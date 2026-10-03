@@ -1,0 +1,43 @@
+version: "2"
+run:
+  go: "1.25"
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+linters:
+  enable:
+    - copyloopvar
+    - errorlint
+    - exhaustive
+    - intrange
+    - makezero
+    - nakedret
+    - nolintlint
+    - prealloc
+    - revive
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - wastedassign
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    nakedret:
+      max-func-lines: 0
+    staticcheck:
+      checks:
+        - all
+        - -ST1000 # At least one file in a package should have a package comment
+        - -ST1003 # Poorly chosen identifier (remoteUrl vs remoteURL)
+        - -ST1020 # Doc of exported function should start with its name
+        - -ST1021 # Doc of exported type should start with its name
+        - -ST1022 # Doc of exported variable should start with its name
+  exclusions:
+    presets:
+      - comments
+      - std-error-handling
+formatters:
+  enable:
+    - gofumpt
+    - goimports

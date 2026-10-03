@@ -1,0 +1,114 @@
+// Package ado talks to the Azure DevOps REST API using the token of the
+// logged-in Azure CLI (`az login`), so no PAT is needed.
+package ado
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os/exec"
+	"strings"
+	"sync"
+	"time"
+)
+
+// adoResourceID is the well-known Entra ID resource for Azure DevOps.
+const adoResourceID = "499b84ac-1321-427f-aa17-267ca6975798"
+
+type Client struct {
+	Org  string // organization name, e.g. "arbinSW"
+	http *http.Client
+
+	mu          sync.Mutex
+	token       string
+	tokenExpiry time.Time
+}
+
+func NewClient(org string) *Client {
+	return &Client{Org: org, http: &http.Client{Timeout: 30 * time.Second}}
+}
+
+// DefaultOrg reads the organization configured by `az devops configure`.
+func DefaultOrg() (string, error) {
+	out, err := exec.Command("az", "devops", "configure", "--list").Output()
+	if err != nil {
+		return "", fmt.Errorf("az devops configure --list: %w", err)
+	}
+	for line := range strings.SplitSeq(string(out), "\n") {
+		k, v, ok := strings.Cut(line, "=")
+		if ok && strings.TrimSpace(k) == "organization" {
+			return OrgName(strings.TrimSpace(v)), nil
+		}
+	}
+	return "", errors.New("no default organization; pass --org or run `az devops configure -d organization=https://dev.azure.com/<org>`")
+}
+
+// OrgName accepts either a bare org name or an org URL.
+func OrgName(s string) string {
+	s = strings.TrimSuffix(strings.TrimSpace(s), "/")
+	if i := strings.LastIndex(s, "/"); i >= 0 {
+		s = s[i+1:]
+	}
+	return s
+}
+
+func (c *Client) accessToken(ctx context.Context) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.token != "" && time.Until(c.tokenExpiry) > 5*time.Minute {
+		return c.token, nil
+	}
+	out, err := exec.CommandContext(ctx, "az", "account", "get-access-token",
+		"--resource", adoResourceID, "-o", "json").Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return "", fmt.Errorf("az account get-access-token failed (run `az login`): %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return "", fmt.Errorf("az account get-access-token: %w", err)
+	}
+	var tok struct {
+		AccessToken string `json:"accessToken"`
+		ExpiresOn   int64  `json:"expires_on"`
+	}
+	if err := json.Unmarshal(out, &tok); err != nil {
+		return "", fmt.Errorf("parse az token: %w", err)
+	}
+	c.token = tok.AccessToken
+	c.tokenExpiry = time.Unix(tok.ExpiresOn, 0)
+	if tok.ExpiresOn == 0 {
+		c.tokenExpiry = time.Now().Add(30 * time.Minute)
+	}
+	return c.token, nil
+}
+
+func (c *Client) get(ctx context.Context, path string, query url.Values, out any) error {
+	token, err := c.accessToken(ctx)
+	if err != nil {
+		return err
+	}
+	u := "https://dev.azure.com/" + url.PathEscape(c.Org) + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("GET %s: %s: %s", path, resp.Status, strings.TrimSpace(string(body)))
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
