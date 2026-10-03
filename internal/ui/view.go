@@ -40,6 +40,9 @@ func (m Model) View() string {
 	if m.width == 0 {
 		return ""
 	}
+	if m.detail != nil {
+		return m.detail.view()
+	}
 	var b strings.Builder
 	b.WriteString(m.titleLine() + "\n")
 
@@ -56,7 +59,7 @@ func (m Model) View() string {
 		b.WriteString("\n")
 	}
 	b.WriteString(m.statusLine() + "\n")
-	b.WriteString(styleDim.Render(truncate("j/k move  tab section  enter toggle/open  o open  y copy URL  c checkout  r refresh  q quit", m.width-1)))
+	b.WriteString(styleDim.Render(truncate("j/k move  tab section  enter detail  o open  y copy URL  c checkout  r refresh  q quit", m.width-1)))
 	return b.String()
 }
 

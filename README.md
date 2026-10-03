@@ -51,12 +51,38 @@ lazdo --interval 30s     # auto-refresh period (default 2m)
 | --- | --- |
 | `j` / `k`, arrows | move |
 | `tab` / `shift+tab` | next / previous section |
-| `enter` | collapse section, or open PR |
+| `enter` | collapse section, or open the PR detail |
 | `o` | open PR in browser |
 | `y` | copy PR URL |
 | `c` | check out PR branch (run lazdo inside a clone of that repo) |
 | `r` | refresh now |
 | `q` | quit |
+
+### PR detail
+
+Opening a PR counts as a visit, exactly like opening it in the browser: its
+"new since last visit" counts reset, and the activity filter "What's new"
+shows what arrived since your previous visit.
+
+Tabs: **Overview** (checks, description, activity, reviewers, tags, work
+items), **Files**, **Commits** (grouped by push), **Conflicts**.
+
+| Key | Action |
+| --- | --- |
+| `1`–`4`, `[` / `]` | switch tab |
+| `v` | vote: approve, approve with suggestions, wait for author, reject, reset |
+| `m` | complete, set/cancel auto-complete, mark as draft/publish, abandon |
+| `j` / `k` | scroll (Overview), move (other tabs) |
+| `J` / `K` | previous / next activity entry |
+| `enter` | step into a comment thread (then `j`/`k` picks a comment); open file/commit in browser |
+| `f` | cycle activity filter |
+| `n` / `R` | new comment / reply |
+| `s` | set thread status |
+| `e` / `d` | edit / delete your comment |
+| `esc` | leave thread, then back to the list |
+
+Comments are typed in a text box: `ctrl+s` posts, `ctrl+e` continues the
+draft in `$EDITOR`.
 
 ## Release
 

@@ -45,6 +45,8 @@ type Model struct {
 	cursor, offset int
 	width, height  int
 	sem            chan struct{}
+
+	detail *detailModel // non-nil while a pull request's detail is open
 }
 
 func New(client *ado.Client, interval time.Duration) Model {
@@ -134,6 +136,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.clampCursor()
+		if m.detail != nil {
+			m.detail.resize(msg.Width, msg.Height)
+		}
+	case detailLoadedMsg, visitMsg, editorDoneMsg:
+		if m.detail != nil {
+			return m, m.detail.update(msg)
+		}
+	case actionDoneMsg:
+		if m.detail == nil {
+			return m, nil
+		}
+		if msg.leave && msg.err == nil {
+			m.detail = nil
+			m.status = msg.text
+			return m, m.refresh()
+		}
+		return m, m.detail.update(msg)
 	case listMsg:
 		return m.onList(msg)
 	case statsMsg:
@@ -144,17 +163,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case buildMsg:
 		m.builds[msg.id] = msg.result
 	case tickMsg:
+		var detailCmd tea.Cmd
+		if m.detail != nil {
+			detailCmd = m.detail.reload()
+		}
 		if m.loading {
-			return m, m.tick()
+			return m, tea.Batch(m.tick(), detailCmd)
 		}
 		m.loading = true
-		return m, m.fetchList()
+		return m, tea.Batch(m.fetchList(), detailCmd)
 	case statusMsg:
-		m.status = string(msg)
+		if m.detail != nil {
+			m.detail.status = string(msg)
+		} else {
+			m.status = string(msg)
+		}
 	case tea.KeyMsg:
+		if m.detail != nil {
+			return m.onDetailKey(msg)
+		}
 		return m.onKey(msg)
 	}
 	return m, nil
+}
+
+func (m Model) onDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+	if m.detail.closeRequested(msg) {
+		m.detail = nil
+		// The visit cleared this PR's "new since last visit" counts.
+		return m, m.refresh()
+	}
+	return m, m.detail.update(msg)
+}
+
+func (m *Model) refresh() tea.Cmd {
+	if m.loading {
+		return nil
+	}
+	m.loading = true
+	return m.fetchList()
+}
+
+func (m Model) openDetail(pr *ado.PullRequest) (tea.Model, tea.Cmd) {
+	m.detail = newDetail(m.client, m.me, *pr, m.repoKey, m.width, m.height)
+	return m, m.detail.init()
 }
 
 func (m Model) onList(msg listMsg) (tea.Model, tea.Cmd) {
@@ -210,7 +265,7 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			kind := m.sections[r.section].Kind
 			m.collapsed[kind] = !m.collapsed[kind]
 		} else if ok {
-			return m, m.openSelected(r.pr)
+			return m.openDetail(r.pr)
 		}
 	case "o":
 		if r, ok := m.selected(rows); ok && r.pr != nil {
