@@ -29,12 +29,14 @@ func TestViewFitsWidth(t *testing.T) {
 	m.me = ado.Identity{ID: "me"}
 	m.loading = false
 	m.sections = ado.Classify("me", []ado.PullRequest{pr}, nil)
-	m.details[pr.ID] = detailState{loaded: true, d: ado.Details{CommentsTotal: 2, PushesSinceMyVote: 1, Build: ado.BuildFailed}}
+	m.stats = map[int]ado.Stats{pr.ID: {Comments: 2, ActiveComments: 2, Visited: true, NewPushes: 8, NewComments: 1}}
+	m.builds[pr.ID] = buildResult{state: ado.BuildFailed}
 
 	for _, width := range []int{80, 120, 200} {
 		next, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 20})
 		view := next.View()
-		if !strings.Contains(view, "!15074") {
+		// Narrow terminals clip the right-hand columns first.
+		if width >= 120 && !strings.Contains(view, "!15074") {
 			t.Fatalf("width %d: PR row missing:\n%s", width, view)
 		}
 		for line := range strings.SplitSeq(view, "\n") {

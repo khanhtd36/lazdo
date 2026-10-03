@@ -36,16 +36,18 @@ type Repository struct {
 }
 
 type PullRequest struct {
-	ID            int        `json:"pullRequestId"`
-	Title         string     `json:"title"`
-	IsDraft       bool       `json:"isDraft"`
-	CreatedBy     Identity   `json:"createdBy"`
-	CreationDate  time.Time  `json:"creationDate"`
-	SourceRefName string     `json:"sourceRefName"`
-	TargetRefName string     `json:"targetRefName"`
-	MergeStatus   string     `json:"mergeStatus"`
-	Repository    Repository `json:"repository"`
-	Reviewers     []Reviewer `json:"reviewers"`
+	ID                 int        `json:"pullRequestId"`
+	CodeReviewID       int        `json:"codeReviewId"`
+	SupportsIterations bool       `json:"supportsIterations"`
+	Title              string     `json:"title"`
+	IsDraft            bool       `json:"isDraft"`
+	CreatedBy          Identity   `json:"createdBy"`
+	CreationDate       time.Time  `json:"creationDate"`
+	SourceRefName      string     `json:"sourceRefName"`
+	TargetRefName      string     `json:"targetRefName"`
+	MergeStatus        string     `json:"mergeStatus"`
+	Repository         Repository `json:"repository"`
+	Reviewers          []Reviewer `json:"reviewers"`
 }
 
 func (pr PullRequest) SourceBranch() string {

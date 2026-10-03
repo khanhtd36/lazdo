@@ -12,13 +12,12 @@ import (
 	"github.com/khanhtd36/lazdo/internal/ado"
 )
 
-// maxParallelDetails caps concurrent per-PR detail requests.
-const maxParallelDetails = 8
+// maxParallelBuilds caps concurrent per-PR build policy requests.
+const maxParallelBuilds = 8
 
-type detailState struct {
-	loaded bool
-	d      ado.Details
-	err    error
+type buildResult struct {
+	state ado.BuildState
+	err   error
 }
 
 // row is one visible line: a section header or a PR inside a section.
@@ -34,7 +33,9 @@ type Model struct {
 
 	me        ado.Identity
 	sections  []ado.Section
-	details   map[int]detailState
+	stats     map[int]ado.Stats // nil until the stats batch returns
+	statsErr  error
+	builds    map[int]buildResult
 	collapsed map[ado.SectionKind]bool
 	loading   bool
 	err       error
@@ -52,10 +53,10 @@ func New(client *ado.Client, interval time.Duration) Model {
 		client:    client,
 		interval:  interval,
 		repoKey:   key,
-		details:   map[int]detailState{},
+		builds:    map[int]buildResult{},
 		collapsed: map[ado.SectionKind]bool{},
 		loading:   true,
-		sem:       make(chan struct{}, maxParallelDetails),
+		sem:       make(chan struct{}, maxParallelBuilds),
 	}
 }
 
@@ -65,10 +66,13 @@ type (
 		sections []ado.Section
 		err      error
 	}
-	detailMsg struct {
-		id  int
-		d   ado.Details
-		err error
+	statsMsg struct {
+		stats map[int]ado.Stats
+		err   error
+	}
+	buildMsg struct {
+		id     int
+		result buildResult
 	}
 	tickMsg   struct{}
 	statusMsg string
@@ -99,15 +103,25 @@ func (m Model) fetchList() tea.Cmd {
 	}
 }
 
-func (m Model) fetchDetails(pr ado.PullRequest) tea.Cmd {
-	client, meID, sem := m.client, m.me.ID, m.sem
+func (m Model) fetchStats(prs []ado.PullRequest) tea.Cmd {
+	client := m.client
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		stats, err := client.Stats(ctx, prs)
+		return statsMsg{stats: stats, err: err}
+	}
+}
+
+func (m Model) fetchBuild(pr ado.PullRequest) tea.Cmd {
+	client, sem := m.client, m.sem
 	return func() tea.Msg {
 		sem <- struct{}{}
 		defer func() { <-sem }()
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		d, err := client.Details(ctx, pr, meID)
-		return detailMsg{id: pr.ID, d: d, err: err}
+		state, err := client.Build(ctx, pr)
+		return buildMsg{id: pr.ID, result: buildResult{state: state, err: err}}
 	}
 }
 
@@ -122,8 +136,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clampCursor()
 	case listMsg:
 		return m.onList(msg)
-	case detailMsg:
-		m.details[msg.id] = detailState{loaded: true, d: msg.d, err: msg.err}
+	case statsMsg:
+		m.statsErr = msg.err
+		if msg.err == nil {
+			m.stats = msg.stats
+		}
+	case buildMsg:
+		m.builds[msg.id] = msg.result
 	case tickMsg:
 		if m.loading {
 			return m, m.tick()
@@ -149,10 +168,15 @@ func (m Model) onList(msg listMsg) (tea.Model, tea.Cmd) {
 	m.me = msg.me
 	m.sections = msg.sections
 	m.fetchedAt = time.Now()
+	var all []ado.PullRequest
 	for _, s := range m.sections {
-		for _, pr := range s.PRs {
-			cmds = append(cmds, m.fetchDetails(pr))
-		}
+		all = append(all, s.PRs...)
+	}
+	if len(all) > 0 {
+		cmds = append(cmds, m.fetchStats(all))
+	}
+	for _, pr := range all {
+		cmds = append(cmds, m.fetchBuild(pr))
 	}
 	m.clampCursor()
 	return m, tea.Batch(cmds...)

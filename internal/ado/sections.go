@@ -38,25 +38,21 @@ type Section struct {
 	PRs  []PullRequest
 }
 
-// Classify sorts PRs into the dashboard sections:
+// Classify sorts PRs into the dashboard sections, matching the Azure DevOps
+// "My pull requests" page:
 //   - Wait for approval: I'm a reviewer, haven't voted, PR is not a draft.
 //   - Waiting for author: my vote is "waiting for author" or "rejected".
 //   - Assigned to me: every other PR I review (drafts, ones I approved).
-//   - Created by me: PRs I opened, shown only here.
+//   - Created by me: PRs I opened but don't review; a PR I both opened and
+//     review goes to one of the reviewer sections instead.
 func Classify(meID string, reviewing, created []PullRequest) []Section {
 	sections := make([]Section, sectionCount)
 	for i := range sections {
 		sections[i].Kind = SectionKind(i)
 	}
-	mine := make(map[int]bool, len(created))
-	for _, pr := range created {
-		mine[pr.ID] = true
-		sections[SectionCreated].PRs = append(sections[SectionCreated].PRs, pr)
-	}
+	reviewed := make(map[int]bool, len(reviewing))
 	for _, pr := range reviewing {
-		if mine[pr.ID] {
-			continue
-		}
+		reviewed[pr.ID] = true
 		kind := SectionAssigned
 		if me, ok := pr.ReviewerFor(meID); ok {
 			switch {
@@ -67,6 +63,11 @@ func Classify(meID string, reviewing, created []PullRequest) []Section {
 			}
 		}
 		sections[kind].PRs = append(sections[kind].PRs, pr)
+	}
+	for _, pr := range created {
+		if !reviewed[pr.ID] {
+			sections[SectionCreated].PRs = append(sections[SectionCreated].PRs, pr)
+		}
 	}
 	return sections
 }

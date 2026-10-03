@@ -97,7 +97,8 @@ func (m Model) renderRow(r row) string {
 }
 
 func (m Model) renderPR(pr *ado.PullRequest) string {
-	det := m.details[pr.ID]
+	stats, hasStats := m.stats[pr.ID]
+	buildRes, hasBuild := m.builds[pr.ID]
 
 	var badges []string
 	if pr.IsDraft {
@@ -106,8 +107,8 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	if me, ok := pr.ReviewerFor(m.me.ID); ok && me.IsRequired {
 		badges = append(badges, styleRequired.Render("[required]"))
 	}
-	if det.d.PushesSinceMyVote > 0 {
-		badges = append(badges, styleCyan.Render(fmt.Sprintf("[+%d push]", det.d.PushesSinceMyVote)))
+	if hasStats {
+		badges = append(badges, sinceLastVisit(stats)...)
 	}
 	badgeText := strings.Join(badges, " ")
 
@@ -116,9 +117,9 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 		fit(fmt.Sprintf("!%d", pr.ID), colID),
 		styleDim.Render(fit(pr.Repository.Name+" → "+pr.TargetBranch(), colRepo)),
 		fitStyled(votes(pr.Reviewers), colVotes),
-		fitStyled(comments(det), colComments),
-		fitStyled(build(det), colBuild),
-		styleDim.Render(fit(updated(det, pr), colUpdated)),
+		fitStyled(m.comments(stats, hasStats), colComments),
+		fitStyled(build(buildRes, hasBuild), colBuild),
+		styleDim.Render(fit(updated(stats, pr), colUpdated)),
 	}, " ")
 
 	// 2 cursor + 2 indent + 1 gap before right + 1 spare so the line never wraps.
@@ -153,27 +154,51 @@ func votes(reviewers []ado.Reviewer) string {
 	return strings.Join(parts, " ")
 }
 
-func comments(det detailState) string {
-	switch {
-	case !det.loaded:
-		return styleDim.Render("…")
-	case det.err != nil:
-		return styleRed.Render("err")
-	case det.d.CommentsTotal == 0:
-		return styleDim.Render("0")
+// sinceLastVisit mirrors the "N new pushes" note of the Azure DevOps list.
+func sinceLastVisit(s ado.Stats) []string {
+	if !s.Visited {
+		return []string{styleCyan.Render("[unvisited]")}
 	}
-	s := fmt.Sprintf("%d/%d", det.d.CommentsResolved, det.d.CommentsTotal)
-	if det.d.CommentsResolved < det.d.CommentsTotal {
-		return styleYellow.Render(s)
+	var out []string
+	for _, c := range []struct {
+		n    int
+		noun string
+	}{{s.NewPushes, "push"}, {s.NewComments, "comment"}, {s.NewVotes, "vote"}} {
+		switch {
+		case c.n == 1:
+			out = append(out, styleCyan.Render("[1 new "+c.noun+"]"))
+		case c.n > 1 && c.noun == "push":
+			out = append(out, styleCyan.Render(fmt.Sprintf("[%d new pushes]", c.n)))
+		case c.n > 1:
+			out = append(out, styleCyan.Render(fmt.Sprintf("[%d new %ss]", c.n, c.noun)))
+		}
 	}
-	return styleGreen.Render(s)
+	return out
 }
 
-func build(det detailState) string {
-	if !det.loaded {
+func (m Model) comments(s ado.Stats, ok bool) string {
+	switch {
+	case m.statsErr != nil:
+		return styleRed.Render("err")
+	case !ok:
 		return styleDim.Render("…")
+	case s.Comments == 0:
+		return styleDim.Render("0")
+	case s.ActiveComments > 0:
+		// Like Azure DevOps: unresolved/total while any thread is open.
+		return styleYellow.Render(fmt.Sprintf("%d/%d", s.ActiveComments, s.Comments))
 	}
-	switch det.d.Build {
+	return fmt.Sprint(s.Comments)
+}
+
+func build(b buildResult, ok bool) string {
+	switch {
+	case !ok:
+		return styleDim.Render("…")
+	case b.err != nil:
+		return styleRed.Render("?")
+	}
+	switch b.state {
 	case ado.BuildPassed:
 		return styleGreen.Render("✓")
 	case ado.BuildFailed:
@@ -185,10 +210,10 @@ func build(det detailState) string {
 	return styleDim.Render("·")
 }
 
-func updated(det detailState, pr *ado.PullRequest) string {
+func updated(s ado.Stats, pr *ado.PullRequest) string {
 	t := pr.CreationDate
-	if det.loaded && det.d.LastUpdated.After(t) {
-		t = det.d.LastUpdated
+	if s.LastUpdated.After(t) {
+		t = s.LastUpdated
 	}
 	return relTime(time.Since(t), t)
 }

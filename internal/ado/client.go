@@ -3,6 +3,7 @@
 package ado
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -87,6 +88,14 @@ func (c *Client) accessToken(ctx context.Context) (string, error) {
 }
 
 func (c *Client) get(ctx context.Context, path string, query url.Values, out any) error {
+	return c.do(ctx, http.MethodGet, path, query, nil, out)
+}
+
+func (c *Client) post(ctx context.Context, path string, query url.Values, in, out any) error {
+	return c.do(ctx, http.MethodPost, path, query, in, out)
+}
+
+func (c *Client) do(ctx context.Context, method, path string, query url.Values, in, out any) error {
 	token, err := c.accessToken(ctx)
 	if err != nil {
 		return err
@@ -95,20 +104,31 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, out any
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	var body io.Reader
+	if in != nil {
+		b, err := json.Marshal(in)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
+	if in != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("GET %s: %s: %s", path, resp.Status, strings.TrimSpace(string(body)))
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("%s %s: %s: %s", method, path, resp.Status, strings.TrimSpace(string(msg)))
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }

@@ -15,7 +15,7 @@ func TestClassify(t *testing.T) {
 		pr(5, VoteApproved, false),
 		pr(6, VoteNone, false), // also created by me
 	}
-	created := []PullRequest{{ID: 6}}
+	created := []PullRequest{{ID: 6}, {ID: 7}}
 
 	got := map[SectionKind][]int{}
 	for _, s := range Classify(me, reviewing, created) {
@@ -24,10 +24,10 @@ func TestClassify(t *testing.T) {
 		}
 	}
 	want := map[SectionKind][]int{
-		SectionNeedsReview:      {1},
+		SectionNeedsReview:      {1, 6},
 		SectionWaitingForAuthor: {2, 3},
 		SectionAssigned:         {4, 5},
-		SectionCreated:          {6},
+		SectionCreated:          {7},
 	}
 	for k, w := range want {
 		if len(got[k]) != len(w) {
