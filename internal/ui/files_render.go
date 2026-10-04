@@ -257,6 +257,9 @@ func (d *detailModel) renderDiffPane(h int) []string {
 		mode = "side-by-side"
 	}
 	header := styleHeader.Render(f.cmp.label)
+	if d.runMerge() {
+		header += styleYellow.Render("  includes a merge: " + d.pr.TargetBranch() + " changes appear")
+	}
 	if ch != nil {
 		header += "  " + ch.Item.Path
 	}

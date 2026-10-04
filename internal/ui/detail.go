@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -64,6 +65,10 @@ type detailModel struct {
 	// Files
 	files     filesView
 	rowCaches map[string]*diffRows
+	// parents counts each commit's parents, to spot merges; fetched when
+	// commits are picked.
+	parents        map[string]int
+	parentsLoading bool
 
 	// Commits, Conflicts
 	lists [tabCount]pickList
@@ -115,6 +120,7 @@ func newDetail(client *ado.Client, me ado.Identity, pr ado.PullRequest, width, h
 		md:        newMarkdownCache(),
 		files:     newFilesView(),
 		rowCaches: map[string]*diffRows{},
+		parents:   map[string]int{},
 	}
 	d.resize(width, height)
 	return d
@@ -178,6 +184,12 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		}
 	case filesLoadedMsg:
 		return d.onFilesLoaded(msg)
+	case parentsMsg:
+		d.parentsLoading = false
+		maps.Copy(d.parents, msg.counts)
+		if msg.err != nil {
+			d.status = "error: find merge commits: " + msg.err.Error()
+		}
 	case fileDiffMsg:
 		d.files.diffs[msg.key] = msg.diff
 		d.scrollDiffToCursor()

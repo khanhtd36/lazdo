@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/khanhtd36/lazdo/internal/ado"
@@ -100,5 +101,60 @@ func TestFilesThreadSelection(t *testing.T) {
 	press(d, "e")
 	if _, ok := d.modal.(*editorModal); !ok {
 		t.Fatalf("e on own comment opened %T", d.modal)
+	}
+}
+
+// fakeCommits gives the PR four commits, newest first; c2 is a merge.
+func fakeCommits(t *testing.T) *detailModel {
+	t.Helper()
+	d := fakeDetail(t, 140)
+	d.data.Pushes = []ado.Push{{ID: 1}}
+	d.data.Commits = []ado.Commit{{ID: "c4", Comment: "four"}, {ID: "c3", Comment: "three"}, {ID: "c2", Comment: "Merge develop"}, {ID: "c1", Comment: "one"}}
+	d.parents = map[string]int{"c4": 1, "c3": 1, "c2": 2, "c1": 1}
+	d.rebuildLists()
+	return d
+}
+
+func TestCommitPickerFillsGapsIntoOneRun(t *testing.T) {
+	d := fakeCommits(t)
+	p := d.newCommitPicker()
+	space := tea.KeyMsg{Type: tea.KeySpace}
+	p.update(space)       // c4
+	p.update(keyMsg("j")) // c3
+	p.update(keyMsg("j")) // c2
+	p.update(space)       // c2: c3 is included
+	if !strings.Contains(ansi.Strip(p.view(140)), "(included)") {
+		t.Fatal("c3, between the marked commits, should show as included")
+	}
+	m, _ := p.update(tea.KeyMsg{Type: tea.KeyEnter})
+	if m != nil || d.files.cmp.commit != "c4" || d.files.cmp.oldest != "c2" {
+		t.Fatalf("enter should show the run c2..c4, got %+v", d.files.cmp)
+	}
+	if label := ansi.Strip(d.tabLabels()[tabFiles]); label != "2 Files (3 of 4 commits)" {
+		t.Fatalf("tab label: %q", label)
+	}
+	if !d.runMerge() {
+		t.Fatal("the run holds merge c2")
+	}
+	if marks := strings.Count(ansi.Strip(listText(&d.lists[tabCommits])), "●"); marks != 3 {
+		t.Fatalf("the Commits tab should mark the 3 shown commits, got %d", marks)
+	}
+}
+
+func TestCommitPickerAllIsAllChanges(t *testing.T) {
+	d := fakeCommits(t)
+	d.openCommitDiff("c3")
+	if d.files.cmp.commit != "c3" || d.files.cmp.oldest != "" || d.tab != tabFiles {
+		t.Fatalf("enter on a commit shows just it: %+v", d.files.cmp)
+	}
+	p := d.newCommitPicker()
+	if !p.marked["c3"] {
+		t.Fatal("the picker should start from what Files shows")
+	}
+	p.update(keyMsg("a")) // clears
+	p.update(keyMsg("a")) // all
+	p.update(tea.KeyMsg{Type: tea.KeyEnter})
+	if d.files.cmp.label != "All changes" || d.runMerge() {
+		t.Fatalf("every commit is All changes, got %+v", d.files.cmp)
 	}
 }

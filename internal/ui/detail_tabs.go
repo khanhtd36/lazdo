@@ -229,6 +229,13 @@ func (d *detailModel) commitLines() []listLine {
 		ids:   initial,
 	}}, groups...)
 
+	// ● marks the commits Files shows when it is narrowed to a run.
+	shown := map[string]bool{}
+	if lo, hi, ok := d.commitRun(); ok {
+		for _, c := range d.data.Commits[lo : hi+1] {
+			shown[c.ID] = true
+		}
+	}
 	var lines []listLine
 	for i := len(groups) - 1; i >= 0; i-- {
 		g := groups[i]
@@ -238,8 +245,12 @@ func (d *detailModel) commitLines() []listLine {
 			if !ok {
 				continue
 			}
+			mark := "  "
+			if shown[id] {
+				mark = styleCyan.Render("●") + " "
+			}
 			lines = append(lines, listLine{
-				text: "  " + styleDim.Render(shortSHA(id)) + " " + firstLine(c.Comment) +
+				text: mark + styleDim.Render(shortSHA(id)) + " " + firstLine(c.Comment) +
 					styleDim.Render("  "+c.Author.Name+" · "+relTime(time.Since(c.Author.Date), c.Author.Date)),
 				url:    d.commitURL(id),
 				commit: id,

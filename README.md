@@ -178,6 +178,14 @@ Tabs: **Overview** (checks, description, activity, reviewers, tags, work
 items), **Files** (file tree and syntax-highlighted diff), **Commits**
 (grouped by push; `enter` diffs one commit), **Conflicts**.
 
+Files can show a run of commits instead of the whole PR: `enter` on a
+commit, or `u` → Commits… to mark them (`space`; `a` all or none). The
+marked commits and everything between them make one diff, since commits
+with gaps between them have none; picking every commit is All changes. The
+Files tab then reads `(3 of 12 commits)`, the Commits tab marks them `●`,
+and a run holding a merge commit warns that target-branch changes show.
+`u` → All changes goes back.
+
 Keys specific to a pull request (on top of the ones above):
 
 | Key | Action |
@@ -188,7 +196,7 @@ Keys specific to a pull request (on top of the ones above):
 | `R` / `s` / `e` / `d` | reply / status / edit / delete on the selected thread |
 | `f` | Overview: cycle the activity filter |
 | `S` | Files: side-by-side ⇄ inline (default follows terminal width) |
-| `u` | Files: compare all changes, since my last visit, one update, or any two |
+| `u` | Files: compare all changes, since my last visit, one update, any two, or commits |
 | `V` | diff: start or clear a line range |
 | `z` | Files: hide / show the file tree |
 

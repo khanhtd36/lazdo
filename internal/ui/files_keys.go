@@ -247,6 +247,7 @@ func (d *detailModel) comparisonMenu() modal {
 		return func() (modal, tea.Cmd) {
 			d.files.cmp = c
 			d.resetTree()
+			d.rebuildLists()
 			return nil, d.ensureFiles()
 		}
 	}
@@ -281,6 +282,13 @@ func (d *detailModel) comparisonMenu() modal {
 	items = append(items, menuItem{label: "Compare two updates…", run: func() (modal, tea.Cmd) {
 		return d.compareBaseMenu(), nil
 	}})
+	commits := menuItem{label: "Commits…", disabled: "no commits"}
+	if len(d.data.Commits) > 0 {
+		commits = menuItem{label: "Commits…", run: func() (modal, tea.Cmd) {
+			return d.newCommitPicker(), d.ensureParents()
+		}}
+	}
+	items = append(items, commits)
 	return &menuModal{title: "Compare", items: items}
 }
 
@@ -309,6 +317,7 @@ func (d *detailModel) compareTargetMenu(base int) modal {
 		items = append(items, menuItem{label: fmt.Sprintf("Update %d", p.ID), run: func() (modal, tea.Cmd) {
 			d.files.cmp = comparison{label: label, target: p.ID, base: base}
 			d.resetTree()
+			d.rebuildLists()
 			return nil, d.ensureFiles()
 		}})
 	}
@@ -316,17 +325,13 @@ func (d *detailModel) compareTargetMenu(base int) modal {
 }
 
 func (d *detailModel) openCommitDiff(commit string) tea.Cmd {
-	label := "Commit " + shortSHA(commit)
-	for _, c := range d.data.Commits {
-		if c.ID == commit {
-			label += " · " + firstLine(c.Comment)
-		}
+	i := d.commitIndex(commit)
+	if i < 0 {
+		return nil
 	}
-	d.files.cmp = comparison{label: label, commit: commit}
-	d.resetTree()
 	d.files.pane = paneTree
 	d.tab = tabFiles
-	return d.ensureFiles()
+	return d.showCommits(i, i)
 }
 
 // --- Line comments ---

@@ -1,11 +1,13 @@
 package ado
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 )
 
 // LineBlock is one run of lines in a file diff, as Azure DevOps aligns them.
@@ -60,6 +62,38 @@ func (c *Client) CommitParent(ctx context.Context, pr PullRequest, commitID stri
 		return "", fmt.Errorf("commit %s has no parent", commitID)
 	}
 	return resp.Parents[0], nil
+}
+
+// ParentCounts returns how many parents each commit has, 2 or more for a
+// merge. Commit lists leave parents out, so it asks for each commit, a few
+// at a time; what it got before an error is still returned.
+func (c *Client) ParentCounts(ctx context.Context, pr PullRequest, ids []string) (map[string]int, error) {
+	out := make(map[string]int, len(ids))
+	var (
+		mu       sync.Mutex
+		wg       sync.WaitGroup
+		firstErr error
+	)
+	slots := make(chan struct{}, 8)
+	for _, id := range ids {
+		wg.Go(func() {
+			slots <- struct{}{}
+			defer func() { <-slots }()
+			var resp struct {
+				Parents []string `json:"parents"`
+			}
+			err := c.get(ctx, pr.repoPath()+"/commits/"+id, v71(), &resp)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				firstErr = cmp.Or(firstErr, err)
+				return
+			}
+			out[id] = len(resp.Parents)
+		})
+	}
+	wg.Wait()
+	return out, firstErr
 }
 
 // CommitChanges lists the files one commit changed against its parent.

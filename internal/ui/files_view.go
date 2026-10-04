@@ -28,10 +28,13 @@ type comparison struct {
 	// fromCommit, with commit, compares two commits (a tag range) instead
 	// of one commit against its parent.
 	fromCommit string
+	// oldest, with commit, is a run of pull request commits: everything
+	// from oldest's parent up to commit.
+	oldest string
 }
 
 func (c comparison) key() string {
-	return fmt.Sprintf("%d:%d:%s:%s", c.target, c.base, c.commit, c.fromCommit)
+	return fmt.Sprintf("%d:%d:%s:%s:%s", c.target, c.base, c.commit, c.fromCommit, c.oldest)
 }
 
 type filePane int
@@ -137,6 +140,14 @@ func (d *detailModel) ensureFiles() tea.Cmd {
 		if cmp.commit != "" && cmp.fromCommit != "" {
 			msg.baseCommit, msg.targetCommit = cmp.fromCommit, cmp.commit
 			msg.changes, msg.err = client.RangeChanges(ctx, pr.AsRepo(), cmp.fromCommit, cmp.commit)
+			return msg
+		}
+		if cmp.commit != "" && cmp.oldest != "" {
+			msg.targetCommit = cmp.commit
+			if msg.baseCommit, msg.err = client.CommitParent(ctx, pr, cmp.oldest); msg.err != nil {
+				return msg
+			}
+			msg.changes, msg.err = client.RangeChanges(ctx, pr.AsRepo(), msg.baseCommit, cmp.commit)
 			return msg
 		}
 		if cmp.commit != "" {

@@ -96,7 +96,7 @@ var (
 	}
 	filesKeys = []binding{
 		{keys: "S", desc: "side-by-side ⇄ inline", press: "S", hint: "mode"},
-		{keys: "u", desc: "compare: all changes, since last visit, updates", press: "u", hint: "compare"},
+		{keys: "u", desc: "compare: all changes, since last visit, updates, commits", press: "u", hint: "compare"},
 		{keys: "z", desc: "hide / show the file tree", press: "z"},
 	}
 	diffViewKeys = []binding{

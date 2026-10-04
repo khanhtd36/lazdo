@@ -136,7 +136,11 @@ func (d *detailModel) tabLabels() []string {
 		if d.data != nil {
 			switch t {
 			case tabFiles:
-				label += fmt.Sprintf(" (%d)", len(d.data.Changes))
+				if lo, hi, ok := d.commitRun(); ok {
+					label += fmt.Sprintf(" (%d of %d commits)", hi-lo+1, len(d.data.Commits))
+				} else {
+					label += fmt.Sprintf(" (%d)", len(d.data.Changes))
+				}
 			case tabCommits:
 				label += fmt.Sprintf(" (%d)", len(d.data.Commits))
 			case tabConflicts:
