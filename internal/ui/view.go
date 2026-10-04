@@ -31,7 +31,6 @@ const (
 	colAuthorCompact = 4
 	colID            = 7
 	colRepo          = 28
-	colVotes         = 18
 	colComments      = 6
 	colBuild         = 2
 	colUpdated       = 9
@@ -46,7 +45,6 @@ const (
 	columnAuthor column = iota
 	columnID
 	columnRepo
-	columnVotes
 	columnComments
 	columnBuild
 	columnUpdated
@@ -55,7 +53,7 @@ const (
 
 // columnDropOrder is which columns give way, first to last, when the title
 // would otherwise get squeezed. The ID always stays.
-var columnDropOrder = []column{columnRepo, columnVotes, columnUpdated, columnAuthor, columnComments, columnBuild}
+var columnDropOrder = []column{columnRepo, columnUpdated, columnAuthor, columnComments, columnBuild}
 
 // rowLayout is how dashboard rows fit the current width.
 type rowLayout struct {
@@ -74,8 +72,6 @@ func (l rowLayout) width(c column) int {
 		return colID
 	case columnRepo:
 		return colRepo
-	case columnVotes:
-		return colVotes
 	case columnComments:
 		return colComments
 	case columnBuild:
@@ -260,7 +256,6 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 		columnAuthor:   styleDim.Render(fit(author, layout.width(columnAuthor))),
 		columnID:       fit(fmt.Sprintf("!%d", pr.ID), colID),
 		columnRepo:     styleDim.Render(fit(pr.Repository.Name+" → "+pr.TargetBranch(), colRepo)),
-		columnVotes:    fitStyled(votes(pr.Reviewers), colVotes),
 		columnComments: fitStyled(m.comments(stats, hasStats), colComments),
 		columnBuild:    fitStyled(build(buildRes, hasBuild), colBuild),
 		columnUpdated:  styleDim.Render(fit(updated(stats, pr), colUpdated)),

@@ -4,9 +4,9 @@ Lazy Azure DevOps pull requests: the "My pull requests" page of Azure DevOps, in
 
 ```
 ▾ Wait for approval (4)
-    fix(export): keep large exports from stalling [required]   Nhan Nguyen  !15018  MITS11 → develop   TK JC YW   0/2  ✓  2h ago
+    fix(export): keep large exports from stalling [required]   Nhan Nguyen  !15018  MITS11 → develop   0/2  ✓  2h ago
 ▾ Waiting for author (3)
-    feat(download): stream exported large test data [+1 push]  Nhan Nguyen  !15050  MITS11 → develop   TK! JC    3/4  ✓  5m ago
+    feat(download): stream exported large test data [+1 push]  Nhan Nguyen  !15050  MITS11 → develop   3/4  ✓  5m ago
 ▾ Assigned to me (4)
 ▾ Created by me (3)
 ```
@@ -18,9 +18,9 @@ Sections, across every project of the organization:
 - **Assigned to me**: every other PR you review (drafts, ones you approved).
 - **Created by me**.
 
-Each row: title, draft/required badges, author, ID, repo → target branch, reviewer votes
-(`✓` approved, `~` with suggestions, `!` waiting for author, `✗` rejected), resolved/total
-comment threads, build policy (`✓` `✗` `●` running), last update.
+Each row: title, draft/required badges, author, ID, repo → target branch, resolved/total
+comment threads, build policy (`✓` `✗` `●` running), last update. Reviewer votes
+are in the PR detail.
 
 ## Install
 
