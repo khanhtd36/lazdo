@@ -68,7 +68,7 @@ var (
 		{keys: "enter", desc: "step into the selected comment thread", press: "enter", hint: "thread"},
 		{keys: "a", desc: "add a comment on the pull request", press: "a", hint: "comment"},
 		{keys: "R / s", desc: "reply / status on the selected thread", press: "R"},
-		{keys: "f", desc: "cycle the activity filter", press: "f", hint: "filter"},
+		{keys: "f", desc: "choose the activity filter", press: "f", hint: "filter"},
 		{keys: "/", desc: "find text; n / N next / previous match", press: "/", hint: "find"},
 		{keys: "y", desc: "copy menu: URL, branch, ID, title", press: "y", hint: "copy"},
 	}

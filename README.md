@@ -194,7 +194,7 @@ Keys specific to a pull request (on top of the ones above):
 | `m` | complete, set/cancel auto-complete, mark as draft/publish, abandon |
 | `a` | add a comment (Overview: on the PR · diff: on the line or `V` range) |
 | `R` / `s` / `e` / `d` | reply / status / edit / delete on the selected thread |
-| `f` | Overview: cycle the activity filter |
+| `f` | Overview: choose the activity filter (each with its count) |
 | `S` | Files: side-by-side ⇄ inline (default follows terminal width) |
 | `u` | Files: compare all changes, since my last visit, one update, any two, or commits |
 | `V` | diff: start or clear a line range |

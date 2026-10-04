@@ -172,9 +172,7 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		d.rebuildOverview()
 		d.scrollToEntry()
 	case "f":
-		d.filter = (d.filter + 1) % filterCount
-		d.threadSel, d.inThread = 0, false
-		d.rebuildOverview()
+		d.modal = d.filterMenu()
 	case "enter":
 		if e, ok := d.selectedEntry(); ok && e.isHuman {
 			d.inThread, d.commentSel = true, 0
@@ -201,6 +199,27 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		return d.threadKey(msg.String(), *e.thread, d.inThread, d.commentSel)
 	}
 	return nil
+}
+
+// filterMenu picks the activity filter, starting on the current one; each
+// choice shows how many entries it keeps.
+func (d *detailModel) filterMenu() modal {
+	items := make([]menuItem, 0, filterCount)
+	for f := range filterCount {
+		mark := "  "
+		if f == d.filter {
+			mark = "✓ "
+		}
+		items = append(items, menuItem{
+			label: fmt.Sprintf("%s%s (%d)", mark, f.title(), len(d.entries(f))),
+			run: func() (modal, tea.Cmd) {
+				d.filter, d.threadSel, d.inThread = f, 0, false
+				d.rebuildOverview()
+				return nil, nil
+			},
+		})
+	}
+	return &menuModal{title: "Show", items: items, cursor: int(d.filter)}
 }
 
 // findKey edits the Overview's / find box and jumps to the first match.

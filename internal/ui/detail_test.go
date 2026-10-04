@@ -89,6 +89,22 @@ func TestDetailGroupKeysWithoutActivity(t *testing.T) {
 	}
 }
 
+func TestDetailFilterKeyOpensMenu(t *testing.T) {
+	d := fakeDetail(t, 120)
+	press(d, "f")
+	menu, ok := d.modal.(*menuModal)
+	if !ok || d.filter != filterEverything {
+		t.Fatal("f should open a menu, not change the filter")
+	}
+	if menu.cursor != int(filterEverything) || !strings.Contains(menu.items[menu.cursor].label, "✓") {
+		t.Fatal("the menu should start on the current filter, checked")
+	}
+	press(d, "j", "enter") // All comments
+	if d.modal != nil || d.filter != filterComments {
+		t.Fatalf("enter should apply the picked filter, got %v", d.filter)
+	}
+}
+
 func TestDetailActivityFilters(t *testing.T) {
 	d := fakeDetail(t, 120)
 	counts := map[activityFilter]int{}
