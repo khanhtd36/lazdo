@@ -69,9 +69,18 @@ Inside a project (`esc` goes back a level):
 
 - **Pull requests**: everyone's active PRs; `enter` opens the PR detail.
 - **Repos**: default branch, last push, size. `y` / `Y` copy the https /
-  ssh clone URL, `enter` lists branches (ahead/behind the default branch,
-  last commit); there `y` copies the name and `c` checks it out when lazdo
-  runs inside a clone of that repo.
+  ssh clone URL. `enter` opens the repo browser: branches (ahead/behind the
+  default branch) │ file tree │ file content. Folders load as you open
+  them; `/` in the tree finds any file in the repo (the full list loads in
+  the background the first time). Files are syntax highlighted, markdown is
+  rendered (`M` for raw), `/` finds text in the file (`n`/`N`). Switching
+  branch keeps your open folders and file. `tab` moves between panes, `z`
+  folds the branches away (automatic on narrow screens).
+
+**Checkout** (`c`, wherever a branch is shown) asks for a folder: the working
+directory if it is a clone of the repo, the last folder you used, or a new
+`./<repo>` folder. An existing clone is fetched and switched, a missing or
+empty folder gets a fresh clone; nothing is ever forced.
 - **Pipelines**: latest run of each; `enter` lists runs, `enter` on a run
   shows its stages, jobs and steps beside the selected step's log. A running
   run refreshes every few seconds; a step's log appears once the step ends

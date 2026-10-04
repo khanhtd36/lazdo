@@ -59,8 +59,8 @@ func TestProjectsSearchFindsRepoAndOpensBranches(t *testing.T) {
 		t.Fatalf("search should select the dev-tools repo, got %+v", it.value)
 	}
 	open, cmd := p.openSelected(ado.NewClient("org"))
-	if open == nil || cmd == nil || open.level != levelBranches || open.repo.Name != "dev-tools" {
-		t.Fatalf("opening a found repo should land on its branches: %+v", open)
+	if open == nil || cmd == nil || open.level != levelRepo || open.repo.Name != "dev-tools" {
+		t.Fatalf("opening a found repo should land on its browser: %+v", open)
 	}
 }
 

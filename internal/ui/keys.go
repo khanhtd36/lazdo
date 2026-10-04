@@ -104,12 +104,18 @@ var (
 		{"r", "refresh", "r"},
 		{"esc", "back to the Projects page", "esc"},
 	}
-	branchKeys = []binding{
-		{"y", "copy the branch name", "y"},
-		{"Y", "copy the repo's ssh URL", "Y"},
-		{"c", "check out the branch (inside a clone of the repo)", "c"},
-		{"o", "open the branch in the browser", "o"},
-		{"/", "filter branches", "/"},
+	repoKeys = []binding{
+		{"tab", "next pane: branches, files, content", "tab"},
+		{"h / l", "collapse / expand a folder, or move between panes", ""},
+		{"enter", "switch branch, open folder or file", "enter"},
+		{"/", "branches: filter · files: go to any file · content: find text", "/"},
+		{"n / N", "next / previous match in the file", "n"},
+		{"M", "markdown: rendered ⇄ raw", "M"},
+		{"y", "copy the branch name or file path", "y"},
+		{"Y", "copy the web link to the file on this branch", "Y"},
+		{"c", "check out a branch (asks where)", "c"},
+		{"z", "hide / show the branches", "z"},
+		{"o", "open in the browser", "o"},
 		{"esc", "back to the repos", "esc"},
 	}
 	runsKeys = []binding{
@@ -169,8 +175,8 @@ func (m Model) pageHelpGroups() []bindingGroup {
 	global := bindingGroup{"Global", globalKeys}
 	if p := m.project; p != nil {
 		switch p.level {
-		case levelBranches:
-			return []bindingGroup{{"Branches", branchKeys}, global}
+		case levelRepo:
+			return []bindingGroup{{"Repo", repoKeys}, global}
 		case levelRuns:
 			return []bindingGroup{{"Runs", runsKeys}, global}
 		case levelRun:

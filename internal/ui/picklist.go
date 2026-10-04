@@ -118,7 +118,10 @@ func (l *pickList) key(msg tea.KeyMsg, height int) (handled, activate bool) {
 		case "esc":
 			l.filter, l.typing, l.cursor = "", false, 0
 		case "enter":
+			// Like fzf: stop typing and open the selected match.
 			l.typing = false
+			_, ok := l.selected()
+			return true, ok
 		case "backspace":
 			if r := []rune(l.filter); len(r) > 0 {
 				l.filter, l.cursor = string(r[:len(r)-1]), 0
@@ -175,7 +178,7 @@ func (l *pickList) key(msg tea.KeyMsg, height int) (handled, activate bool) {
 func (l *pickList) filterLine() (string, bool) {
 	switch {
 	case l.typing:
-		return styleSelected.Render("/"+l.filter+"▏") + styleDim.Render(fmt.Sprintf("  %d matches · enter keep · esc clear", len(l.visible()))), true
+		return styleSelected.Render("/"+l.filter+"▏") + styleDim.Render(fmt.Sprintf("  %d matches · enter open · esc clear", len(l.visible()))), true
 	case l.filter != "":
 		return styleDim.Render(fmt.Sprintf("/%s  %d matches · / edit · esc clear", l.filter, len(l.visible()))), true
 	}

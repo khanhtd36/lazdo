@@ -135,6 +135,57 @@ func (c *Client) Branches(ctx context.Context, r Repo) ([]Branch, error) {
 	return resp.Value, err
 }
 
+// RepoItem is a file or folder in a repo at some branch.
+type RepoItem struct {
+	Path     string `json:"path"`
+	IsFolder bool   `json:"isFolder"`
+	ObjectID string `json:"objectId"`
+}
+
+// Items lists a folder's children at a branch; full lists everything under
+// it instead (slow on big repos: seconds, megabytes).
+func (c *Client) Items(ctx context.Context, r Repo, branch, folder string, full bool) ([]RepoItem, error) {
+	level := "OneLevel"
+	if full {
+		level = "Full"
+	}
+	q := url.Values{
+		"scopePath":                     {folder},
+		"recursionLevel":                {level},
+		"versionDescriptor.version":     {branch},
+		"versionDescriptor.versionType": {"branch"},
+		"api-version":                   {apiVersion},
+	}
+	var resp struct {
+		Value []RepoItem `json:"value"`
+	}
+	if err := c.get(ctx, r.path()+"/items", q, &resp); err != nil {
+		return nil, err
+	}
+	out := resp.Value[:0]
+	for _, it := range resp.Value {
+		if it.Path != folder { // the listing includes the folder itself
+			out = append(out, it)
+		}
+	}
+	return out, nil
+}
+
+// FileContent downloads a file at a branch.
+func (c *Client) FileContent(ctx context.Context, r Repo, branch, path string) ([]byte, error) {
+	q := url.Values{
+		"path":                          {path},
+		"versionDescriptor.version":     {branch},
+		"versionDescriptor.versionType": {"branch"},
+		"api-version":                   {apiVersion},
+	}
+	return c.getRaw(ctx, r.path()+"/items", q, "application/octet-stream")
+}
+
+func (c *Client) FileURL(r Repo, branch, path string) string {
+	return r.WebURL + "?path=" + url.QueryEscape(path) + "&version=GB" + url.QueryEscape(branch)
+}
+
 // Run is one execution of a pipeline.
 type Run struct {
 	ID           int       `json:"id"`

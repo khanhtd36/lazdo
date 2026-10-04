@@ -34,8 +34,8 @@ func (m *projectModel) view() string {
 func (m *projectModel) titleLine() string {
 	crumbs := []string{styleTitle.Render(m.project.Name)}
 	switch m.level {
-	case levelBranches:
-		crumbs = append(crumbs, "Repos", styleTitle.Render(m.repo.Name), "branches")
+	case levelRepo:
+		crumbs = append(crumbs, "Repos", styleTitle.Render(m.repo.Name), styleCyan.Render("⎇ "+m.browser.branch))
 	case levelRuns:
 		crumbs = append(crumbs, "Pipelines", styleTitle.Render(m.pipeline.Name), "runs")
 	case levelRun:
@@ -52,8 +52,8 @@ func (m *projectModel) titleLine() string {
 
 func (m *projectModel) busy() bool {
 	switch m.level {
-	case levelBranches:
-		return m.branchesLoading
+	case levelRepo:
+		return m.browser.indexLoading[m.browser.branch]
 	case levelRuns:
 		return m.runsLoading
 	case levelRun:
@@ -103,11 +103,11 @@ func (m *projectModel) tabAt(x int) (projectTab, bool) {
 func (m *projectModel) body() []string {
 	h, w := m.bodyHeight(), m.width-1
 	switch m.level {
-	case levelBranches:
-		if m.branchesLoading && m.branchList.items == nil {
-			return padLines([]string{styleDim.Render("  loading branches…")}, h)
+	case levelRepo:
+		if m.browser.branch == "" {
+			return padLines([]string{styleDim.Render("  empty repo")}, h)
 		}
-		return m.branchList.view(w, h)
+		return m.browser.view(w, h)
 	case levelRuns:
 		if m.runsLoading && m.runList.items == nil {
 			return padLines([]string{styleDim.Render("  loading runs…")}, h)
@@ -133,8 +133,15 @@ func padLines(lines []string, h int) []string {
 func (m *projectModel) help() string {
 	common := "? help  / search  o browser  r refresh  esc back"
 	switch m.level {
-	case levelBranches:
-		return "j/k move  y copy name  Y copy ssh URL  c checkout  " + common
+	case levelRepo:
+		switch m.browser.pane {
+		case paneBranches:
+			return "j/k move  enter switch branch  y copy name  c checkout  z hide  tab panes  " + common
+		case paneContent:
+			return "j/k scroll  / find  n/N match  M markdown raw  y copy path  Y copy link  tab panes  " + common
+		case paneFiles:
+		}
+		return "j/k move  enter open  h/l fold  / go to file  y copy path  Y copy link  c checkout  tab panes  " + common
 	case levelRuns:
 		return "j/k move  enter open run  " + common
 	case levelRun:
@@ -143,7 +150,7 @@ func (m *projectModel) help() string {
 	}
 	switch m.tab {
 	case projTabRepos:
-		return "1-3 tabs  enter branches  y copy URL  Y copy ssh URL  " + common
+		return "1-3 tabs  enter browse  y copy URL  Y copy ssh URL  " + common
 	case projTabPipelines:
 		return "1-3 tabs  enter runs  " + common
 	case projTabPRs, projTabCount:
@@ -151,18 +158,28 @@ func (m *projectModel) help() string {
 	return "1-3 tabs  enter open PR  y copy URL  " + common
 }
 
-// currentList is the list the body shows, nil on the run view.
+// currentList is the list the body shows, nil on the repo and run views.
 func (m *projectModel) currentList() *pickList {
 	switch m.level {
-	case levelBranches:
-		return &m.branchList
 	case levelRuns:
 		return &m.runList
-	case levelRun:
+	case levelRepo, levelRun:
 		return nil
 	case levelTabs:
 	}
 	return &m.lists[m.tab]
+}
+
+// typing reports whether keys are going into a filter or search box.
+func (m *projectModel) typing() bool {
+	switch m.level {
+	case levelRepo:
+		return m.browser.typing()
+	case levelRun:
+		return m.run.tree.typing
+	case levelTabs, levelRuns:
+	}
+	return m.currentList().typing
 }
 
 func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
@@ -177,8 +194,12 @@ func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 	if by < 0 || by >= m.bodyHeight() {
 		return nil
 	}
-	if m.level == levelRun {
+	switch m.level {
+	case levelRun:
 		return m.run.onMouse(msg, by, m.width-1, m.bodyHeight())
+	case levelRepo:
+		return m.browser.onMouse(msg, by, m.width-1, m.bodyHeight())
+	case levelTabs, levelRuns:
 	}
 	l := m.currentList()
 	if d := wheelDelta(msg); d != 0 {

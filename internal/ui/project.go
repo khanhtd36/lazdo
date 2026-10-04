@@ -37,13 +37,13 @@ func (t projectTab) title() string {
 	}
 }
 
-// projectLevel is how deep the user drilled: the tabs, a repo's branches, a
+// projectLevel is how deep the user drilled: the tabs, a repo's browser, a
 // pipeline's runs, or one run.
 type projectLevel int
 
 const (
 	levelTabs projectLevel = iota
-	levelBranches
+	levelRepo
 	levelRuns
 	levelRun
 )
@@ -67,9 +67,8 @@ type projectModel struct {
 
 	level projectLevel
 
-	repo            ado.Repo
-	branchList      pickList
-	branchesLoading bool
+	repo    ado.Repo
+	browser *repoBrowser
 
 	pipeline    ado.Pipeline
 	runList     pickList
@@ -162,16 +161,9 @@ func (m *projectModel) loadPipelines() tea.Cmd {
 }
 
 func (m *projectModel) openRepo(r ado.Repo) tea.Cmd {
-	m.tab, m.level, m.repo = projTabRepos, levelBranches, r
-	m.branchList = pickList{}
-	m.branchesLoading = true
-	client := m.client
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		defer cancel()
-		bs, err := client.Branches(ctx, r)
-		return branchesMsg{repoID: r.ID, branches: bs, err: err}
-	}
+	m.tab, m.level, m.repo = projTabRepos, levelRepo, r
+	m.browser = newRepoBrowser(m.client, m.project, r)
+	return m.browser.init()
 }
 
 func (m *projectModel) openPipeline(p ado.Pipeline) tea.Cmd {
@@ -206,10 +198,9 @@ func (m *projectModel) update(msg tea.Msg) tea.Cmd {
 			m.pipelines = msg.pipelines
 			m.lists[projTabPipelines].setItems(m.pipelineItems())
 		}
-	case branchesMsg:
-		if msg.repoID == m.repo.ID {
-			m.branchesLoading, m.err = false, msg.err
-			m.branchList.setItems(m.branchItems(msg.branches))
+	case branchesMsg, folderMsg, indexMsg, contentMsg:
+		if m.browser != nil {
+			return m.browser.update(msg)
 		}
 	case runsMsg:
 		if msg.pipelineID == m.pipeline.ID {
@@ -230,8 +221,14 @@ func (m *projectModel) update(msg tea.Msg) tea.Cmd {
 func (m *projectModel) key(msg tea.KeyMsg) tea.Cmd {
 	m.status = ""
 	switch m.level {
-	case levelBranches:
-		return m.branchesKey(msg)
+	case levelRepo:
+		if handled, cmd := m.browser.key(msg, m.width-1, m.bodyHeight()); handled {
+			return cmd
+		}
+		if msg.String() == "esc" {
+			m.level, m.browser = levelTabs, nil
+		}
+		return nil
 	case levelRuns:
 		return m.runsKey(msg)
 	case levelRun:
@@ -337,38 +334,6 @@ func (m *projectModel) activate() tea.Cmd {
 	return nil
 }
 
-func (m *projectModel) branchesKey(msg tea.KeyMsg) tea.Cmd {
-	handled, _ := m.branchList.key(msg, m.bodyHeight())
-	if handled {
-		return nil
-	}
-	it, ok := m.branchList.selected()
-	b, _ := it.value.(ado.Branch)
-	switch msg.String() {
-	case "esc":
-		m.level = levelTabs
-	case "r":
-		return m.openRepo(m.repo)
-	case "o":
-		if ok {
-			return openURL(m.client.BranchURL(m.repo, b.Name), "opened "+b.Name)
-		}
-		return openURL(m.repo.WebURL, "opened "+m.repo.Name)
-	case "y":
-		if ok {
-			return func() tea.Msg { return resultMsg(actions.CopyToClipboard(b.Name), "copied "+b.Name) }
-		}
-	case "Y":
-		return copyRepoURL(m.repo, true)
-	case "c":
-		if !ok {
-			return nil
-		}
-		return requestCheckout(m.client.Org, m.project.Name, m.repo.Name, b.Name)
-	}
-	return nil
-}
-
 func (m *projectModel) runsKey(msg tea.KeyMsg) tea.Cmd {
 	handled, activate := m.runList.key(msg, m.bodyHeight())
 	it, ok := m.runList.selected()
@@ -468,38 +433,6 @@ func humanSize(b int64) string {
 		return fmt.Sprintf("%.0f KB", float64(b)/(1<<10))
 	}
 	return fmt.Sprintf("%d B", b)
-}
-
-func (m *projectModel) branchItems(branches []ado.Branch) []pickItem {
-	sort.SliceStable(branches, func(i, j int) bool {
-		if branches[i].IsBaseVersion != branches[j].IsBaseVersion {
-			return branches[i].IsBaseVersion // default branch first
-		}
-		return branches[i].Commit.Author.Date.After(branches[j].Commit.Author.Date)
-	})
-	items := make([]pickItem, 0, len(branches))
-	for _, b := range branches {
-		items = append(items, pickItem{
-			search: b.Name + " " + b.Commit.Author.Name,
-			value:  b,
-			render: func(width int) string { return branchRow(b, width) },
-		})
-	}
-	return items
-}
-
-func branchRow(b ado.Branch, width int) string {
-	ab := styleDim.Render("default")
-	if !b.IsBaseVersion {
-		ab = styleGreen.Render(fmt.Sprintf("↑%d", b.AheadCount)) + " " + styleRed.Render(fmt.Sprintf("↓%d", b.BehindCount))
-	}
-	date := b.Commit.Author.Date
-	return truncate(joinCols(
-		fit(styleTitle.Render(b.Name), 40),
-		fitStyled(ab, 12),
-		styleDim.Render(fit(nameInitials(b.Commit.Author.Name)+" · "+relTime(time.Since(date), date), 16)),
-		styleDim.Render(firstLine(b.Commit.Comment)),
-	), width)
 }
 
 func (m *projectModel) pipelineItems() []pickItem {

@@ -151,7 +151,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case projectsLoadedMsg:
 		m.projects.onLoaded(msg)
-	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg, runLoadedMsg, logMsg, runTickMsg:
+	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg, runLoadedMsg, logMsg, runTickMsg,
+		folderMsg, indexMsg, contentMsg:
 		if m.project != nil {
 			return m, m.project.update(msg)
 		}
@@ -258,10 +259,7 @@ func (m Model) typing() bool {
 	case m.detail != nil:
 		return m.detail.modal != nil
 	case m.project != nil:
-		if l := m.project.currentList(); l != nil {
-			return l.typing
-		}
-		return m.project.run.tree.typing
+		return m.project.typing()
 	case m.page == pageProjects:
 		return m.projects.list.typing
 	}
