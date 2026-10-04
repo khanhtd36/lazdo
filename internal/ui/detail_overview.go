@@ -164,7 +164,7 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		return copyPR(d.client.Org, d.pr)
 	case "J":
-		d.threadSel, d.inThread = min(d.threadSel+1, n-1), false
+		d.threadSel, d.inThread = max(0, min(d.threadSel+1, n-1)), false
 		d.rebuildOverview()
 		d.scrollToEntry()
 	case "K":
@@ -258,7 +258,7 @@ func (d *detailModel) threadKey(key string, t ado.Thread, inThread bool, comment
 func statusCmd(s string) tea.Cmd { return func() tea.Msg { return statusMsg(s) } }
 
 func (d *detailModel) scrollToEntry() {
-	if d.threadSel < len(d.entryLines) {
+	if d.threadSel >= 0 && d.threadSel < len(d.entryLines) {
 		d.vp.SetYOffset(max(0, d.entryLines[d.threadSel]-2))
 	}
 }

@@ -78,6 +78,17 @@ func TestDetailFitsWidth(t *testing.T) {
 	}
 }
 
+func TestDetailGroupKeysWithoutActivity(t *testing.T) {
+	d := fakeDetail(t, 120)
+	d.data.Threads = nil
+	d.filter = filterComments // nothing matches; Everything always has "created"
+	d.rebuildOverview()
+	press(d, "J", "K", "J") // must not panic with no entries
+	if d.threadSel != 0 {
+		t.Fatalf("selection should stay at 0 with no entries, got %d", d.threadSel)
+	}
+}
+
 func TestDetailActivityFilters(t *testing.T) {
 	d := fakeDetail(t, 120)
 	counts := map[activityFilter]int{}
