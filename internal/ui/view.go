@@ -27,14 +27,90 @@ var (
 
 // Fixed widths of the right-hand columns; the title takes what's left.
 const (
-	colAuthor   = 16
-	colID       = 7
-	colRepo     = 28
-	colVotes    = 18
-	colComments = 6
-	colBuild    = 2
-	colUpdated  = 9
+	colAuthor        = 16
+	colAuthorCompact = 4
+	colID            = 7
+	colRepo          = 28
+	colVotes         = 18
+	colComments      = 6
+	colBuild         = 2
+	colUpdated       = 9
 )
+
+// compactWidth is the width below which badges and author names shorten.
+const compactWidth = 150
+
+type column int
+
+const (
+	columnAuthor column = iota
+	columnID
+	columnRepo
+	columnVotes
+	columnComments
+	columnBuild
+	columnUpdated
+	columnCount
+)
+
+// columnDropOrder is which columns give way, first to last, when the title
+// would otherwise get squeezed. The ID always stays.
+var columnDropOrder = []column{columnRepo, columnVotes, columnUpdated, columnAuthor, columnComments, columnBuild}
+
+// rowLayout is how dashboard rows fit the current width.
+type rowLayout struct {
+	compact bool
+	shown   [columnCount]bool
+}
+
+func (l rowLayout) width(c column) int {
+	switch c {
+	case columnAuthor:
+		if l.compact {
+			return colAuthorCompact
+		}
+		return colAuthor
+	case columnID:
+		return colID
+	case columnRepo:
+		return colRepo
+	case columnVotes:
+		return colVotes
+	case columnComments:
+		return colComments
+	case columnBuild:
+		return colBuild
+	case columnUpdated:
+		return colUpdated
+	case columnCount:
+	}
+	return 0
+}
+
+func (m Model) rowLayout() rowLayout {
+	l := rowLayout{compact: m.width < compactWidth}
+	for c := range columnCount {
+		l.shown[c] = true
+	}
+	badges := 22 // room for typical badges like "[draft] [required]"
+	if l.compact {
+		badges = 9 // "[d] [r] [+8p]"
+	}
+	minTitle := max(24, m.width/3)
+	for _, drop := range columnDropOrder {
+		used := 6 + badges // cursor, indent, gaps
+		for c := range columnCount {
+			if l.shown[c] {
+				used += l.width(c) + 1
+			}
+		}
+		if m.width-used >= minTitle {
+			break
+		}
+		l.shown[drop] = false
+	}
+	return l
+}
 
 func (m Model) View() string {
 	if m.width == 0 {
@@ -106,38 +182,55 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	stats, hasStats := m.stats[pr.ID]
 	buildRes, hasBuild := m.builds[pr.ID]
 
+	layout := m.rowLayout()
+
 	var badges []string
 	if pr.IsDraft {
-		badges = append(badges, styleDraft.Render("[draft]"))
+		badges = append(badges, styleDraft.Render(pick2(layout.compact, "[d]", "[draft]")))
 	}
 	if me, ok := pr.ReviewerFor(m.me.ID); ok && me.IsRequired {
-		badges = append(badges, styleRequired.Render("[required]"))
+		badges = append(badges, styleRequired.Render(pick2(layout.compact, "[r]", "[required]")))
 	}
 	if hasStats {
-		badges = append(badges, sinceLastVisit(stats)...)
+		badges = append(badges, sinceLastVisit(stats, layout.compact)...)
 	}
 	badgeText := strings.Join(badges, " ")
 
-	right := strings.Join([]string{
-		styleDim.Render(fit(pr.CreatedBy.DisplayName, colAuthor)),
-		fit(fmt.Sprintf("!%d", pr.ID), colID),
-		styleDim.Render(fit(pr.Repository.Name+" → "+pr.TargetBranch(), colRepo)),
-		fitStyled(votes(pr.Reviewers), colVotes),
-		fitStyled(m.comments(stats, hasStats), colComments),
-		fitStyled(build(buildRes, hasBuild), colBuild),
-		styleDim.Render(fit(updated(stats, pr), colUpdated)),
-	}, " ")
+	author := pr.CreatedBy.DisplayName
+	if layout.compact {
+		author = nameInitials(author)
+	}
+	cells := [columnCount]string{
+		columnAuthor:   styleDim.Render(fit(author, layout.width(columnAuthor))),
+		columnID:       fit(fmt.Sprintf("!%d", pr.ID), colID),
+		columnRepo:     styleDim.Render(fit(pr.Repository.Name+" → "+pr.TargetBranch(), colRepo)),
+		columnVotes:    fitStyled(votes(pr.Reviewers), colVotes),
+		columnComments: fitStyled(m.comments(stats, hasStats), colComments),
+		columnBuild:    fitStyled(build(buildRes, hasBuild), colBuild),
+		columnUpdated:  styleDim.Render(fit(updated(stats, pr), colUpdated)),
+	}
+	var shown []string
+	for c, s := range cells {
+		if layout.shown[c] {
+			shown = append(shown, s)
+		}
+	}
+	right := strings.Join(shown, " ")
 
 	// 2 cursor + 2 indent + 1 gap before right + 1 spare so the line never wraps.
 	titleWidth := m.width - 6 - ansi.StringWidth(right) - ansi.StringWidth(badgeText)
 	if badgeText != "" {
 		titleWidth--
 	}
-	title := fit(pr.Title, max(titleWidth, 10))
+	// Badges follow the title text, like the web list; the padding goes
+	// after them so the right-hand columns still line up.
+	title := truncate(pr.Title, max(titleWidth, 10))
+	cellWidth := max(titleWidth, 10)
 	if badgeText != "" {
 		title += " " + badgeText
+		cellWidth += 1 + ansi.StringWidth(badgeText)
 	}
-	return "  " + title + " " + right // indent under the section header
+	return "  " + padRight(title, cellWidth) + " " + right // indent under the section header
 }
 
 func votes(reviewers []ado.Reviewer) string {
@@ -160,10 +253,29 @@ func votes(reviewers []ado.Reviewer) string {
 	return strings.Join(parts, " ")
 }
 
-// sinceLastVisit mirrors the "N new pushes" note of the Azure DevOps list.
-func sinceLastVisit(s ado.Stats) []string {
+func pick2(compact bool, short, long string) string {
+	if compact {
+		return short
+	}
+	return long
+}
+
+// nameInitials turns "Truong Duy Khanh" into "TDK" (at most four letters).
+func nameInitials(name string) string {
+	var b strings.Builder
+	for _, w := range strings.FieldsFunc(name, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		if b.Len() < 4 {
+			b.WriteRune(unicode.ToUpper([]rune(w)[0]))
+		}
+	}
+	return b.String()
+}
+
+// sinceLastVisit mirrors the "N new pushes" note of the Azure DevOps list;
+// compact gives "[+8p]", "[+2c]", "[+1v]" and "[u]" for unvisited.
+func sinceLastVisit(s ado.Stats, compact bool) []string {
 	if !s.Visited {
-		return []string{styleCyan.Render("[unvisited]")}
+		return []string{styleCyan.Render(pick2(compact, "[u]", "[unvisited]"))}
 	}
 	var out []string
 	for _, c := range []struct {
@@ -171,6 +283,8 @@ func sinceLastVisit(s ado.Stats) []string {
 		noun string
 	}{{s.NewPushes, "push"}, {s.NewComments, "comment"}, {s.NewVotes, "vote"}} {
 		switch {
+		case c.n > 0 && compact:
+			out = append(out, styleCyan.Render(fmt.Sprintf("[+%d%c]", c.n, c.noun[0])))
 		case c.n == 1:
 			out = append(out, styleCyan.Render("[1 new "+c.noun+"]"))
 		case c.n > 1 && c.noun == "push":

@@ -47,6 +47,50 @@ func TestViewFitsWidth(t *testing.T) {
 	}
 }
 
+func TestDashboardCompactLayout(t *testing.T) {
+	me := ado.Identity{ID: "me"}
+	mk := func(id int, title, author string, draft bool) ado.PullRequest {
+		return ado.PullRequest{
+			ID: id, Title: title, IsDraft: draft, CreatedBy: ado.Identity{DisplayName: author},
+			Repository: ado.Repository{Name: "MITS11"}, TargetRefName: "refs/heads/develop",
+			Reviewers: []ado.Reviewer{{Identity: me, IsRequired: true}},
+		}
+	}
+	prs := []ado.PullRequest{
+		mk(15069, "fix(mdbi): upgrade master, info and data databases", "Truong Duy Khanh", false),
+		mk(14736, "feat(das): add --verify-iv, the firmware wire contract", "Nam X. Duong", true),
+	}
+	for _, width := range []int{100, 130, 200} {
+		m := New(ado.NewClient("org"), time.Minute)
+		m.me, m.loading = me, false
+		m.sections = ado.Classify("me", prs, nil)
+		m.stats = map[int]ado.Stats{14736: {Visited: true, NewPushes: 8}}
+		next, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 20})
+		view := ansi.Strip(next.View())
+
+		compact := width < compactWidth
+		if compact != strings.Contains(view, "[r]") || compact == strings.Contains(view, "[required]") {
+			t.Errorf("width %d: compact=%v but badges are wrong:\n%s", width, compact, view)
+		}
+		if compact && (!strings.Contains(view, "TDK") || !strings.Contains(view, "[+8p]")) {
+			t.Errorf("width %d: want initials TDK and [+8p]:\n%s", width, view)
+		}
+		// The title keeps a third of the width, and the ID column lines up.
+		idCols := map[int]bool{}
+		for _, line := range strings.Split(view, "\n") {
+			if i := strings.Index(line, "!1"); i >= 0 {
+				idCols[ansi.StringWidth(line[:i])] = true
+				if !strings.Contains(line, "fix(mdbi): upgrade") && !strings.Contains(line, "feat(das): add --ver") {
+					t.Errorf("width %d: title squeezed: %q", width, line)
+				}
+			}
+		}
+		if len(idCols) != 1 {
+			t.Errorf("width %d: ID column not aligned: %v\n%s", width, idCols, view)
+		}
+	}
+}
+
 func TestInitials(t *testing.T) {
 	for in, want := range map[string]string{
 		"Truong Duy Khanh":    "TK",
