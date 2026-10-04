@@ -55,8 +55,15 @@ func TestNextChange(t *testing.T) {
 	c, a := diffLine{kind: lineContext}, diffLine{kind: lineAdd}
 	lines := []diffLine{c, a, a, c, c, a, c}
 	for _, tc := range []struct{ from, dir, want int }{
-		{0, 1, 1}, {1, 1, 5}, {2, 1, 5}, {5, 1, 5}, // no further change: stay
-		{6, -1, 5}, {5, -1, 1}, {4, -1, 1}, {1, -1, 1},
+		{0, 1, 1},
+		{1, 1, 5},
+		{2, 1, 5},
+		{5, 1, 5}, // no further change: stay
+		{6, -1, 5},
+		{5, -1, 1},
+		{4, -1, 1},
+		{1, -1, 1},
+		{2, -1, 1}, // inside a change: back to its start
 	} {
 		if got := nextChange(lines, tc.from, tc.dir); got != tc.want {
 			t.Errorf("nextChange(from %d, dir %d) = %d, want %d", tc.from, tc.dir, got, tc.want)

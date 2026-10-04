@@ -137,6 +137,13 @@ const changeContextRows = 5
 // changed lines.
 func nextChange(lines []diffLine, from, dir int) int {
 	changed := func(i int) bool { return lines[i].kind != lineContext }
+	if dir < 0 && from > 0 && from < len(lines) && changed(from) && changed(from-1) {
+		// Inside a change: go back to where it starts first.
+		for from > 0 && changed(from-1) {
+			from--
+		}
+		return from
+	}
 	i := from
 	// Leave the run the cursor is in first.
 	for i >= 0 && i < len(lines) && changed(i) {
