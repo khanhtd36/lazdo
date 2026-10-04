@@ -58,6 +58,16 @@ lazdo --interval 30s     # auto-refresh period (default 2m)
 | `r` | refresh now |
 | `q` | quit |
 
+### Mouse
+
+Click selects; clicking what is already selected opens it (a PR, a comment
+thread, a commit, a file's diff). Click section headers to collapse them,
+tabs to switch, and the vote / complete buttons and menu items to act; a
+click outside a menu closes it. In the diff, a click picks the line and the
+side. The wheel scrolls whatever is under the pointer.
+
+lazdo captures the mouse, so select text with shift+drag.
+
 ### PR detail
 
 Opening a PR counts as a visit, exactly like opening it in the browser: its

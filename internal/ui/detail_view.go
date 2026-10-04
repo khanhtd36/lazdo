@@ -55,21 +55,29 @@ func (d *detailModel) body() string {
 	return d.renderList()
 }
 
-func (d *detailModel) titleLine() string {
-	vote := "Approve"
+// titleButtons renders the vote and complete buttons and returns the column
+// each starts at, for mouse clicks.
+func (d *detailModel) titleButtons() (vote, complete string, voteX, completeX int) {
+	voteLabel := "Approve"
 	if d.data != nil {
 		if me, ok := d.data.ReviewerFor(d.me.ID); ok && me.Vote != ado.VoteNone {
-			vote = voteText(me.Vote)
+			voteLabel = voteText(me.Vote)
 		}
 	}
-	complete := "Set auto-complete"
+	completeLabel := "Set auto-complete"
 	if d.data != nil && d.data.AutoCompleteSetBy != nil && d.data.AutoCompleteSetBy.ID != "" {
-		complete = "Auto-complete set"
+		completeLabel = "Auto-complete set"
 	}
-	buttons := styleButton.Render("v "+vote+" ▾") + " " + styleButtonCTA.Render("m "+complete+" ▾")
-	title := truncate(styleTitle.Render(d.pr.Title), d.width-ansi.StringWidth(buttons)-3)
-	gap := max(1, d.width-1-ansi.StringWidth(title)-ansi.StringWidth(buttons))
-	return title + strings.Repeat(" ", gap) + buttons
+	vote = styleButton.Render("v " + voteLabel + " ▾")
+	complete = styleButtonCTA.Render("m " + completeLabel + " ▾")
+	voteX = d.width - 1 - ansi.StringWidth(vote) - 1 - ansi.StringWidth(complete)
+	return vote, complete, voteX, voteX + ansi.StringWidth(vote) + 1
+}
+
+func (d *detailModel) titleLine() string {
+	vote, complete, voteX, _ := d.titleButtons()
+	title := truncate(styleTitle.Render(d.pr.Title), voteX-2)
+	return fit(title, voteX) + vote + " " + complete
 }
 
 func (d *detailModel) subtitleLine() string {
@@ -85,8 +93,35 @@ func (d *detailModel) subtitleLine() string {
 	return truncate(s, d.width-1)
 }
 
+const tabGap = "   "
+
+// tabAt returns the tab whose label covers column x of the tabs line.
+func (d *detailModel) tabAt(x int) (detailTab, bool) {
+	start := 0
+	for t, label := range d.tabLabels() {
+		end := start + ansi.StringWidth(label)
+		if x >= start && x < end {
+			return detailTab(t), true
+		}
+		start = end + len(tabGap)
+	}
+	return 0, false
+}
+
 func (d *detailModel) tabsLine() string {
 	parts := make([]string, 0, tabCount)
+	for t, label := range d.tabLabels() {
+		if detailTab(t) == d.tab {
+			parts = append(parts, styleTabActive.Render(label))
+		} else {
+			parts = append(parts, label)
+		}
+	}
+	return strings.Join(parts, tabGap)
+}
+
+func (d *detailModel) tabLabels() []string {
+	labels := make([]string, 0, tabCount)
 	for t := range tabCount {
 		label := fmt.Sprintf("%d %s", t+1, t.title())
 		if d.data != nil {
@@ -100,13 +135,9 @@ func (d *detailModel) tabsLine() string {
 			case tabOverview, tabCount:
 			}
 		}
-		if t == d.tab {
-			parts = append(parts, styleTabActive.Render(label))
-		} else {
-			parts = append(parts, label)
-		}
+		labels = append(labels, label)
 	}
-	return strings.Join(parts, "   ")
+	return labels
 }
 
 func (d *detailModel) statusLine() string {

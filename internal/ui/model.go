@@ -183,6 +183,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.onDetailKey(msg)
 		}
 		return m.onKey(msg)
+	case tea.MouseMsg:
+		return m.onMouse(msg)
 	}
 	return m, nil
 }
