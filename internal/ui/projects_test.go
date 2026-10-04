@@ -97,7 +97,7 @@ func TestPagesSwitchAndProjectEsc(t *testing.T) {
 	// / then 1 types into the filter instead of switching pages.
 	next, _ = m.Update(keyMsg("/"))
 	next, _ = next.Update(keyMsg("1"))
-	if next.(Model).project == nil || next.(Model).project.lists[projTabPRs].filter != "1" {
+	if p := next.(Model).project; p == nil || p.tab != projTabRepos || p.lists[projTabRepos].filter != "1" {
 		t.Fatal("1 while filtering should be typed, not switch pages")
 	}
 	next, _ = next.Update(keyMsg("esc")) // clears the filter

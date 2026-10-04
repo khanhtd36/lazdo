@@ -18,8 +18,8 @@ import (
 type projectTab int
 
 const (
-	projTabPRs projectTab = iota
-	projTabRepos
+	projTabRepos projectTab = iota
+	projTabPRs
 	projTabPipelines
 	projTabCount
 )

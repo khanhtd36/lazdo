@@ -64,7 +64,7 @@ func (m *projectModel) busy() bool {
 }
 
 func (m *projectModel) tabLabels() []string {
-	counts := [projTabCount]int{len(m.prs), len(m.repos), len(m.pipelines)}
+	counts := [projTabCount]int{projTabRepos: len(m.repos), projTabPRs: len(m.prs), projTabPipelines: len(m.pipelines)}
 	labels := make([]string, 0, projTabCount)
 	for t := range projTabCount {
 		label := fmt.Sprintf("%d %s", t+1, t.title())

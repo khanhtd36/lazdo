@@ -95,7 +95,7 @@ var (
 		{"r", "refresh", "r"},
 	}
 	projectKeys = []binding{
-		{"1-3", "Pull requests, Repos, Pipelines tab", ""},
+		{"1-3", "Repos, Pull requests, Pipelines tab", ""},
 		{"[ / ]", "previous / next tab", "]"},
 		{"enter", "open: pull request, repo's branches, pipeline's runs", "enter"},
 		{"/", "filter the list", "/"},
