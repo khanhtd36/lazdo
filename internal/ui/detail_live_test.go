@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -48,14 +49,42 @@ func TestDetailLive(t *testing.T) {
 	if width == 0 {
 		width = 160
 	}
-	d := newDetail(c, me, *found, "", width, 60)
+	d := newDetail(c, me, *found, "", width, 50)
 	data, err := c.Detail(ctx, *found)
 	d.update(detailLoadedMsg{d: data, err: err})
-	for _, key := range []string{"", "2", "3", "4"} {
-		if key != "" {
-			d.update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+	keys := strings.Fields(os.Getenv("LAZDO_LIVE_KEYS"))
+	if len(keys) == 0 {
+		keys = []string{"1", "2", "j", "l", "n", "|", "S", "|", "3", "j", "enter", "l", "|", "4", "|"}
+	}
+	for _, key := range keys {
+		if key == "|" {
+			fmt.Println(d.view())
+			fmt.Println("=====")
+			continue
 		}
-		fmt.Println(d.view())
-		fmt.Println("=====")
+		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
+		if key == "enter" {
+			msg = tea.KeyMsg{Type: tea.KeyEnter}
+		}
+		drain(d, d.update(msg))
+	}
+}
+
+// drain runs commands synchronously, feeding their messages back, so the
+// test sees loaded files and diffs. Visits are never recorded: the test
+// never calls init.
+func drain(d *detailModel, cmd tea.Cmd) {
+	for cmd != nil {
+		msg := cmd()
+		if batch, ok := msg.(tea.BatchMsg); ok {
+			for _, c := range batch {
+				drain(d, c)
+			}
+			return
+		}
+		if msg == nil {
+			return
+		}
+		cmd = d.update(msg)
 	}
 }

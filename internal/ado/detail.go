@@ -68,14 +68,23 @@ type Push struct {
 	SourceRefCommit struct {
 		CommitID string `json:"commitId"`
 	} `json:"sourceRefCommit"`
+	CommonRefCommit struct {
+		CommitID string `json:"commitId"`
+	} `json:"commonRefCommit"`
 }
 
 type Change struct {
-	ChangeType   string `json:"changeType"`
-	OriginalPath string `json:"originalPath"`
-	Item         struct {
-		Path string `json:"path"`
-	} `json:"item"`
+	ChangeType       string     `json:"changeType"`
+	OriginalPath     string     `json:"originalPath"`
+	ChangeTrackingID int        `json:"changeTrackingId"`
+	Item             ChangeItem `json:"item"`
+}
+
+type ChangeItem struct {
+	Path             string `json:"path"`
+	ObjectID         string `json:"objectId"`
+	OriginalObjectID string `json:"originalObjectId"`
+	IsFolder         bool   `json:"isFolder"`
 }
 
 type Conflict struct {
@@ -114,8 +123,18 @@ type Thread struct {
 		Value any `json:"$value"`
 	} `json:"properties"`
 	ThreadContext *struct {
-		FilePath string `json:"filePath"`
+		FilePath       string    `json:"filePath"`
+		LeftFileStart  *Position `json:"leftFileStart"`
+		LeftFileEnd    *Position `json:"leftFileEnd"`
+		RightFileStart *Position `json:"rightFileStart"`
+		RightFileEnd   *Position `json:"rightFileEnd"`
 	} `json:"threadContext"`
+}
+
+// Position is a 1-based line and character offset in a file.
+type Position struct {
+	Line   int `json:"line"`
+	Offset int `json:"offset"`
 }
 
 // Kind is the CodeReviewThreadType of a system thread, "" for a human one.
@@ -268,10 +287,23 @@ func (c *Client) buildDefinitionName(ctx context.Context, pr PullRequest, id int
 }
 
 func (c *Client) threads(ctx context.Context, pr PullRequest) ([]Thread, error) {
+	return c.threadsQuery(ctx, pr, v71())
+}
+
+// TrackedThreads returns the threads with file positions mapped onto the
+// comparison of push base to push target, as the web diff shows them.
+func (c *Client) TrackedThreads(ctx context.Context, pr PullRequest, target, base int) ([]Thread, error) {
+	q := v71()
+	q.Set("$iteration", strconv.Itoa(target))
+	q.Set("$baseIteration", strconv.Itoa(base))
+	return c.threadsQuery(ctx, pr, q)
+}
+
+func (c *Client) threadsQuery(ctx context.Context, pr PullRequest, q url.Values) ([]Thread, error) {
 	var resp struct {
 		Value []Thread `json:"value"`
 	}
-	err := c.get(ctx, pr.prPath()+"/threads", v71(), &resp)
+	err := c.get(ctx, pr.prPath()+"/threads", q, &resp)
 	var out []Thread
 	for _, t := range resp.Value {
 		if !t.IsDeleted && len(t.LiveComments()) > 0 {
@@ -296,16 +328,22 @@ func (c *Client) pushesAndChanges(ctx context.Context, pr PullRequest) ([]Push, 
 	if err := c.get(ctx, pr.prPath()+"/iterations", v71(), &its); err != nil || len(its.Value) == 0 {
 		return its.Value, nil, err
 	}
-	last := its.Value[len(its.Value)-1].ID
+	changes, err := c.IterationChanges(ctx, pr, its.Value[len(its.Value)-1].ID, 0)
+	return its.Value, changes, err
+}
+
+// IterationChanges lists the files changed between push base and push
+// target; base 0 means the merge base, i.e. all changes up to target.
+func (c *Client) IterationChanges(ctx context.Context, pr PullRequest, target, base int) ([]Change, error) {
 	var changes []Change
 	for skip := 0; ; {
-		q := url.Values{"api-version": {apiVersion}, "$compareTo": {"0"}, "$top": {"100"}, "$skip": {strconv.Itoa(skip)}}
+		q := url.Values{"api-version": {apiVersion}, "$compareTo": {strconv.Itoa(base)}, "$top": {"100"}, "$skip": {strconv.Itoa(skip)}}
 		var resp struct {
 			ChangeEntries []Change `json:"changeEntries"`
 			NextSkip      int      `json:"nextSkip"`
 		}
-		if err := c.get(ctx, fmt.Sprintf("%s/iterations/%d/changes", pr.prPath(), last), q, &resp); err != nil {
-			return its.Value, changes, err
+		if err := c.get(ctx, fmt.Sprintf("%s/iterations/%d/changes", pr.prPath(), target), q, &resp); err != nil {
+			return changes, err
 		}
 		changes = append(changes, resp.ChangeEntries...)
 		if resp.NextSkip == 0 {
@@ -314,7 +352,7 @@ func (c *Client) pushesAndChanges(ctx context.Context, pr PullRequest) ([]Push, 
 		skip = resp.NextSkip
 	}
 	sort.Slice(changes, func(i, j int) bool { return changes[i].Item.Path < changes[j].Item.Path })
-	return its.Value, changes, nil
+	return changes, nil
 }
 
 func (c *Client) conflicts(ctx context.Context, pr PullRequest) ([]Conflict, error) {

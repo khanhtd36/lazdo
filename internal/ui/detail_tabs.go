@@ -12,11 +12,13 @@ import (
 	"github.com/khanhtd36/lazdo/internal/ado"
 )
 
-// listLine is one row of the Files, Commits or Conflicts tab; url is what
-// enter opens, empty for rows that are not actionable.
+// listLine is one row of the Files tree, Commits or Conflicts tab; url is
+// what enter opens in the browser, change and commit what it opens in lazdo.
 type listLine struct {
-	text string
-	url  string
+	text   string
+	url    string
+	change *ado.Change
+	commit string
 }
 
 func (d *detailModel) listLines() []listLine {
@@ -25,7 +27,7 @@ func (d *detailModel) listLines() []listLine {
 	}
 	switch d.tab {
 	case tabFiles:
-		return d.fileLines()
+		return d.treeLines()
 	case tabCommits:
 		return d.commitLines()
 	case tabConflicts:
@@ -48,6 +50,9 @@ func (d *detailModel) listKey(msg tea.KeyMsg) tea.Cmd {
 	case "G", "end":
 		*cur = len(lines) - 1
 	case "enter":
+		if *cur < len(lines) && lines[*cur].commit != "" {
+			return d.openCommitDiff(lines[*cur].commit)
+		}
 		if *cur < len(lines) && lines[*cur].url != "" {
 			return openURL(lines[*cur].url, "opened in browser")
 		}
@@ -83,10 +88,10 @@ type fileNode struct {
 	change   *ado.Change
 }
 
-func (d *detailModel) fileLines() []listLine {
+func (d *detailModel) fileLines(changes []ado.Change) []listLine {
 	root := &fileNode{children: map[string]*fileNode{}}
-	for i := range d.data.Changes {
-		ch := &d.data.Changes[i]
+	for i := range changes {
+		ch := &changes[i]
 		node := root
 		parts := strings.Split(strings.Trim(ch.Item.Path, "/"), "/")
 		for _, p := range parts {
@@ -99,8 +104,8 @@ func (d *detailModel) fileLines() []listLine {
 		}
 		node.change = ch
 	}
-	lines := []listLine{{text: styleSection.Render(d.pr.Repository.Name) + styleDim.Render(fmt.Sprintf("  %d changed %s · enter opens the diff in the browser",
-		len(d.data.Changes), plural(len(d.data.Changes), "file", "files")))}}
+	lines := []listLine{{text: styleSection.Render(d.pr.Repository.Name) + styleDim.Render(fmt.Sprintf("  %d %s",
+		len(changes), plural(len(changes), "file", "files")))}}
 	d.appendTree(&lines, root, 0)
 	return lines
 }
@@ -123,8 +128,9 @@ func (d *detailModel) appendTree(lines *[]listLine, node *fileNode, depth int) {
 		child := node.children[n]
 		if child.change != nil {
 			*lines = append(*lines, listLine{
-				text: indent + changeGlyph(child.change.ChangeType) + " " + child.name,
-				url:  d.fileURL(child.change.Item.Path),
+				text:   indent + changeGlyph(child.change.ChangeType) + " " + child.name,
+				url:    d.fileURL(child.change.Item.Path),
+				change: child.change,
 			})
 			continue
 		}
@@ -220,7 +226,8 @@ func (d *detailModel) commitLines() []listLine {
 			lines = append(lines, listLine{
 				text: "  " + styleDim.Render(shortSHA(id)) + " " + firstLine(c.Comment) +
 					styleDim.Render("  "+c.Author.Name+" · "+relTime(time.Since(c.Author.Date), c.Author.Date)),
-				url: d.commitURL(id),
+				url:    d.commitURL(id),
+				commit: id,
 			})
 		}
 	}

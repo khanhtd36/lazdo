@@ -38,9 +38,7 @@ func fakeDetail(t *testing.T, width int) *detailModel {
 			}},
 		},
 		Commits: []ado.Commit{{ID: "abcdef1234", Comment: "fix: x"}},
-		Changes: []ado.Change{{ChangeType: "edit", Item: struct {
-			Path string `json:"path"`
-		}{Path: "/src/a/b.go"}}},
+		Changes: []ado.Change{{ChangeType: "edit", Item: ado.ChangeItem{Path: "/src/a/b.go"}}},
 	}
 	data.MergeStatus = "succeeded"
 	d := newDetail(ado.NewClient("org"), me, pr, "", width, 40)

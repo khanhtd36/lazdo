@@ -49,6 +49,9 @@ func (d *detailModel) body() string {
 	if d.data == nil {
 		return d.renderOverview() // loading or error text
 	}
+	if d.tab == tabFiles {
+		return d.renderFiles()
+	}
 	return d.renderList()
 }
 
@@ -120,7 +123,16 @@ func (d *detailModel) statusLine() string {
 
 func (d *detailModel) help() string {
 	common := "v vote  m complete  o browser  y copy  c checkout  r refresh  1-4/[ ] tabs  esc back"
-	if d.tab != tabOverview {
+	switch {
+	case d.tab == tabFiles && d.files.inThread:
+		return "j/k comment  R reply  s status  e edit  d delete  esc leave thread  " + common
+	case d.tab == tabFiles && d.files.pane == paneDiff:
+		return "j/k line  n/p change  h/l side  V range  a comment  enter thread  R/s on thread  S mode  u compare  z tree  tab files  " + common
+	case d.tab == tabFiles:
+		return "j/k file  enter diff  S mode  u compare  z hide tree  " + common
+	case d.tab == tabCommits:
+		return "j/k move  enter diff of commit  " + common
+	case d.tab != tabOverview:
 		return "j/k move  enter open  " + common
 	}
 	if d.inThread {

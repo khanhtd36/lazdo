@@ -139,7 +139,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.detail != nil {
 			m.detail.resize(msg.Width, msg.Height)
 		}
-	case detailLoadedMsg, visitMsg, editorDoneMsg:
+	case detailLoadedMsg, visitMsg, editorDoneMsg, filesLoadedMsg, fileDiffMsg:
 		if m.detail != nil {
 			return m, m.detail.update(msg)
 		}

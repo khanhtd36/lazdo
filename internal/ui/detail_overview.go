@@ -170,12 +170,12 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		d.vp.ScrollUp(1)
 	case "n":
 		d.modal = d.newCommentEditor()
-	case "R":
-		return d.withThread(func(t ado.Thread) { d.modal = d.replyEditor(t) })
-	case "s":
-		return d.withThread(func(t ado.Thread) { d.modal = d.threadStatusMenu(t) })
-	case "e", "d":
-		return d.withOwnComment(msg.String())
+	case "R", "s", "e", "d":
+		e, ok := d.selectedEntry()
+		if !ok || !e.isHuman {
+			return statusCmd("select a comment thread first (J/K)")
+		}
+		return d.threadKey(msg.String(), *e.thread, d.inThread, d.commentSel)
 	default:
 		var cmd tea.Cmd
 		d.vp, cmd = d.vp.Update(msg)
@@ -193,30 +193,29 @@ func (d *detailModel) moveComment(delta int) tea.Cmd {
 	return nil
 }
 
-func (d *detailModel) withThread(f func(ado.Thread)) tea.Cmd {
-	e, ok := d.selectedEntry()
-	if !ok || !e.isHuman {
-		return statusCmd("select a comment thread first (J/K)")
+// threadKey runs reply (R), status (s), edit (e) or delete (d) on a thread;
+// edit and delete act on the picked comment, so they need inThread.
+func (d *detailModel) threadKey(key string, t ado.Thread, inThread bool, commentSel int) tea.Cmd {
+	switch key {
+	case "R":
+		d.modal = d.replyEditor(t)
+		return nil
+	case "s":
+		d.modal = d.threadStatusMenu(t)
+		return nil
 	}
-	f(*e.thread)
-	return nil
-}
-
-func (d *detailModel) withOwnComment(key string) tea.Cmd {
-	e, ok := d.selectedEntry()
-	if !ok || !e.isHuman || !d.inThread {
-		return statusCmd("select a thread (J/K), press enter, then pick a comment (j/k)")
+	if !inThread {
+		return statusCmd("press enter to step into the thread, then pick a comment (j/k)")
 	}
-	live := e.thread.LiveComments()
-	cm := live[min(d.commentSel, len(live)-1)]
+	live := t.LiveComments()
+	cm := live[min(commentSel, len(live)-1)]
 	if cm.Author.ID != d.me.ID {
 		return statusCmd("you can only change your own comments")
 	}
 	if key == "e" {
-		d.modal = d.editCommentEditor(*e.thread, cm)
+		d.modal = d.editCommentEditor(t, cm)
 		return nil
 	}
-	t := *e.thread
 	d.modal = newConfirm("Delete this comment?", d.act("comment deleted", false, func(ctx context.Context) error {
 		return d.client.DeleteComment(ctx, d.pr, t, cm)
 	}))

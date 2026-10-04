@@ -65,7 +65,25 @@ Opening a PR counts as a visit, exactly like opening it in the browser: its
 shows what arrived since your previous visit.
 
 Tabs: **Overview** (checks, description, activity, reviewers, tags, work
-items), **Files**, **Commits** (grouped by push), **Conflicts**.
+items), **Files** (file tree and syntax-highlighted diff), **Commits**
+(grouped by push; `enter` diffs one commit), **Conflicts**.
+
+Files tab:
+
+| Key | Action |
+| --- | --- |
+| `j` / `k` | next / previous file (tree) or line (diff) |
+| `enter`, `l`, `tab` | tree: focus the diff · diff: step into the thread on the line |
+| `h` / `l` | diff side in side-by-side; `h` on the old side, or `tab`, back to the tree |
+| `n` / `p` | next / previous change |
+| `ctrl+d` / `ctrl+u` | half page down / up |
+| `V` | start or clear a line range |
+| `a` | comment on the line or range, on the cursor's side |
+| `R` / `s` / `e` / `d` | reply / status / edit / delete on the line's thread |
+| `S` | side-by-side ⇄ inline (default follows terminal width) |
+| `u` | compare: all changes, since my last visit, one update, or any two |
+| `z` | hide / show the file tree |
+| `o` | open the file in the browser |
 
 | Key | Action |
 | --- | --- |

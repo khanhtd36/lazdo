@@ -62,7 +62,11 @@ type detailModel struct {
 	entryLines []int
 	md         *markdownCache
 
-	// Files, Commits, Conflicts
+	// Files
+	files     filesView
+	rowCaches map[string]*diffRows
+
+	// Commits, Conflicts
 	cursor [tabCount]int
 
 	modal modal
@@ -87,12 +91,14 @@ type (
 
 func newDetail(client *ado.Client, me ado.Identity, pr ado.PullRequest, repoKey string, width, height int) *detailModel {
 	d := &detailModel{
-		client:  client,
-		me:      me,
-		pr:      pr,
-		repoKey: repoKey,
-		loading: true,
-		md:      newMarkdownCache(),
+		client:    client,
+		me:        me,
+		pr:        pr,
+		repoKey:   repoKey,
+		loading:   true,
+		md:        newMarkdownCache(),
+		files:     newFilesView(),
+		rowCaches: map[string]*diffRows{},
 	}
 	d.resize(width, height)
 	return d
@@ -150,6 +156,14 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 			d.pr = msg.d.PullRequest
 		}
 		d.rebuildOverview()
+		if d.tab == tabFiles {
+			return d.ensureFiles()
+		}
+	case filesLoadedMsg:
+		return d.onFilesLoaded(msg)
+	case fileDiffMsg:
+		d.files.diffs[msg.key] = msg.diff
+		d.scrollDiffToCursor()
 	case visitMsg:
 		if msg.err != nil {
 			d.status = "error: record visit: " + msg.err.Error()
@@ -162,7 +176,8 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		d.status = msg.text
-		return d.reload()
+		d.files.loadedKey = "" // refetch threads so new line comments show
+		return tea.Batch(d.reload(), d.ensureFiles())
 	case editorDoneMsg:
 		if e, ok := d.modal.(*editorModal); ok {
 			return e.editorDone(msg)
@@ -183,13 +198,19 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "1", "2", "3", "4":
 		d.tab = detailTab(msg.String()[0] - '1')
+		return d.onTabChange()
 	case "]":
 		d.tab = (d.tab + 1) % tabCount
+		return d.onTabChange()
 	case "[":
 		d.tab = (d.tab + tabCount - 1) % tabCount
+		return d.onTabChange()
 	case "r":
 		return d.reload()
 	case "o":
+		if ch := d.selectedChange(); d.tab == tabFiles && ch != nil {
+			return openURL(d.fileURL(ch.Item.Path), "opened "+ch.Item.Path)
+		}
 		return openURL(d.pr.WebURL(d.client.Org), fmt.Sprintf("opened !%d", d.pr.ID))
 	case "y":
 		u := d.pr.WebURL(d.client.Org)
@@ -208,7 +229,9 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 		switch d.tab {
 		case tabOverview:
 			return d.overviewKey(msg)
-		case tabFiles, tabCommits, tabConflicts:
+		case tabFiles:
+			return d.filesKey(msg)
+		case tabCommits, tabConflicts:
 			return d.listKey(msg)
 		case tabCount:
 		}
@@ -216,10 +239,31 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// closeRequested reports whether esc should leave the detail view.
+func (d *detailModel) onTabChange() tea.Cmd {
+	if d.tab == tabFiles {
+		return d.ensureFiles()
+	}
+	return nil
+}
+
+// closeRequested reports whether esc should leave the detail view; before
+// that, esc backs out of whatever is open inside it.
 func (d *detailModel) closeRequested(msg tea.KeyMsg) bool {
 	if d.modal != nil || msg.String() != "esc" {
 		return false
+	}
+	if f := &d.files; d.tab == tabFiles {
+		switch {
+		case f.inThread:
+			f.inThread = false
+			return false
+		case f.anchor >= 0:
+			f.anchor = -1
+			return false
+		case f.pane == paneDiff && !f.hideTree:
+			f.pane = paneTree
+			return false
+		}
 	}
 	if d.inThread {
 		d.inThread = false

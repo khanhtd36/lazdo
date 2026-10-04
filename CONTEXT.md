@@ -43,6 +43,14 @@ _Avoid_: iteration, update
 A discussion on a pull request: a human comment thread that can be active or resolved, or a system entry such as a push, a vote, or reviewers being added.
 _Avoid_: comment (for the whole discussion)
 
+**Line comment**:
+A thread anchored to a line range on one side, old or new, of a changed file.
+_Avoid_: inline comment, code comment
+
+**Comparison**:
+The two versions a diff shows: the merge base or an earlier push against a later push, or one commit against its parent.
+_Avoid_: diff (for the choice of versions), iteration range
+
 **Policy**:
 A branch rule a pull request must satisfy to complete, such as a build, minimum reviewers or required reviewers; blocking or optional.
 _Avoid_: check (except in on-screen text copied from Azure DevOps)
