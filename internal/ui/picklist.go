@@ -29,9 +29,11 @@ func rankFuzzy(query string, texts []string) []fuzzy.Match {
 }
 
 // pickItem is one row of a pickList. Headers group rows and can't be
-// selected; searchOnly rows appear only while a filter is typed.
+// selected; a groupStart row starts a group itself (a job above its
+// steps); searchOnly rows appear only while a filter is typed.
 type pickItem struct {
 	header     bool
+	groupStart bool
 	searchOnly bool
 	search     string // what / matches against
 	render     func(width int) string
@@ -179,15 +181,17 @@ func (l *pickList) key(msg tea.KeyMsg, height int) (handled, activate bool) {
 }
 
 // jumpGroup moves to the first row of the next (dir 1) or current/previous
-// (dir -1) group; groups start after a header. Without headers it does nothing.
+// (dir -1) group; a group starts after a header or at a groupStart row.
 func (l *pickList) jumpGroup(dir int) {
 	vis := l.visible()
-	isHeader := func(i int) bool { return l.items[vis[i]].header }
+	starts := func(i int) bool {
+		it := l.items[vis[i]]
+		return !it.header && (it.groupStart || i > 0 && l.items[vis[i-1]].header)
+	}
 	if dir > 0 {
 		for i := l.cursor + 1; i < len(vis); i++ {
-			if isHeader(i) {
+			if starts(i) {
 				l.cursor = i
-				l.clamp(1)
 				return
 			}
 		}
@@ -195,13 +199,13 @@ func (l *pickList) jumpGroup(dir int) {
 	}
 	// Back to this group's first row, or the previous group's if already there.
 	start := l.cursor
-	for start > 0 && !isHeader(start-1) {
+	for start > 0 && !starts(start) {
 		start--
 	}
 	if start == l.cursor {
-		for i := start - 2; i >= 0; i-- {
-			if isHeader(i) {
-				start = i + 1
+		for i := start - 1; i >= 0; i-- {
+			if starts(i) {
+				start = i
 				break
 			}
 		}

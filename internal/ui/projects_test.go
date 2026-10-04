@@ -153,3 +153,33 @@ func TestRunTreeFlattensPhases(t *testing.T) {
 		t.Fatalf("the failed step's log should open first, got log %d", v.logID)
 	}
 }
+
+func TestRunTreeJumpsBetweenJobs(t *testing.T) {
+	v := newRunView(ado.NewClient("org"), ado.ProjectInfo{}, ado.Run{ID: 1, Status: "completed"})
+	v.update(runLoadedMsg{runID: 1, run: ado.Run{ID: 1, Status: "completed"}, records: []ado.TimelineRecord{
+		{ID: "j1", Type: "Job", Name: "Setup", Order: 1},
+		{ID: "a", ParentID: "j1", Type: "Task", Name: "Init", Order: 1},
+		{ID: "b", ParentID: "j1", Type: "Task", Name: "Checkout", Order: 2},
+		{ID: "j2", Type: "Job", Name: "Build WebConsole", Order: 2},
+		{ID: "c", ParentID: "j2", Type: "Task", Name: "Install", Order: 1},
+		{ID: "j3", Type: "Job", Name: "Build DAS", Order: 3},
+	}})
+	name := func() string {
+		it, _ := v.tree.selected()
+		return it.value.(ado.TimelineRecord).Name
+	}
+	v.tree.cursor = 0
+	for _, want := range []string{"Build WebConsole", "Build DAS"} {
+		v.tree.key(keyMsg("J"), 20)
+		if name() != want {
+			t.Fatalf("J should jump to the next job %q, got %q", want, name())
+		}
+	}
+	v.tree.move(-1) // Install, inside Build WebConsole
+	for _, want := range []string{"Build WebConsole", "Setup"} {
+		v.tree.key(keyMsg("K"), 20)
+		if name() != want {
+			t.Fatalf("K should go to %q, got %q", want, name())
+		}
+	}
+}

@@ -340,9 +340,10 @@ func (v *runView) treeItems() []pickItem {
 				continue
 			}
 			items = append(items, pickItem{
-				search: r.Name,
-				value:  r,
-				render: func(width int) string { return recordRow(r, depth, width) },
+				groupStart: r.Type == "Stage" || r.Type == "Job",
+				search:     r.Name,
+				value:      r,
+				render:     func(width int) string { return recordRow(r, depth, width) },
 			})
 			walk(r.ID, depth+1)
 		}
