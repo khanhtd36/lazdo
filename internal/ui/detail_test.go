@@ -41,7 +41,7 @@ func fakeDetail(t *testing.T, width int) *detailModel {
 		Changes: []ado.Change{{ChangeType: "edit", Item: ado.ChangeItem{Path: "/src/a/b.go"}}},
 	}
 	data.MergeStatus = "succeeded"
-	d := newDetail(ado.NewClient("org"), me, pr, "", width, 40)
+	d := newDetail(ado.NewClient("org"), me, pr, width, 40)
 	d.prevVisit = now.Add(-3 * time.Hour)
 	d.update(detailLoadedMsg{d: data})
 	return d

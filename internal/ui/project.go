@@ -53,7 +53,6 @@ const runPollInterval = 3 * time.Second
 type projectModel struct {
 	client  *ado.Client
 	project ado.ProjectInfo
-	repoKey string
 
 	prs   []ado.PullRequest
 	repos []ado.Repo
@@ -110,8 +109,7 @@ type (
 func newProject(client *ado.Client, p ado.ProjectInfo, prs []ado.PullRequest, repos []ado.Repo) *projectModel {
 	sort.Slice(prs, func(i, j int) bool { return prs[i].CreationDate.After(prs[j].CreationDate) })
 	sort.Slice(repos, func(i, j int) bool { return strings.ToLower(repos[i].Name) < strings.ToLower(repos[j].Name) })
-	key, _ := actions.CurrentRepoKey()
-	m := &projectModel{client: client, project: p, prs: prs, repos: repos, repoKey: key, lastPush: map[string]time.Time{}}
+	m := &projectModel{client: client, project: p, prs: prs, repos: repos, lastPush: map[string]time.Time{}}
 	m.lists[projTabPRs].setItems(m.prItems())
 	m.lists[projTabRepos].setItems(m.repoItems())
 	return m
@@ -366,11 +364,7 @@ func (m *projectModel) branchesKey(msg tea.KeyMsg) tea.Cmd {
 		if !ok {
 			return nil
 		}
-		if m.repoKey != actions.RepoKey(m.client.Org, m.project.Name, m.repo.Name) {
-			return statusCmd("checkout: run lazdo inside a clone of " + m.repo.Name)
-		}
-		name := b.Name
-		return func() tea.Msg { return resultMsg(actions.Checkout(name), "switched to "+name) }
+		return requestCheckout(m.client.Org, m.project.Name, m.repo.Name, b.Name)
 	}
 	return nil
 }

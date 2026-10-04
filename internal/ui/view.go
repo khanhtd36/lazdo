@@ -119,6 +119,9 @@ func (m Model) View() string {
 	if m.help != nil {
 		return m.help.place(m.width, m.height)
 	}
+	if m.modal != nil {
+		return placeModal(m.modal, m.width, m.height)
+	}
 	if m.detail != nil {
 		return m.detail.view()
 	}

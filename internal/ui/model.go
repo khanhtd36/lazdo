@@ -29,7 +29,6 @@ type row struct {
 type Model struct {
 	client   *ado.Client
 	interval time.Duration
-	repoKey  string // RepoKey of the cwd git repo, "" when not in an ADO clone
 
 	me        ado.Identity
 	sections  []ado.Section
@@ -52,18 +51,21 @@ type Model struct {
 
 	detail *detailModel // non-nil while a pull request's detail is open
 	help   *helpModal   // non-nil while the shortcut help is open
+	modal  modal        // a dialog over any screen, such as checkout
+
+	lastCheckout map[string]string // repo key → path, this session only
 }
 
 func New(client *ado.Client, interval time.Duration) Model {
-	key, _ := actions.CurrentRepoKey()
 	return Model{
 		client:    client,
 		interval:  interval,
-		repoKey:   key,
 		builds:    map[int]buildResult{},
 		collapsed: map[ado.SectionKind]bool{},
 		loading:   true,
 		sem:       make(chan struct{}, maxParallelBuilds),
+
+		lastCheckout: map[string]string{},
 	}
 }
 
@@ -155,6 +157,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case openPRMsg:
 		return m.openDetail(&msg.pr)
+	case checkoutRequestMsg:
+		key := actions.RepoKey(msg.org, msg.project, msg.repo)
+		m.modal = newCheckoutModal(msg, checkoutSuggestions(key, msg.repo, m.lastCheckout), m.width)
+	case checkoutDoneMsg:
+		m.modal = nil
+		if msg.err == nil {
+			m.lastCheckout[msg.repoKey] = msg.path
+		}
+		return m.Update(resultMsg(msg.err, msg.text))
 	case detailLoadedMsg, visitMsg, editorDoneMsg, filesLoadedMsg, fileDiffMsg:
 		if m.detail != nil {
 			return m, m.detail.update(msg)
@@ -200,6 +211,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.help != nil {
 			return m.onHelpKey(msg)
+		}
+		if m.modal != nil {
+			if msg.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+			var cmd tea.Cmd
+			m.modal, cmd = m.modal.update(msg)
+			return m, cmd
 		}
 		if msg.String() == "?" && !m.typing() {
 			m.help = newHelp(m.helpGroups(), m.width, m.height-2)
@@ -335,7 +354,7 @@ func (m *Model) refresh() tea.Cmd {
 }
 
 func (m Model) openDetail(pr *ado.PullRequest) (tea.Model, tea.Cmd) {
-	m.detail = newDetail(m.client, m.me, *pr, m.repoKey, m.width, m.height)
+	m.detail = newDetail(m.client, m.me, *pr, m.width, m.height)
 	return m, m.detail.init()
 }
 
@@ -405,7 +424,7 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "c":
 		if r, ok := m.selected(rows); ok && r.pr != nil {
-			return m, m.checkout(r.pr)
+			return m, prCheckout(m.client.Org, *r.pr)
 		}
 	}
 	m.clampCursor()
@@ -415,17 +434,6 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) openSelected(pr *ado.PullRequest) tea.Cmd {
 	u := pr.WebURL(m.client.Org)
 	return func() tea.Msg { return resultMsg(actions.OpenBrowser(u), "opened !"+fmt.Sprint(pr.ID)) }
-}
-
-func (m Model) checkout(pr *ado.PullRequest) tea.Cmd {
-	prKey := actions.RepoKey(m.client.Org, pr.Repository.Project.Name, pr.Repository.Name)
-	if m.repoKey != prKey {
-		return func() tea.Msg {
-			return statusMsg("checkout: run lazdo inside a clone of " + pr.Repository.Name)
-		}
-	}
-	branch := pr.SourceBranch()
-	return func() tea.Msg { return resultMsg(actions.Checkout(branch), "switched to "+branch) }
 }
 
 func resultMsg(err error, ok string) statusMsg {

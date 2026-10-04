@@ -71,24 +71,6 @@ func keyFromEscaped(org, project, repo string) (string, bool) {
 	return RepoKey(parts[0], parts[1], parts[2]), true
 }
 
-// CurrentRepoKey returns the RepoKey of the origin remote of the git repo
-// in the working directory.
-func CurrentRepoKey() (string, bool) {
-	out, err := exec.Command("git", "remote", "get-url", "origin").Output()
-	if err != nil {
-		return "", false
-	}
-	return RemoteRepoKey(string(out))
-}
-
-// Checkout fetches the PR's source branch from origin and switches to it.
-func Checkout(branch string) error {
-	if err := run("git", "fetch", "origin", branch); err != nil {
-		return err
-	}
-	return run("git", "switch", branch)
-}
-
 func run(name string, args ...string) error {
 	out, err := exec.Command(name, args...).CombinedOutput()
 	if err != nil {

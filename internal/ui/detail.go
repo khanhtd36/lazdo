@@ -39,10 +39,9 @@ func (t detailTab) title() string {
 
 // detailModel is the full-screen view of one pull request.
 type detailModel struct {
-	client  *ado.Client
-	me      ado.Identity
-	pr      ado.PullRequest
-	repoKey string
+	client *ado.Client
+	me     ado.Identity
+	pr     ado.PullRequest
 
 	data      *ado.PRDetail
 	err       error
@@ -89,12 +88,11 @@ type (
 	}
 )
 
-func newDetail(client *ado.Client, me ado.Identity, pr ado.PullRequest, repoKey string, width, height int) *detailModel {
+func newDetail(client *ado.Client, me ado.Identity, pr ado.PullRequest, width, height int) *detailModel {
 	d := &detailModel{
 		client:    client,
 		me:        me,
 		pr:        pr,
-		repoKey:   repoKey,
 		loading:   true,
 		md:        newMarkdownCache(),
 		files:     newFilesView(),
@@ -216,7 +214,7 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 		u := d.pr.WebURL(d.client.Org)
 		return func() tea.Msg { return resultMsg(actions.CopyToClipboard(u), "copied "+u) }
 	case "c":
-		return checkoutCmd(d.client.Org, d.repoKey, d.pr)
+		return prCheckout(d.client.Org, d.pr)
 	case "v":
 		if d.data != nil {
 			d.modal = d.voteMenu()
@@ -286,13 +284,7 @@ func openURL(u, done string) tea.Cmd {
 	return func() tea.Msg { return resultMsg(actions.OpenBrowser(u), done) }
 }
 
-func checkoutCmd(org, repoKey string, pr ado.PullRequest) tea.Cmd {
-	prKey := actions.RepoKey(org, pr.Repository.Project.Name, pr.Repository.Name)
-	if repoKey != prKey {
-		return func() tea.Msg {
-			return statusMsg("checkout: run lazdo inside a clone of " + pr.Repository.Name)
-		}
-	}
-	branch := pr.SourceBranch()
-	return func() tea.Msg { return resultMsg(actions.Checkout(branch), "switched to "+branch) }
+// prCheckout opens the checkout dialog for a pull request's source branch.
+func prCheckout(org string, pr ado.PullRequest) tea.Cmd {
+	return requestCheckout(org, pr.Repository.Project.Name, pr.Repository.Name, pr.SourceBranch())
 }
