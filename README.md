@@ -24,11 +24,41 @@ comment threads, build policy (`✓` `✗` `●` running), last update.
 
 ## Install
 
+Linux and macOS (installs to `~/.local/bin`):
+
 ```sh
-go install github.com/khanhtd36/lazdo@latest
+curl -fsSL https://lazdo.khanhtd36.dev/install.sh | sh
 ```
 
-Or grab a binary from [releases](https://github.com/khanhtd36/lazdo/releases).
+Windows PowerShell (installs to `%LOCALAPPDATA%\Programs\lazdo` and adds it
+to your User PATH, saving the previous PATH to `%LOCALAPPDATA%\lazdo` first):
+
+```powershell
+irm https://lazdo.khanhtd36.dev/install.ps1 | iex
+```
+
+Homebrew (macOS and Linux):
+
+```sh
+brew install khanhtd36/tap/lazdo
+```
+
+With Go: `go install github.com/khanhtd36/lazdo@latest`. Binaries and
+checksums: [releases](https://github.com/khanhtd36/lazdo/releases).
+
+The scripts verify the download against the release's `checksums.txt`. Run
+the same command again to update. To pick a version or folder:
+`LAZDO_VERSION=0.1.0` / `LAZDO_INSTALL_DIR=<dir>` (sh), or
+`$env:LAZDO_VERSION`, `$env:LAZDO_INSTALL_DIR`, and `$env:LAZDO_SKIP_PATH=1`
+to leave PATH alone (PowerShell).
+
+Uninstall:
+
+```sh
+rm ~/.local/bin/lazdo                                    # install.sh
+brew uninstall lazdo                                     # Homebrew
+Remove-Item -Recurse "$env:LOCALAPPDATA\Programs\lazdo"  # install.ps1, then drop it from your User PATH
+```
 
 ## Auth
 

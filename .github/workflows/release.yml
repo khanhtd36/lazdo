@@ -25,3 +25,88 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Writes Formula/lazdo.rb in khanhtd36/homebrew-tap from this release's
+  # checksums, for `brew install khanhtd36/tap/lazdo` on macOS and Linux.
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read checksums
+        id: sums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" -p checksums.txt
+          sum() { awk -v f="lazdo_${version}_$1.tar.gz" '$2 == f { print $1 }' checksums.txt; }
+          {
+            echo "version=$version"
+            echo "darwin_arm64=$(sum darwin_arm64)"
+            echo "darwin_x86_64=$(sum darwin_x86_64)"
+            echo "linux_arm64=$(sum linux_arm64)"
+            echo "linux_x86_64=$(sum linux_x86_64)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: khanhtd36/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Write and push the formula
+        env:
+          VERSION: ${{ steps.sums.outputs.version }}
+          DARWIN_ARM64: ${{ steps.sums.outputs.darwin_arm64 }}
+          DARWIN_X86_64: ${{ steps.sums.outputs.darwin_x86_64 }}
+          LINUX_ARM64: ${{ steps.sums.outputs.linux_arm64 }}
+          LINUX_X86_64: ${{ steps.sums.outputs.linux_x86_64 }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/lazdo_${VERSION}"
+          mkdir -p tap/Formula
+          cat > tap/Formula/lazdo.rb <<EOF
+          class Lazdo < Formula
+            desc "Lazy Azure DevOps: pull requests, repos and pipelines in your terminal"
+            homepage "https://github.com/${GITHUB_REPOSITORY}"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "${base}_darwin_arm64.tar.gz"
+                sha256 "${DARWIN_ARM64}"
+              end
+              on_intel do
+                url "${base}_darwin_x86_64.tar.gz"
+                sha256 "${DARWIN_X86_64}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "${base}_linux_arm64.tar.gz"
+                sha256 "${LINUX_ARM64}"
+              end
+              on_intel do
+                url "${base}_linux_x86_64.tar.gz"
+                sha256 "${LINUX_X86_64}"
+              end
+            end
+
+            def install
+              bin.install "lazdo"
+            end
+
+            test do
+              assert_match "lazdo", shell_output("#{bin}/lazdo --version")
+            end
+          end
+          EOF
+          cd tap
+          git config user.name "khanhtd36-bot"
+          git config user.email "khanhtd36@gmail.com"
+          git add Formula/lazdo.rb
+          git commit -m "Update lazdo to ${VERSION}" || { echo "formula unchanged"; exit 0; }
+          git push
