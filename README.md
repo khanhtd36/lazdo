@@ -154,7 +154,7 @@ In the file content, diff and pipeline log, `V` (or dragging the mouse)
 selects whole lines and `y` copies them: the original text, without line
 numbers, colors or wrap breaks (logs without their timestamps). With
 nothing selected, `y` opens the Copy menu (current line, whole log, file
-path, URLs, tag names, …). Inside a comment thread, `y` copies the
+path, URLs, commit IDs, …); on a tag it copies the tag name. Inside a comment thread, `y` copies the
 comment's markdown. Shift+drag still uses the terminal's own selection.
 
 ### Mouse

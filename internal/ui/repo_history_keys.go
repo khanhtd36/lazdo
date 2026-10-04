@@ -78,18 +78,11 @@ func (b *repoBrowser) commitsKey(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 		return true, b.ensureHistory()
 	case "y":
 		if ok {
-			items := []copyItem{
-				{"Commit ID", c.ID},
-				{"Short ID", shortSHA(c.ID)},
-				{"Message", firstLine(c.Comment)},
-				{"Web URL", b.client.CommitURL(b.repo, c.ID)},
-			}
-			// Tags on the commit come first: copying "8.0.1" is the usual ask.
-			var tags []copyItem
-			for _, name := range b.hist.commitTags[c.ID] {
-				tags = append(tags, copyItem{"Tag", name})
-			}
-			return true, copyMenu("commit "+shortSHA(c.ID), append(tags, items...)...)
+			return true, copyMenu("commit "+shortSHA(c.ID),
+				copyItem{"Web URL", b.client.CommitURL(b.repo, c.ID)},
+				copyItem{"Commit ID", c.ID},
+				copyItem{"Short ID", shortSHA(c.ID)},
+				copyItem{"Message", firstLine(c.Comment)})
 		}
 	case "o":
 		if ok {
@@ -154,10 +147,7 @@ func (b *repoBrowser) tagsKey(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 		}
 	case "y":
 		if ok {
-			return true, copyMenu("tag "+t.Name,
-				copyItem{"Name", t.Name},
-				copyItem{"Commit ID", t.CommitID},
-				copyItem{"Web URL", b.client.TagURL(b.repo, t.Name)})
+			return true, copyText(t.Name, "copied "+t.Name) // the tag itself, no menu
 		}
 	case "o":
 		if ok {
