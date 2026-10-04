@@ -255,9 +255,9 @@ func (m *projectModel) helpGroups() []bindingGroup {
 		}
 		return withCommon(bindingGroup{"Files", repoKeys}, tab)
 	case levelRuns:
-		return withCommon(bindingGroup{"Runs", runsKeys})
+		return withCommon(bindingGroup{"Runs", runsKeys}, bindingGroup{"Project", projectKeys[:2]})
 	case levelRun:
-		return withCommon(bindingGroup{"Run", runKeys})
+		return withCommon(bindingGroup{"Run", runKeys}, bindingGroup{"Project", projectKeys[:2]})
 	case levelTabs:
 	}
 	return withCommon(bindingGroup{"Project", projectKeys})

@@ -172,9 +172,9 @@ func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if isClick(msg) && msg.Y == 1 && m.level == levelTabs {
+	if isClick(msg) && msg.Y == 1 && m.level != levelRepo {
 		if t, ok := m.tabAt(msg.X); ok {
-			m.tab = t
+			m.tab, m.level, m.run = t, levelTabs, nil
 			return m.onTabChange()
 		}
 		return nil

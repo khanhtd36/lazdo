@@ -260,6 +260,11 @@ func (m *projectModel) update(msg tea.Msg) tea.Cmd {
 // key handles a key; the returned bool is true when the project should close.
 func (m *projectModel) key(msg tea.KeyMsg) tea.Cmd {
 	m.status = ""
+	// The project tabs stay on screen over a pipeline's runs and a run, so
+	// their keys work there too: back to the tabs level, then switch.
+	if (m.level == levelRuns || m.level == levelRun) && isProjectTabKey(msg.String()) && !m.typing() {
+		m.level, m.run = levelTabs, nil
+	}
 	switch m.level {
 	case levelRepo:
 		if handled, cmd := m.browser.key(msg, m.width-1, m.bodyHeight()); handled {
@@ -289,6 +294,14 @@ func (m *projectModel) key(msg tea.KeyMsg) tea.Cmd {
 	case levelTabs:
 	}
 	return m.tabsKey(msg)
+}
+
+func isProjectTabKey(k string) bool {
+	switch k {
+	case "1", "2", "3", "[", "]":
+		return true
+	}
+	return false
 }
 
 // closeRequested reports whether esc at the top level should close the

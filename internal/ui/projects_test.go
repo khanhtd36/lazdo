@@ -115,6 +115,23 @@ func TestPagesSwitchAndProjectEsc(t *testing.T) {
 	}
 }
 
+func TestProjectTabKeysLeavePipelineRuns(t *testing.T) {
+	p := fakeProjectsPage()
+	client := ado.NewClient("org")
+	for _, level := range []projectLevel{levelRuns, levelRun} {
+		m := p.newProject(client, ado.ProjectInfo{ID: "p1", Name: "MITS11"})
+		m.width, m.height = 120, 20
+		m.tab, m.level = projTabPipelines, level
+		if level == levelRun {
+			m.run = newRunView(client, m.project, ado.Run{ID: 1})
+		}
+		m.key(keyMsg("1"))
+		if m.level != levelTabs || m.tab != projTabRepos || m.run != nil {
+			t.Fatalf("1 at level %d should switch to Repos at the tabs level, got level %d tab %d", level, m.level, m.tab)
+		}
+	}
+}
+
 func TestRunTreeFlattensPhases(t *testing.T) {
 	v := newRunView(ado.NewClient("org"), ado.ProjectInfo{}, ado.Run{ID: 1, Status: "completed"})
 	v.update(runLoadedMsg{runID: 1, run: ado.Run{ID: 1, Status: "completed"}, records: []ado.TimelineRecord{
