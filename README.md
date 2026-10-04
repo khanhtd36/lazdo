@@ -91,7 +91,7 @@ Files tab:
 | `j` / `k` | next / previous file (tree) or line (diff) |
 | `enter`, `l`, `tab` | tree: focus the diff · diff: step into the thread on the line |
 | `h` / `l` | diff side in side-by-side; `h` on the old side, or `tab`, back to the tree |
-| `n` / `p` | next / previous change |
+| `n` / `N` (or `p`) | next / previous change |
 | `ctrl+d` / `ctrl+u` | half page down / up |
 | `V` | start or clear a line range |
 | `a` | comment on the line or range, on the cursor's side |

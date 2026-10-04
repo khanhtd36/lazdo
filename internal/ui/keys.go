@@ -65,7 +65,7 @@ var (
 	diffKeys = []binding{
 		{"j / k", "next / previous line", ""},
 		{"ctrl+d / ctrl+u", "half page down / up", "ctrl+d"},
-		{"n / p", "next / previous change", "n"},
+		{"n / N (or p)", "next / previous change", "n"},
 		{"h / l", "old / new side (side-by-side); h on old goes to the tree", ""},
 		{"V", "start or clear a line range", "V"},
 		{"a", "comment on the line or range", "a"},

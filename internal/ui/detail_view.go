@@ -158,7 +158,7 @@ func (d *detailModel) help() string {
 	case d.tab == tabFiles && d.files.inThread:
 		return "j/k comment  R reply  s status  e edit  d delete  esc leave thread  " + common
 	case d.tab == tabFiles && d.files.pane == paneDiff:
-		return "j/k line  n/p change  h/l side  V range  a comment  enter thread  R/s on thread  S mode  u compare  z tree  tab files  " + common
+		return "j/k line  n/N change  h/l side  V range  a comment  enter thread  R/s on thread  S mode  u compare  z tree  tab files  " + common
 	case d.tab == tabFiles:
 		return "j/k file  enter diff  S mode  u compare  z hide tree  " + common
 	case d.tab == tabCommits:

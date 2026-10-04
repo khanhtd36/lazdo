@@ -93,9 +93,9 @@ func (d *detailModel) diffKeyPress(msg tea.KeyMsg) tea.Cmd {
 		f.cursor = 0
 	case "G", "end":
 		f.cursor = len(lines) - 1
-	case "n", "p":
+	case "n", "p", "N":
 		dir := 1
-		if msg.String() == "p" {
+		if msg.String() != "n" {
 			dir = -1
 		}
 		f.cursor = nextChange(lines, f.cursor, dir)

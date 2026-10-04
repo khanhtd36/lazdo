@@ -65,6 +65,10 @@ func TestFilesLineCommentRange(t *testing.T) {
 	if d.files.cursor != 2 {
 		t.Fatalf("cursor after n = %d, want 2", d.files.cursor)
 	}
+	press(d, "G", "N")
+	if d.files.cursor != 2 {
+		t.Fatalf("N from the end should go back to the change, got %d", d.files.cursor)
+	}
 	press(d, "V", "j", "a")
 	e, ok := d.modal.(*editorModal)
 	if !ok {
