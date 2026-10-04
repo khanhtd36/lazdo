@@ -64,6 +64,14 @@ func TestProjectsSearchFindsRepoAndOpensBranches(t *testing.T) {
 	}
 }
 
+func TestProjectMainRepoFirst(t *testing.T) {
+	p := fakeProjectsPage()
+	m := p.newProject(ado.NewClient("org"), ado.ProjectInfo{ID: "p1", Name: "MITS11"})
+	if m.repos[0].Name != "MITS11" || m.repos[1].Name != "dev-tools" {
+		t.Fatalf("main repo first, then A-Z: %s, %s", m.repos[0].Name, m.repos[1].Name)
+	}
+}
+
 func TestPickListSkipsHeadersAndClicks(t *testing.T) {
 	var l pickList
 	row := func(s string) pickItem {

@@ -111,7 +111,15 @@ type (
 
 func newProject(client *ado.Client, p ado.ProjectInfo, prs []ado.PullRequest, repos []ado.Repo) *projectModel {
 	sort.Slice(prs, func(i, j int) bool { return prs[i].CreationDate.After(prs[j].CreationDate) })
-	sort.Slice(repos, func(i, j int) bool { return strings.ToLower(repos[i].Name) < strings.ToLower(repos[j].Name) })
+	// The project's main repo (named after it, as Azure DevOps creates it)
+	// comes first, then the rest A-Z.
+	sort.Slice(repos, func(i, j int) bool {
+		mi, mj := strings.EqualFold(repos[i].Name, p.Name), strings.EqualFold(repos[j].Name, p.Name)
+		if mi != mj {
+			return mi
+		}
+		return strings.ToLower(repos[i].Name) < strings.ToLower(repos[j].Name)
+	})
 	m := &projectModel{client: client, project: p, prs: prs, repos: repos, lastPush: map[string]time.Time{}}
 	m.lists[projTabPRs].setItems(m.prItems())
 	m.lists[projTabRepos].setItems(m.repoItems())
