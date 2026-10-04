@@ -122,8 +122,19 @@ func (m Model) View() string {
 	if m.detail != nil {
 		return m.detail.view()
 	}
+	if m.project != nil {
+		return m.project.view()
+	}
 	var b strings.Builder
 	b.WriteString(m.titleLine() + "\n")
+	if m.page == pageProjects {
+		for _, line := range padLines(m.projects.view(m.width-1, m.listHeight()), m.listHeight()) {
+			b.WriteString(truncate(line, m.width-1) + "\n")
+		}
+		b.WriteString(m.statusLine() + "\n")
+		b.WriteString(styleDim.Render(truncate("? help  1/2 pages  j/k move  enter open  / search projects and repos  o browser  y copy repo URL  r refresh  q quit", m.width-1)))
+		return b.String()
+	}
 
 	rows := m.rows()
 	end := min(len(rows), m.offset+m.listHeight())
@@ -142,10 +153,48 @@ func (m Model) View() string {
 	return b.String()
 }
 
+const titlePrefix = "lazdo  "
+
+// pageLabels are the page switchers after the "lazdo" prefix.
+func (m Model) pageLabels() []string {
+	labels := make([]string, 0, pageCount)
+	for p := range pageCount {
+		labels = append(labels, fmt.Sprintf("%d %s", p+1, p.title()))
+	}
+	return labels
+}
+
+func (m Model) pageAt(x int) (page, bool) {
+	start := len(titlePrefix)
+	for p, label := range m.pageLabels() {
+		end := start + ansi.StringWidth(label)
+		if x >= start && x < end {
+			return page(p), true
+		}
+		start = end + len(tabGap)
+	}
+	return 0, false
+}
+
 func (m Model) titleLine() string {
-	s := styleTitle.Render("lazdo") + styleDim.Render(" · "+m.client.Org)
+	s := styleTitle.Render(strings.TrimSpace(titlePrefix)) + "  "
+	pages := make([]string, 0, pageCount)
+	for p, label := range m.pageLabels() {
+		if page(p) == m.page {
+			pages = append(pages, styleTabActive.Render(label))
+		} else {
+			pages = append(pages, label)
+		}
+	}
+	s += strings.Join(pages, tabGap) + styleDim.Render("   "+m.client.Org)
 	if m.me.DisplayName != "" {
 		s += styleDim.Render(" · " + m.me.DisplayName)
+	}
+	if m.page == pageProjects {
+		if m.projects.loading {
+			s += styleYellow.Render("  refreshing…")
+		}
+		return truncate(s, m.width-1)
 	}
 	switch {
 	case m.loading:

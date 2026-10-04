@@ -3,7 +3,6 @@ package ado
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -45,28 +44,8 @@ const maxBlobBytes = 8 << 20
 
 // Blob downloads one file version by its git object ID.
 func (c *Client) Blob(ctx context.Context, pr PullRequest, objectID string) ([]byte, error) {
-	token, err := c.accessToken(ctx)
-	if err != nil {
-		return nil, err
-	}
-	u := fmt.Sprintf("https://dev.azure.com/%s%s/blobs/%s?api-version=%s&$format=octetstream",
-		url.PathEscape(c.Org), pr.repoPath(), objectID, apiVersion)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/octet-stream")
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("blob %s: %s: %s", objectID, resp.Status, apiMessage(msg))
-	}
-	return io.ReadAll(io.LimitReader(resp.Body, maxBlobBytes))
+	q := url.Values{"api-version": {apiVersion}, "$format": {"octetstream"}}
+	return c.getRaw(ctx, pr.repoPath()+"/blobs/"+objectID, q, "application/octet-stream")
 }
 
 // CommitParent returns the first parent of a commit.

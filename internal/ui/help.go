@@ -1,11 +1,9 @@
 package ui
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sahilm/fuzzy"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -56,14 +54,7 @@ func (h *helpModal) rows() []helpRow {
 			texts = append(texts, searchText(g.bindings[i]))
 		}
 	}
-	matches := fuzzy.Find(h.filter, texts)
-	// Rank tight matches first: "cmpl" should find "complete" before
-	// "new comment on the pull request", which fuzzy scores higher for
-	// hitting word starts.
-	span := func(m fuzzy.Match) int {
-		return m.MatchedIndexes[len(m.MatchedIndexes)-1] - m.MatchedIndexes[0]
-	}
-	sort.SliceStable(matches, func(i, j int) bool { return span(matches[i]) < span(matches[j]) })
+	matches := rankFuzzy(h.filter, texts)
 	rows := make([]helpRow, 0, len(matches))
 	for _, mt := range matches {
 		r := all[mt.Index]

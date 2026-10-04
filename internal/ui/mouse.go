@@ -43,6 +43,18 @@ func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.detail != nil {
 		return m, m.detail.onMouse(msg)
 	}
+	if m.project != nil {
+		return m, m.project.onMouse(msg)
+	}
+	if isClick(msg) && msg.Y == 0 {
+		if p, ok := m.pageAt(msg.X); ok {
+			return m.switchPage(p)
+		}
+		return m, nil
+	}
+	if m.page == pageProjects {
+		return m.projectsMouse(msg)
+	}
 	if d := wheelDelta(msg); d != 0 {
 		m.cursor += d
 		m.clampCursor()
@@ -69,6 +81,19 @@ func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 	m.clampCursor()
 	return m, nil
+}
+
+func (m Model) projectsMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	l := &m.projects.list
+	if d := wheelDelta(msg); d != 0 {
+		l.wheel(d)
+		return m, nil
+	}
+	y := msg.Y - 1 // below the title line
+	if !isClick(msg) || y < 0 || y >= m.listHeight() || !l.click(y) {
+		return m, nil
+	}
+	return m.onProjectsKey(tea.KeyMsg{Type: tea.KeyEnter})
 }
 
 // --- Detail ---

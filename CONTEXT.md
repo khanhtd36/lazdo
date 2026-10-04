@@ -6,6 +6,10 @@ A terminal view of one person's Azure DevOps pull requests across an organizatio
 
 ### Dashboard
 
+**Page**:
+One of the dashboard's top-level views: Pull requests (Me's pull requests in Sections) or Projects.
+_Avoid_: tab (reserved for the views inside a pull request or project), screen
+
 **Me**:
 The signed-in Azure DevOps identity whose pull requests the dashboard shows.
 _Avoid_: user, current user
@@ -25,6 +29,32 @@ Pull requests Me reviews that are in neither of the two sections above, such as 
 
 **Created by me**:
 Pull requests Me opened and does not review. A pull request Me opened and also reviews belongs to a reviewer section instead.
+
+### Projects
+
+**Project**:
+An Azure DevOps project in the organization, holding repos, pull requests and pipelines.
+
+**Recent project**:
+A project Me visited lately, in the order Azure DevOps remembers them.
+
+**Active project**:
+A project with at least one active pull request, by anyone.
+
+**Repo**:
+A git repository in a project.
+_Avoid_: repository (in on-screen text), repo URL (ambiguous: clone or web)
+
+**Branch**:
+A branch of a repo, compared against the repo's default branch as ahead and behind counts.
+
+**Pipeline**:
+A build pipeline definition in a project, YAML or classic.
+_Avoid_: build definition, release (release pipelines are out of scope)
+
+**Run**:
+One execution of a pipeline, made of stages, jobs and steps, each with a status and a log.
+_Avoid_: build (for the execution)
 
 ### Review
 

@@ -58,6 +58,27 @@ lazdo --interval 30s     # auto-refresh period (default 2m)
 | `r` | refresh now |
 | `q` | quit |
 
+### Projects page
+
+`2` (or `[` / `]`) switches to the Projects page: your recent projects,
+then other projects with open pull requests, then all projects A–Z. `/`
+searches projects **and every repo in the organization**; `enter` on a
+found repo jumps straight to its branches.
+
+Inside a project (`esc` goes back a level):
+
+- **Pull requests**: everyone's active PRs; `enter` opens the PR detail.
+- **Repos**: default branch, last push, size. `y` / `Y` copy the https /
+  ssh clone URL, `enter` lists branches (ahead/behind the default branch,
+  last commit); there `y` copies the name and `c` checks it out when lazdo
+  runs inside a clone of that repo.
+- **Pipelines**: latest run of each; `enter` lists runs, `enter` on a run
+  shows its stages, jobs and steps beside the selected step's log. A running
+  run refreshes every few seconds; a step's log appears once the step ends
+  (Azure DevOps only streams live logs to the browser).
+
+`/` filters every list; `o` opens the selection in the browser.
+
 ### Help
 
 `?` lists the shortcuts for where you are, most specific first. `j`/`k`

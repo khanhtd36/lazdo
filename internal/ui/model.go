@@ -46,6 +46,10 @@ type Model struct {
 	width, height  int
 	sem            chan struct{}
 
+	page     page
+	projects projectsPage
+	project  *projectModel // non-nil while a project is open
+
 	detail *detailModel // non-nil while a pull request's detail is open
 	help   *helpModal   // non-nil while the shortcut help is open
 }
@@ -140,6 +144,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.detail != nil {
 			m.detail.resize(msg.Width, msg.Height)
 		}
+		if m.project != nil {
+			m.project.width, m.project.height = msg.Width, msg.Height
+		}
+	case projectsLoadedMsg:
+		m.projects.onLoaded(msg)
+	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg, runLoadedMsg, logMsg, runTickMsg:
+		if m.project != nil {
+			return m, m.project.update(msg)
+		}
+	case openPRMsg:
+		return m.openDetail(&msg.pr)
 	case detailLoadedMsg, visitMsg, editorDoneMsg, filesLoadedMsg, fileDiffMsg:
 		if m.detail != nil {
 			return m, m.detail.update(msg)
@@ -174,21 +189,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = true
 		return m, tea.Batch(m.fetchList(), detailCmd)
 	case statusMsg:
-		if m.detail != nil {
+		switch {
+		case m.detail != nil:
 			m.detail.status = string(msg)
-		} else {
+		case m.project != nil:
+			m.project.status = string(msg)
+		default:
 			m.status = string(msg)
 		}
 	case tea.KeyMsg:
 		if m.help != nil {
 			return m.onHelpKey(msg)
 		}
-		if msg.String() == "?" && (m.detail == nil || m.detail.modal == nil) {
+		if msg.String() == "?" && !m.typing() {
 			m.help = newHelp(m.helpGroups(), m.width, m.height-2)
 			return m, nil
 		}
 		if m.detail != nil {
 			return m.onDetailKey(msg)
+		}
+		if m.project != nil {
+			return m.onProjectKey(msg)
+		}
+		if !m.typing() {
+			if p, ok := m.pageKey(msg.String()); ok {
+				return m.switchPage(p)
+			}
+		}
+		if m.page == pageProjects {
+			return m.onProjectsKey(msg)
 		}
 		return m.onKey(msg)
 	case tea.MouseMsg:
@@ -201,6 +230,74 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.onMouse(msg)
 	}
 	return m, nil
+}
+
+// typing reports whether keys are going into a text field or a / filter,
+// where ? and page keys are just characters.
+func (m Model) typing() bool {
+	switch {
+	case m.detail != nil:
+		return m.detail.modal != nil
+	case m.project != nil:
+		if l := m.project.currentList(); l != nil {
+			return l.typing
+		}
+		return m.project.run.tree.typing
+	case m.page == pageProjects:
+		return m.projects.list.typing
+	}
+	return false
+}
+
+func (m Model) pageKey(key string) (page, bool) {
+	switch key {
+	case "1":
+		return pagePRs, true
+	case "2":
+		return pageProjects, true
+	case "]":
+		return (m.page + 1) % pageCount, true
+	case "[":
+		return (m.page + pageCount - 1) % pageCount, true
+	}
+	return 0, false
+}
+
+func (m Model) switchPage(p page) (tea.Model, tea.Cmd) {
+	m.page = p
+	if p == pageProjects && !m.projects.loaded {
+		return m, m.projects.load(m.client)
+	}
+	return m, nil
+}
+
+func (m Model) onProjectsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "q":
+		if !m.projects.list.typing {
+			return m, tea.Quit
+		}
+	}
+	m.status = ""
+	cmd, open := m.projects.key(msg, m.listHeight(), m.client)
+	if open != nil {
+		open.width, open.height = m.width, m.height
+		m.project = open
+	}
+	return m, cmd
+}
+
+func (m Model) onProjectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+	if m.project.closeRequested(msg) {
+		m.project = nil
+		return m, nil
+	}
+	return m, m.project.update(msg)
 }
 
 func (m Model) onHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

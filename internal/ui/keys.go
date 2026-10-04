@@ -82,6 +82,50 @@ var (
 		{"j / k", "move", ""},
 		{"enter", "open (a commit shows its diff)", "enter"},
 	}
+	pageKeys = []binding{
+		{"1 / 2", "Pull requests / Projects page", ""},
+		{"[ / ]", "previous / next page", "]"},
+	}
+	projectsPageKeys = []binding{
+		{"j / k", "move", ""},
+		{"enter", "open the project (or a found repo's branches)", "enter"},
+		{"/", "search projects and every repo", "/"},
+		{"o", "open in the browser", "o"},
+		{"y / Y", "copy a found repo's https / ssh URL", "y"},
+		{"r", "refresh", "r"},
+	}
+	projectKeys = []binding{
+		{"1-3", "Pull requests, Repos, Pipelines tab", ""},
+		{"[ / ]", "previous / next tab", "]"},
+		{"enter", "open: pull request, repo's branches, pipeline's runs", "enter"},
+		{"/", "filter the list", "/"},
+		{"y / Y", "copy the repo's https / ssh URL (or the PR URL)", "y"},
+		{"o", "open in the browser", "o"},
+		{"r", "refresh", "r"},
+		{"esc", "back to the Projects page", "esc"},
+	}
+	branchKeys = []binding{
+		{"y", "copy the branch name", "y"},
+		{"Y", "copy the repo's ssh URL", "Y"},
+		{"c", "check out the branch (inside a clone of the repo)", "c"},
+		{"o", "open the branch in the browser", "o"},
+		{"/", "filter branches", "/"},
+		{"esc", "back to the repos", "esc"},
+	}
+	runsKeys = []binding{
+		{"enter", "open the run", "enter"},
+		{"o", "open in the browser", "o"},
+		{"/", "filter runs", "/"},
+		{"esc", "back to the pipelines", "esc"},
+	}
+	runKeys = []binding{
+		{"j / k", "move (steps) or scroll (log)", ""},
+		{"tab / h / l", "steps ⇄ log", "tab"},
+		{"G", "jump to the end and follow new lines", "G"},
+		{"g", "top of the log", "g"},
+		{"o", "open the run in the browser", "o"},
+		{"esc", "back to the runs", "esc"},
+	}
 	globalKeys = []binding{
 		{"?", "this help", ""},
 		{"ctrl+c", "quit", ""},
@@ -93,7 +137,7 @@ var (
 func (m Model) helpGroups() []bindingGroup {
 	d := m.detail
 	if d == nil {
-		return []bindingGroup{{"Dashboard", dashboardKeys}, {"Global", globalKeys}}
+		return m.pageHelpGroups()
 	}
 	var groups []bindingGroup
 	switch d.tab {
@@ -119,6 +163,26 @@ func (m Model) helpGroups() []bindingGroup {
 	case tabCount:
 	}
 	return append(groups, bindingGroup{"Pull request", detailKeys}, bindingGroup{"Global", globalKeys})
+}
+
+func (m Model) pageHelpGroups() []bindingGroup {
+	global := bindingGroup{"Global", globalKeys}
+	if p := m.project; p != nil {
+		switch p.level {
+		case levelBranches:
+			return []bindingGroup{{"Branches", branchKeys}, global}
+		case levelRuns:
+			return []bindingGroup{{"Runs", runsKeys}, global}
+		case levelRun:
+			return []bindingGroup{{"Run", runKeys}, global}
+		case levelTabs:
+		}
+		return []bindingGroup{{"Project", projectKeys}, global}
+	}
+	if m.page == pageProjects {
+		return []bindingGroup{{"Projects", projectsPageKeys}, {"Pages", pageKeys}, global}
+	}
+	return []bindingGroup{{"Dashboard", dashboardKeys}, {"Pages", pageKeys}, global}
 }
 
 // keyMsg turns a binding's press string back into the key it stands for.
