@@ -61,8 +61,12 @@ type repoBrowser struct {
 	rendered struct {
 		key  string
 		rows []string
+		src  []int // source line of each row; -1 for rendered markdown
 	}
 	top         int
+	cur         int // cursor row in the content pane
+	anchor      int // first row of a V selection, -1 when none
+	dragFrom    int // row a mouse drag started on
 	markdownRaw bool
 	md          *markdownCache
 
@@ -103,7 +107,7 @@ func newRepoBrowser(client *ado.Client, p ado.ProjectInfo, r ado.Repo) *repoBrow
 		folders: map[string][]ado.RepoItem{}, expanded: map[string]bool{},
 		index: map[string][]ado.RepoItem{}, indexLoading: map[string]bool{},
 		contents: map[string]*fileContent{}, md: newMarkdownCache(),
-		pane: paneFiles,
+		pane: paneFiles, anchor: -1,
 		hist: history{tagInfo: map[string]*ado.TagInfo{}},
 	}
 }
@@ -371,6 +375,7 @@ func (b *repoBrowser) openItem(it ado.RepoItem, fromSearch bool) tea.Cmd {
 		return cmd
 	}
 	b.file, b.top, b.matches, b.search = it.Path, 0, nil, ""
+	b.cur, b.anchor = 0, -1
 	b.rendered.key = ""
 	b.pane = paneContent
 	cmds := []tea.Cmd{b.loadContent(it.Path)}
@@ -406,6 +411,7 @@ func (b *repoBrowser) switchBranch(name string) tea.Cmd {
 		return nil
 	}
 	b.branch, b.top, b.rendered.key = name, 0, ""
+	b.cur, b.anchor = 0, -1
 	cmds := []tea.Cmd{b.loadFolder("/")}
 	for dir, open := range b.expanded {
 		if open {
@@ -479,6 +485,9 @@ func (b *repoBrowser) key(msg tea.KeyMsg, width, height int) (bool, tea.Cmd) {
 	case "o":
 		return true, b.linkKey(k)
 	case "y":
+		if b.pane == paneContent {
+			return b.contentKey(msg, width, height) // copies a selection first
+		}
 		return true, b.copySelection()
 	case "c":
 		br := b.branch
@@ -599,39 +608,72 @@ func (b *repoBrowser) contentKey(msg tea.KeyMsg, width, height int) (bool, tea.C
 	page := max(1, height/2)
 	switch msg.String() {
 	case "j", "down":
-		b.top++
+		b.cur++
 	case "k", "up":
-		b.top--
+		b.cur--
 	case "ctrl+d", "pgdown":
-		b.top += page
+		b.cur += page
 	case "ctrl+u", "pgup":
-		b.top -= page
+		b.cur -= page
 	case "g", "home":
-		b.top = 0
+		b.cur = 0
 	case "G", "end":
-		b.top = len(rows) - height + 1
+		b.cur = len(rows) - 1
+	case "V":
+		if b.anchor >= 0 {
+			b.anchor = -1
+		} else {
+			b.anchor = b.cur
+		}
+		return true, nil
+	case "y":
+		if text := b.selectedText(width); text != "" {
+			n := strings.Count(text, "\n") + 1
+			b.anchor = -1
+			return true, copyText(text, fmt.Sprintf("copied %d %s", n, plural(n, "line", "lines")))
+		}
+		return true, b.copySelection()
 	case "/":
 		b.searching, b.search = true, ""
+		return true, nil
 	case "n", "N":
 		b.jumpMatch(msg.String() == "n")
+		return true, nil
 	case "M":
 		b.markdownRaw = !b.markdownRaw
-		b.rendered.key, b.top = "", 0
+		b.rendered.key, b.top, b.cur, b.anchor = "", 0, 0, -1
 		return true, nil
 	case "h", "left":
 		b.pane = paneFiles
+		return true, nil
 	case "esc":
-		if b.search != "" {
+		switch {
+		case b.anchor >= 0:
+			b.anchor = -1
+		case b.search != "":
 			b.search, b.matches = "", nil
-		} else {
+		default:
 			b.pane = paneFiles // esc from a side pane returns to the tree
 		}
 		return true, nil
 	default:
 		return false, nil
 	}
-	b.top = max(0, min(b.top, len(rows)-1))
+	b.cur = max(0, min(b.cur, len(rows)-1))
+	b.followCursor(height)
 	return true, nil
+}
+
+// followCursor scrolls the content so the cursor row stays visible (the
+// pane shows height-1 rows below its heading).
+func (b *repoBrowser) followCursor(height int) {
+	visible := max(1, height-1)
+	if b.cur < b.top {
+		b.top = b.cur
+	}
+	if b.cur >= b.top+visible {
+		b.top = b.cur - visible + 1
+	}
 }
 
 func (b *repoBrowser) searchKey(msg tea.KeyMsg, width, height int) {
@@ -656,7 +698,8 @@ func (b *repoBrowser) searchKey(msg tea.KeyMsg, width, height int) {
 	b.findMatches(b.contentRows(b.contentWidth(width)))
 	if len(b.matches) > 0 && b.searching {
 		b.match = 0
-		b.top = max(0, b.matches[0]-height/3)
+		b.cur = b.matches[0]
+		b.top = max(0, b.cur-height/3)
 	}
 }
 
@@ -682,5 +725,6 @@ func (b *repoBrowser) jumpMatch(forward bool) {
 	} else {
 		b.match = (b.match + len(b.matches) - 1) % len(b.matches)
 	}
-	b.top = max(0, b.matches[b.match]-5)
+	b.cur = b.matches[b.match]
+	b.top = max(0, b.cur-5)
 }

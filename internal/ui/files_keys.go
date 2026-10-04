@@ -18,6 +18,16 @@ func (d *detailModel) filesKey(msg tea.KeyMsg) tea.Cmd {
 	}
 	switch msg.String() {
 	case "y":
+		if f.pane == paneDiff && f.inThread {
+			if t, ok := d.diffThread(); ok {
+				return d.copyComment(*t, f.commentSel)
+			}
+		}
+		if f.pane == paneDiff && f.anchor >= 0 {
+			text, n := d.diffSelectionText()
+			f.anchor = -1
+			return copyText(text, fmt.Sprintf("copied %d %s", n, plural(n, "line", "lines")))
+		}
 		if ch := d.selectedChange(); ch != nil {
 			return d.copyFile(ch.Item.Path)
 		}
@@ -66,6 +76,47 @@ func isAnyOf(s string, options ...string) bool {
 		}
 	}
 	return false
+}
+
+// diffSelectionText is the V range's original text: the cursor's side in
+// side-by-side, each line's own side inline; rows with no line there skip.
+func (d *detailModel) diffSelectionText() (string, int) {
+	f := &d.files
+	_, fd := d.currentDiff()
+	lines := d.diffLines()
+	if fd == nil {
+		return "", 0
+	}
+	var out []string
+	for i := min(f.anchor, f.cursor); i <= max(f.anchor, f.cursor) && i < len(lines); i++ {
+		side := d.cursorSide(lines[i]) // inline: the line's own side
+		raw := fd.rightRaw
+		if side == ado.SideLeft {
+			raw = fd.leftRaw
+		}
+		if n := lineOn(lines[i], side); n > 0 && n <= len(raw) {
+			out = append(out, raw[n-1])
+		}
+	}
+	return strings.Join(out, "\n"), len(out)
+}
+
+// copyComment offers a thread's comment text (raw markdown) to copy.
+func (d *detailModel) copyComment(t ado.Thread, sel int) tea.Cmd {
+	live := t.LiveComments()
+	if len(live) == 0 {
+		return nil
+	}
+	c := live[min(sel, len(live)-1)]
+	var all []string
+	for _, x := range live {
+		all = append(all, x.Author.DisplayName+":\n"+x.Content)
+	}
+	return copyMenu("comment",
+		copyItem{"Comment text", c.Content},
+		copyItem{"Whole thread", strings.Join(all, "\n\n")},
+		copyItem{"Web URL", d.pr.WebURL(d.client.Org) + fmt.Sprintf("?discussionId=%d", t.ID)},
+	)
 }
 
 func (d *detailModel) copyFile(path string) tea.Cmd {

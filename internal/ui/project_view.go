@@ -212,13 +212,23 @@ func (v *runView) onMouse(msg tea.MouseMsg, by, width, height int) tea.Cmd {
 		v.scrollLog(d, height)
 		return nil
 	}
+	// Press and drag over log lines selects them; y copies.
+	if !inTree && (isClick(msg) || isDrag(msg)) {
+		line := min(v.logTop+by, len(v.lines)-1)
+		if line < 0 {
+			return nil
+		}
+		if isClick(msg) {
+			v.logPane, v.cur, v.anchor, v.drag, v.follow = true, line, -1, line, false
+		} else if line != v.drag {
+			v.anchor, v.cur = v.drag, line
+		}
+		return nil
+	}
 	if !isClick(msg) {
 		return nil
 	}
-	v.logPane = !inTree
-	if inTree {
-		v.tree.click(by)
-		return v.selectLog()
-	}
-	return nil
+	v.logPane = false
+	v.tree.click(by)
+	return v.selectLog()
 }

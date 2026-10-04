@@ -2,12 +2,14 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/khanhtd36/lazdo/internal/ado"
 )
@@ -31,6 +33,10 @@ type runView struct {
 	logPane bool // focus is on the log
 	logErr  error
 	find    textFind // / find in the log
+	cur     int      // cursor line in the log
+	anchor  int      // first line of a V selection, -1 when none
+	drag    int      // line a mouse drag started on
+	height  int      // log rows last shown, for following new output
 }
 
 type (
@@ -50,7 +56,7 @@ type (
 )
 
 func newRunView(client *ado.Client, p ado.ProjectInfo, r ado.Run) *runView {
-	return &runView{client: client, project: p, run: r, follow: true}
+	return &runView{client: client, project: p, run: r, follow: true, anchor: -1}
 }
 
 func (v *runView) inProgress() bool { return v.run.Status != "completed" }
@@ -115,7 +121,8 @@ func (v *runView) update(msg tea.Msg) tea.Cmd {
 				v.lines = append(v.lines, msg.lines...)
 			}
 			if v.follow {
-				v.logTop = max(0, len(v.lines)-1)
+				v.cur = max(0, len(v.lines)-1)
+				v.logTop = max(0, len(v.lines)-v.height)
 			}
 		}
 	case runTickMsg:
@@ -168,6 +175,7 @@ func (v *runView) selectLog() tea.Cmd {
 		return nil
 	}
 	v.logID, v.lines, v.logTop, v.follow = r.Log.ID, nil, 0, r.State == "inProgress"
+	v.cur, v.anchor = 0, -1
 	return v.loadLog(1)
 }
 
@@ -206,51 +214,108 @@ func (v *runView) key(msg tea.KeyMsg, height int) (handled bool, cmd tea.Cmd) {
 		}
 		return handled, v.selectLog()
 	}
-	return v.logKey(k, height), nil
+	return v.logKey(k, height)
 }
 
 // showMatch scrolls the log to the current find match.
 func (v *runView) showMatch(height int) {
 	if line, ok := v.find.current(); ok {
-		v.logTop, v.follow = max(0, line-height/3), false
+		v.cur, v.logTop, v.follow = line, max(0, line-height/3), false
 	}
 }
 
-func (v *runView) logKey(k string, height int) bool {
+func (v *runView) logKey(k string, height int) (bool, tea.Cmd) {
 	page := max(1, height/2)
 	switch k {
 	case "esc":
-		if v.find.active() {
+		switch {
+		case v.anchor >= 0:
+			v.anchor = -1
+		case v.find.active():
 			v.find = textFind{}
-		} else {
+		default:
 			v.logPane = false // back to the steps, one level
 		}
+		return true, nil
 	case "/":
 		v.find = textFind{typing: true}
+		return true, nil
 	case "n", "N":
 		v.find.next(k == "n")
 		v.showMatch(height)
+		return true, nil
+	case "V":
+		if v.anchor >= 0 {
+			v.anchor = -1
+		} else {
+			v.anchor = v.cur
+		}
+		return true, nil
+	case "y":
+		return true, v.copyLog()
 	case "j", "down":
-		v.scrollLog(1, height)
+		v.moveCursor(1, height)
 	case "k", "up":
-		v.scrollLog(-1, height)
+		v.moveCursor(-1, height)
 	case "ctrl+d", "pgdown":
-		v.scrollLog(page, height)
+		v.moveCursor(page, height)
 	case "ctrl+u", "pgup":
-		v.scrollLog(-page, height)
+		v.moveCursor(-page, height)
 	case "g", "home":
-		v.logTop, v.follow = 0, false
+		v.moveCursor(-len(v.lines), height)
 	case "G", "end":
-		v.logTop, v.follow = max(0, len(v.lines)-height), true
+		v.moveCursor(len(v.lines), height)
 	default:
-		return false
+		return false, nil
 	}
-	return true
+	return true, nil
 }
 
+// moveCursor moves the log's cursor line; sitting on the last line follows
+// new output as it arrives.
+func (v *runView) moveCursor(delta, height int) {
+	v.cur = max(0, min(v.cur+delta, len(v.lines)-1))
+	v.follow = v.cur >= len(v.lines)-1
+	if v.cur < v.logTop {
+		v.logTop = v.cur
+	}
+	if v.cur >= v.logTop+height {
+		v.logTop = v.cur - height + 1
+	}
+}
+
+// scrollLog moves the view (mouse wheel) without moving the cursor.
 func (v *runView) scrollLog(delta, height int) {
-	v.logTop = max(0, min(v.logTop+delta, len(v.lines)-1))
-	v.follow = v.logTop >= len(v.lines)-height
+	v.logTop = max(0, min(v.logTop+delta, len(v.lines)-height))
+	v.follow = false
+}
+
+// logText is a log line as shown: no timestamp, no styling.
+func logText(line string) string { return ansi.Strip(logLine(line)) }
+
+// copyLog copies the selected lines, or offers the Copy menu without one.
+func (v *runView) copyLog() tea.Cmd {
+	if v.anchor >= 0 {
+		lo, hi := min(v.anchor, v.cur), max(v.anchor, v.cur)
+		var out []string
+		for i := lo; i <= hi && i < len(v.lines); i++ {
+			out = append(out, logText(v.lines[i]))
+		}
+		v.anchor = -1
+		return copyText(strings.Join(out, "\n"), fmt.Sprintf("copied %d %s", len(out), plural(len(out), "line", "lines")))
+	}
+	if len(v.lines) == 0 {
+		return nil
+	}
+	shown := make([]string, len(v.lines))
+	for i, l := range v.lines {
+		shown[i] = logText(l)
+	}
+	return copyMenu("log",
+		copyItem{"Current line", shown[min(v.cur, len(shown)-1)]},
+		copyItem{"Whole log", strings.Join(shown, "\n")},
+		copyItem{"Whole log with timestamps", strings.Join(v.lines, "\n")},
+	)
 }
 
 // treeItems nests stages, jobs and steps; phases are an implementation
@@ -345,16 +410,29 @@ func (v *runView) logView(width, height int) []string {
 		out[0] = styleDim.Render(" loading log…")
 		return out
 	}
+	v.height = height
 	start := v.logTop
 	if v.follow {
 		start = max(0, len(v.lines)-height)
+		v.logTop = start
+	}
+	lo, hi := len(v.lines), -1
+	if v.anchor >= 0 {
+		lo, hi = min(v.anchor, v.cur), max(v.anchor, v.cur)
 	}
 	for i := range height {
 		n := start + i
 		if n >= len(v.lines) {
 			break
 		}
-		out[i] = " " + truncate(logLine(v.lines[n]), width-1)
+		mark := " "
+		switch {
+		case n == v.cur && v.logPane:
+			mark = styleCursorLine.Render("▌")
+		case n >= lo && n <= hi:
+			mark = styleRangeLine.Render("┃")
+		}
+		out[i] = mark + truncate(logLine(v.lines[n]), width-1)
 	}
 	return out
 }

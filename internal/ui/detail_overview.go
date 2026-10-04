@@ -159,6 +159,9 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 			d.vp.SetYOffset(max(0, line-3))
 		}
 	case "y":
+		if e, ok := d.selectedEntry(); ok && d.inThread && e.isHuman {
+			return d.copyComment(*e.thread, d.commentSel)
+		}
 		return copyPR(d.client.Org, d.pr)
 	case "J":
 		d.threadSel, d.inThread = min(d.threadSel+1, n-1), false

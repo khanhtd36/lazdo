@@ -71,6 +71,7 @@ type filesView struct {
 	cursor     int
 	top        int
 	anchor     int // first line of a V range, -1 when none
+	drag       int // line a mouse drag started on
 	inThread   bool
 	commentSel int
 }

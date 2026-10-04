@@ -23,6 +23,11 @@ func isClick(msg tea.MouseMsg) bool {
 	return msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft
 }
 
+// isDrag reports the pointer moving with the left button held.
+func isDrag(msg tea.MouseMsg) bool {
+	return msg.Action == tea.MouseActionMotion && msg.Button == tea.MouseButtonLeft
+}
+
 func wheelDelta(msg tea.MouseMsg) int {
 	if msg.Action != tea.MouseActionPress {
 		return 0
@@ -246,7 +251,7 @@ func (d *detailModel) filesMouse(msg tea.MouseMsg, by int) tea.Cmd {
 		d.scrollDiffToCursor()
 		return nil
 	}
-	if !isClick(msg) || by == 0 {
+	if (!isClick(msg) && !isDrag(msg)) || by == 0 {
 		return nil // row 0 is the diff header
 	}
 	ch, fd := d.currentDiff()
@@ -257,7 +262,15 @@ func (d *detailModel) filesMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	row := 1
 	for i := f.top; i < len(lines); i++ {
 		n := d.lineRowCount(i)
+		if by < row+n && isDrag(msg) {
+			// Dragging over lines selects them, like V; y copies, a comments.
+			if i != f.drag {
+				f.anchor, f.cursor, f.inThread = f.drag, i, false
+			}
+			return nil
+		}
 		if by < row+n {
+			f.drag, f.anchor = i, -1
 			wasCursor := f.cursor == i && f.pane == paneDiff
 			f.cursor, f.pane = i, paneDiff
 			if d.isSideBySide() {

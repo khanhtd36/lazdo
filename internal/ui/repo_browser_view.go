@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // columns returns the widths of the branch, tree and content panes; the
@@ -46,8 +47,12 @@ func (b *repoBrowser) contentRows(width int) []string {
 		return b.rendered.rows
 	}
 	var rows []string
+	var src []int
 	if fc.markdown && !b.markdownRaw {
 		rows = strings.Split(b.md.render(strings.Join(fc.raw, "\n"), max(20, width-1)), "\n")
+		for range rows {
+			src = append(src, -1)
+		}
 	} else {
 		nw := max(3, len(fmt.Sprint(len(fc.hl))))
 		for i, line := range fc.hl {
@@ -57,10 +62,11 @@ func (b *repoBrowser) contentRows(width int) []string {
 					num = styleGutter.Render(fmt.Sprintf("%*d", nw, i+1))
 				}
 				rows = append(rows, num+" "+r)
+				src = append(src, i)
 			}
 		}
 	}
-	b.rendered.key, b.rendered.rows = key, rows
+	b.rendered.key, b.rendered.rows, b.rendered.src = key, rows, src
 	b.findMatches(rows) // rows moved: re-find the search hits
 	return rows
 }
@@ -229,18 +235,55 @@ func (b *repoBrowser) contentView(width, height int) []string {
 	for _, m := range b.matches {
 		matched[m] = true
 	}
+	lo, hi := b.selection()
 	for i := 1; i < height; i++ {
 		n := b.top + i - 1
 		if n >= len(rows) {
 			break
 		}
 		mark := " "
-		if matched[n] {
+		switch {
+		case n == b.cur && b.pane == paneContent:
+			mark = styleCursorLine.Render("▌")
+		case n >= lo && n <= hi:
+			mark = styleRangeLine.Render("┃")
+		case matched[n]:
 			mark = styleYellow.Render("▌")
 		}
 		out[i] = mark + truncate(rows[n], width-1)
 	}
 	return out
+}
+
+// selection is the selected row range; lo > hi when nothing is selected.
+func (b *repoBrowser) selection() (lo, hi int) {
+	if b.anchor < 0 {
+		return 1, 0
+	}
+	return min(b.anchor, b.cur), max(b.anchor, b.cur)
+}
+
+// selectedText is the source of the selected rows: whole source lines for
+// code (no numbers, no wrap breaks), the plain text for rendered markdown.
+func (b *repoBrowser) selectedText(width int) string {
+	fc := b.currentContent()
+	rows := b.contentRows(b.contentWidth(width))
+	lo, hi := b.selection()
+	if fc == nil || lo > hi {
+		return ""
+	}
+	var out []string
+	last := -1
+	for i := lo; i <= hi && i < len(rows); i++ {
+		switch src := b.rendered.src[i]; {
+		case src < 0:
+			out = append(out, strings.TrimRight(ansi.Strip(rows[i]), " "))
+		case src != last:
+			out = append(out, fc.raw[src])
+			last = src
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 func (b *repoBrowser) searchLine() (string, bool) {
@@ -271,6 +314,19 @@ func (b *repoBrowser) onMouse(msg tea.MouseMsg, by, width, height int) tea.Cmd {
 			b.tree.wheel(d)
 		case paneContent:
 			b.top = max(0, min(b.top+d, len(b.contentRows(b.contentWidth(width)))-1))
+		}
+		return nil
+	}
+	// Press and drag over content rows selects them; y copies.
+	if pane == paneContent && by > 0 && (isClick(msg) || isDrag(msg)) {
+		row := min(b.top+by-1, len(b.contentRows(b.contentWidth(width)))-1)
+		if row < 0 {
+			return nil
+		}
+		if isClick(msg) {
+			b.pane, b.cur, b.anchor, b.dragFrom = paneContent, row, -1, row
+		} else if row != b.dragFrom {
+			b.anchor, b.cur = b.dragFrom, row
 		}
 		return nil
 	}

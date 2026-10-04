@@ -32,6 +32,12 @@ func copyMenu(title string, items ...copyItem) tea.Cmd {
 	return func() tea.Msg { return copyMenuMsg{title: title, items: kept} }
 }
 
+// copyText puts text on the clipboard straight away (a selection is already
+// a precise choice, so it skips the menu).
+func copyText(text, done string) tea.Cmd {
+	return func() tea.Msg { return resultMsg(actions.CopyToClipboard(text), done) }
+}
+
 func copyPR(org string, pr ado.PullRequest) tea.Cmd {
 	return copyMenu(fmt.Sprintf("!%d", pr.ID),
 		copyItem{"Web URL", pr.WebURL(org)},

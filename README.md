@@ -148,6 +148,15 @@ empty folder gets a fresh clone; nothing is ever forced.
 `?` lists the shortcuts for where you are, most specific first. `/` filters
 them fuzzily; `enter` runs the selected one.
 
+### Copying text
+
+In the file content, diff and pipeline log, `V` (or dragging the mouse)
+selects whole lines and `y` copies them: the original text, without line
+numbers, colors or wrap breaks (logs without their timestamps). With
+nothing selected, `y` opens the Copy menu (current line, whole log, file
+path, URLs, tag names, …). Inside a comment thread, `y` copies the
+comment's markdown. Shift+drag still uses the terminal's own selection.
+
 ### Mouse
 
 Click selects; clicking what is already selected opens it (a PR, a comment

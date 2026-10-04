@@ -77,6 +77,7 @@ var (
 		{keys: "e / d", desc: "edit / delete your comment", press: "e", hint: "edit/delete"},
 		{keys: "R", desc: "reply", press: "R", hint: "reply"},
 		{keys: "s", desc: "set the thread's status", press: "s", hint: "status"},
+		{keys: "y", desc: "copy the comment text or the whole thread", press: "y", hint: "copy"},
 	}
 	treeKeys = []binding{
 		{keys: "enter / l / tab", desc: "focus the diff", press: "enter", hint: "diff"},
@@ -87,11 +88,11 @@ var (
 		{keys: "n / N", desc: "next / previous change", press: "n", hint: "change"},
 		{keys: "h / l", desc: "old / new side (side-by-side); h on old goes to the tree", hint: "side"},
 		{keys: "tab", desc: "focus the file tree", press: "tab", hint: "tree"},
-		{keys: "V", desc: "start or clear a line range", press: "V", hint: "range"},
+		{keys: "V / drag", desc: "select lines: a comments on them, y copies them", press: "V", hint: "select"},
 		{keys: "a", desc: "comment on the line or range", press: "a", hint: "comment"},
 		{keys: "enter", desc: "step into the line's thread", press: "enter", hint: "thread"},
 		{keys: "R / s", desc: "reply / status on the line's thread", press: "R"},
-		{keys: "y", desc: "copy menu: path, web URL, name", press: "y"},
+		{keys: "y", desc: "copy the selected lines (none selected: copy menu)", press: "y", hint: "copy"},
 	}
 	filesKeys = []binding{
 		{keys: "S", desc: "side-by-side ⇄ inline", press: "S", hint: "mode"},
@@ -156,7 +157,8 @@ var (
 		{keys: "/", desc: "branches: filter · files: go to any file · content: find text", press: "/", hint: "find"},
 		{keys: "n / N", desc: "next / previous match in the file", press: "n"},
 		{keys: "M", desc: "markdown: rendered ⇄ raw", press: "M"},
-		{keys: "y", desc: "copy menu: branch, or file path and link", press: "y", hint: "copy"},
+		{keys: "V / drag", desc: "content: select lines", press: "V", hint: "select"},
+		{keys: "y", desc: "copy the selected lines (none: copy menu for branch or file)", press: "y", hint: "copy"},
 		{keys: "c", desc: "check out a branch (asks where)", press: "c", hint: "checkout"},
 		{keys: "z", desc: "hide / show the branches", press: "z"},
 		{keys: "o", desc: "open in the browser", press: "o"},
@@ -174,7 +176,8 @@ var (
 		{keys: "tab / h / l", desc: "steps ⇄ log", press: "tab", hint: "pane"},
 		{keys: "/", desc: "steps: filter · log: find text; n / N next / previous", press: "/", hint: "find"},
 		{keys: "G", desc: "log: jump to the end and follow new lines", press: "G", hint: "follow"},
-		{keys: "y", desc: "copy menu: URL, number, branch", press: "y", hint: "copy"},
+		{keys: "V / drag", desc: "log: select lines", press: "V", hint: "select"},
+		{keys: "y", desc: "log: copy the selected lines (none: current line or whole log) · steps: copy menu", press: "y", hint: "copy"},
 		{keys: "o", desc: "open the run in the browser", press: "o"},
 		{keys: "r", desc: "refresh", press: "r"},
 		{keys: "esc", desc: "log: back to the steps · steps: back to the runs", press: "esc", hint: "back"},
