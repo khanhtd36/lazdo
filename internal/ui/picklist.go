@@ -13,6 +13,9 @@ import (
 // should find "complete" before "new comment on the pull request", which
 // fuzzy alone scores higher for hitting word starts.
 func rankFuzzy(query string, texts []string) []fuzzy.Match {
+	if isNumberQuery(query) {
+		return findLiteral(query, texts)
+	}
 	span := func(m fuzzy.Match) int {
 		return m.MatchedIndexes[len(m.MatchedIndexes)-1] - m.MatchedIndexes[0]
 	}
@@ -25,6 +28,30 @@ func rankFuzzy(query string, texts []string) []fuzzy.Match {
 		}
 	}
 	sort.SliceStable(matches, func(i, j int) bool { return span(matches[i]) < span(matches[j]) })
+	return matches
+}
+
+// isNumberQuery reports a PR number, like "15050" or "!15050": digits
+// scattered through titles and branches would fuzzy-match it, so it is
+// matched as written instead.
+func isNumberQuery(query string) bool {
+	digits := strings.TrimPrefix(query, "!")
+	return digits != "" && strings.Trim(digits, "0123456789") == ""
+}
+
+func findLiteral(query string, texts []string) []fuzzy.Match {
+	var matches []fuzzy.Match
+	for i, t := range texts {
+		at := strings.Index(t, query)
+		if at < 0 {
+			continue
+		}
+		idx := make([]int, len(query))
+		for j := range idx {
+			idx[j] = at + j
+		}
+		matches = append(matches, fuzzy.Match{Str: t, Index: i, MatchedIndexes: idx})
+	}
 	return matches
 }
 

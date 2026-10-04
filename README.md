@@ -102,7 +102,8 @@ lists everything available where you are.
 | `c` | check out the branch (asks where) |
 
 Dashboard: `enter` opens a PR or collapses a section, `/` filters by title,
-author, ID or branch.
+author, ID or branch. A number (`15050` or `!15050`) matches PR IDs as
+typed, not fuzzily; the same goes for a project's pull requests.
 
 ### Projects page
 

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +70,23 @@ func TestProjectMainRepoFirst(t *testing.T) {
 	m := p.newProject(ado.NewClient("org"), ado.ProjectInfo{ID: "p1", Name: "MITS11"})
 	if m.repos[0].Name != "MITS11" || m.repos[1].Name != "dev-tools" {
 		t.Fatalf("main repo first, then A-Z: %s, %s", m.repos[0].Name, m.repos[1].Name)
+	}
+}
+
+func TestRankFuzzyMatchesPRNumbersLiterally(t *testing.T) {
+	texts := []string{
+		"fix(export): keep large exports from stalling Nhan Nguyen !15018 fix/QA-11278-export",
+		"feat(download): stream exported large test data Nhan Nguyen !15050 feat/download-15",
+		"chore: bump 1 5 0 5 0 deps Khanh Truong !14001 chore/deps",
+	}
+	for q, want := range map[string][]int{"15050": {1}, "!15050": {1}, "!150": {0, 1}, "1501": {0}} {
+		var got []int
+		for _, m := range rankFuzzy(q, texts) {
+			got = append(got, m.Index)
+		}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("%q matched %v, want %v", q, got, want)
+		}
 	}
 }
 

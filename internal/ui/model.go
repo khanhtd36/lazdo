@@ -553,7 +553,7 @@ func (m Model) filterMatches() map[int]bool {
 	var ids []int
 	for _, s := range m.sections {
 		for _, pr := range s.PRs {
-			texts = append(texts, fmt.Sprintf("%s %s %d %s", pr.Title, pr.CreatedBy.DisplayName, pr.ID, pr.SourceBranch()))
+			texts = append(texts, fmt.Sprintf("%s %s !%d %s", pr.Title, pr.CreatedBy.DisplayName, pr.ID, pr.SourceBranch()))
 			ids = append(ids, pr.ID)
 		}
 	}

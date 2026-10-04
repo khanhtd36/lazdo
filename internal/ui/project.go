@@ -433,7 +433,7 @@ func (m *projectModel) prItems() []pickItem {
 	items := make([]pickItem, 0, len(m.prs))
 	for _, pr := range m.prs {
 		items = append(items, pickItem{
-			search: fmt.Sprintf("%s %s %s %d", pr.Title, pr.CreatedBy.DisplayName, pr.SourceBranch(), pr.ID),
+			search: fmt.Sprintf("%s %s %s !%d", pr.Title, pr.CreatedBy.DisplayName, pr.SourceBranch(), pr.ID),
 			value:  pr,
 			render: func(width int) string { return projectPRRow(pr, width) },
 		})
