@@ -59,9 +59,9 @@ func TestHelpFuzzySearchAndRun(t *testing.T) {
 	if len(rows) == 0 || !strings.Contains(rows[0].binding.desc, "complete") {
 		t.Fatalf("fuzzy 'cmpl' should rank a complete binding first, got %+v", rows)
 	}
-	// enter keeps the filter, a second enter runs the binding: the complete
-	// menu opens in the detail view.
-	next = typeKeys(next, "enter", "enter")
+	// enter runs the matched binding, like every / filter: the complete menu
+	// opens in the detail view.
+	next = typeKeys(next, "enter")
 	if next.(Model).help != nil {
 		t.Fatal("running a binding should close help")
 	}

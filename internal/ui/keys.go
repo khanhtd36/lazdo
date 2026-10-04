@@ -6,12 +6,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// binding documents one shortcut. press is the key the help popup replays
-// when the user runs the entry; empty for entries that only describe keys.
+// binding documents one shortcut; this table is the single source for the
+// help popup (?) and the footer hints. press is the key the help popup
+// replays when the user runs the entry (empty: describe only); hint is the
+// footer's short label (empty: help only).
 type binding struct {
 	keys  string
 	desc  string
 	press string
+	hint  string
 }
 
 type bindingGroup struct {
@@ -19,132 +22,160 @@ type bindingGroup struct {
 	bindings []binding
 }
 
+// The same keys mean the same thing everywhere outside text inputs:
+// j/k move, ctrl+d/ctrl+u half page, g/G ends, enter deeper, esc back one
+// level, q quit, / filter or find, n/N next match, J/K next group, tab
+// next pane, y copy menu, o browser, r refresh.
 var (
+	moveKeys = []binding{
+		{keys: "j / k", desc: "move (or scroll) down / up", hint: "move"},
+		{keys: "ctrl+d / ctrl+u", desc: "half page down / up", press: "ctrl+d"},
+		{keys: "g / G", desc: "top / bottom", press: "g"},
+	}
 	dashboardKeys = []binding{
-		{"j / k", "move down / up", ""},
-		{"tab / shift+tab", "next / previous section", "tab"},
-		{"enter", "open the pull request, or collapse a section", "enter"},
-		{"o", "open the pull request in the browser", "o"},
-		{"y", "copy the pull request URL", "y"},
-		{"c", "check out the source branch", "c"},
-		{"r", "refresh", "r"},
-		{"g / G", "first / last row", ""},
-		{"q", "quit", "q"},
-	}
-	detailKeys = []binding{
-		{"v", "vote: approve, suggestions, wait for author, reject, reset", "v"},
-		{"m", "complete, auto-complete, draft/publish, abandon", "m"},
-		{"1-4", "Overview, Files, Commits, Conflicts tab", ""},
-		{"[ / ]", "previous / next tab", "]"},
-		{"o", "open in the browser (the file, on the Files tab)", "o"},
-		{"y", "copy the pull request URL", "y"},
-		{"c", "check out the source branch", "c"},
-		{"r", "refresh", "r"},
-		{"esc", "back out: thread, range, pane, then to the list", "esc"},
-	}
-	overviewKeys = []binding{
-		{"j / k", "scroll", ""},
-		{"J / K", "next / previous activity entry", "J"},
-		{"enter", "step into the selected comment thread", "enter"},
-		{"f", "cycle the activity filter", "f"},
-		{"n", "new comment on the pull request", "n"},
-		{"R", "reply to the selected thread", "R"},
-		{"s", "set the selected thread's status", "s"},
-	}
-	threadKeys = []binding{
-		{"j / k", "pick a comment", ""},
-		{"e", "edit your comment", "e"},
-		{"d", "delete your comment", "d"},
-		{"R", "reply", "R"},
-		{"s", "set the thread's status", "s"},
-	}
-	treeKeys = []binding{
-		{"j / k", "next / previous file", ""},
-		{"enter / l / tab", "focus the diff", "enter"},
-	}
-	diffKeys = []binding{
-		{"j / k", "next / previous line", ""},
-		{"ctrl+d / ctrl+u", "half page down / up", "ctrl+d"},
-		{"n / N (or p)", "next / previous change", "n"},
-		{"h / l", "old / new side (side-by-side); h on old goes to the tree", ""},
-		{"V", "start or clear a line range", "V"},
-		{"a", "comment on the line or range", "a"},
-		{"enter", "step into the line's thread", "enter"},
-		{"R / s", "reply / status on the line's thread", ""},
-		{"tab", "focus the file tree", "tab"},
-	}
-	filesKeys = []binding{
-		{"S", "side-by-side ⇄ inline", "S"},
-		{"u", "compare: all changes, since last visit, updates", "u"},
-		{"z", "hide / show the file tree", "z"},
-	}
-	listKeys = []binding{
-		{"j / k", "move", ""},
-		{"enter", "open (a commit shows its diff)", "enter"},
-	}
-	pageKeys = []binding{
-		{"1 / 2", "Pull requests / Projects page", ""},
-		{"[ / ]", "previous / next page", "]"},
+		{keys: "enter", desc: "open the pull request, or collapse a section", press: "enter", hint: "open"},
+		{keys: "J / K", desc: "next / previous section", press: "J", hint: "section"},
+		{keys: "/", desc: "filter pull requests by title, author, ID or branch", press: "/", hint: "filter"},
+		{keys: "y", desc: "copy menu: URL, branch, ID, title", press: "y", hint: "copy"},
+		{keys: "o", desc: "open the pull request in the browser", press: "o", hint: "browser"},
+		{keys: "c", desc: "check out the source branch (asks where)", press: "c", hint: "checkout"},
+		{keys: "r", desc: "refresh", press: "r", hint: "refresh"},
 	}
 	projectsPageKeys = []binding{
-		{"j / k", "move", ""},
-		{"enter", "open the project (or a found repo's branches)", "enter"},
-		{"/", "search projects and every repo", "/"},
-		{"o", "open in the browser", "o"},
-		{"y / Y", "copy a found repo's https / ssh URL", "y"},
-		{"r", "refresh", "r"},
+		{keys: "enter", desc: "open the project (or a found repo's browser)", press: "enter", hint: "open"},
+		{keys: "J / K", desc: "next / previous group", press: "J"},
+		{keys: "/", desc: "search projects and every repo", press: "/", hint: "search"},
+		{keys: "y", desc: "copy menu", press: "y", hint: "copy"},
+		{keys: "o", desc: "open in the browser", press: "o", hint: "browser"},
+		{keys: "r", desc: "refresh", press: "r", hint: "refresh"},
+	}
+	pageKeys = []binding{
+		{keys: "1 / 2", desc: "Pull requests / Projects page", hint: "pages"},
+		{keys: "[ / ]", desc: "previous / next page", press: "]"},
+	}
+	detailKeys = []binding{
+		{keys: "1-4", desc: "Overview, Files, Commits, Conflicts tab", hint: "tabs"},
+		{keys: "[ / ]", desc: "previous / next tab", press: "]"},
+		{keys: "v", desc: "vote: approve, suggestions, wait for author, reject, reset", press: "v", hint: "vote"},
+		{keys: "m", desc: "complete, auto-complete, draft/publish, abandon", press: "m", hint: "complete"},
+		{keys: "o", desc: "open in the browser (the file, on the Files tab)", press: "o", hint: "browser"},
+		{keys: "c", desc: "check out the source branch (asks where)", press: "c", hint: "checkout"},
+		{keys: "r", desc: "refresh", press: "r"},
+		{keys: "esc", desc: "back one level: thread, range, pane, then to the list", press: "esc", hint: "back"},
+	}
+	overviewKeys = []binding{
+		{keys: "J / K", desc: "next / previous activity entry", press: "J", hint: "entry"},
+		{keys: "enter", desc: "step into the selected comment thread", press: "enter", hint: "thread"},
+		{keys: "a", desc: "add a comment on the pull request", press: "a", hint: "comment"},
+		{keys: "R / s", desc: "reply / status on the selected thread", press: "R"},
+		{keys: "f", desc: "cycle the activity filter", press: "f", hint: "filter"},
+		{keys: "/", desc: "find text; n / N next / previous match", press: "/", hint: "find"},
+		{keys: "y", desc: "copy menu: URL, branch, ID, title", press: "y", hint: "copy"},
+	}
+	threadKeys = []binding{
+		{keys: "j / k", desc: "pick a comment", hint: "comment"},
+		{keys: "e / d", desc: "edit / delete your comment", press: "e", hint: "edit/delete"},
+		{keys: "R", desc: "reply", press: "R", hint: "reply"},
+		{keys: "s", desc: "set the thread's status", press: "s", hint: "status"},
+	}
+	treeKeys = []binding{
+		{keys: "enter / l / tab", desc: "focus the diff", press: "enter", hint: "diff"},
+		{keys: "/", desc: "filter files", press: "/", hint: "filter"},
+		{keys: "y", desc: "copy menu: path, web URL, name", press: "y", hint: "copy"},
+	}
+	diffKeys = []binding{
+		{keys: "n / N", desc: "next / previous change", press: "n", hint: "change"},
+		{keys: "h / l", desc: "old / new side (side-by-side); h on old goes to the tree", hint: "side"},
+		{keys: "tab", desc: "focus the file tree", press: "tab", hint: "tree"},
+		{keys: "V", desc: "start or clear a line range", press: "V", hint: "range"},
+		{keys: "a", desc: "comment on the line or range", press: "a", hint: "comment"},
+		{keys: "enter", desc: "step into the line's thread", press: "enter", hint: "thread"},
+		{keys: "R / s", desc: "reply / status on the line's thread", press: "R"},
+		{keys: "y", desc: "copy menu: path, web URL, name", press: "y"},
+	}
+	filesKeys = []binding{
+		{keys: "S", desc: "side-by-side ⇄ inline", press: "S", hint: "mode"},
+		{keys: "u", desc: "compare: all changes, since last visit, updates", press: "u", hint: "compare"},
+		{keys: "z", desc: "hide / show the file tree", press: "z"},
+	}
+	commitsKeys = []binding{
+		{keys: "enter", desc: "show the commit's diff", press: "enter", hint: "diff"},
+		{keys: "J / K", desc: "next / previous push", press: "J", hint: "push"},
+		{keys: "/", desc: "filter commits", press: "/", hint: "filter"},
+		{keys: "y", desc: "copy menu: ID, message, web URL", press: "y", hint: "copy"},
+	}
+	conflictsKeys = []binding{
+		{keys: "enter", desc: "open the conflict in the browser", press: "enter", hint: "open"},
+		{keys: "/", desc: "filter conflicts", press: "/", hint: "filter"},
+		{keys: "y", desc: "copy the path", press: "y", hint: "copy"},
 	}
 	projectKeys = []binding{
-		{"1-3", "Repos, Pull requests, Pipelines tab", ""},
-		{"[ / ]", "previous / next tab", "]"},
-		{"enter", "open: pull request, repo's branches, pipeline's runs", "enter"},
-		{"/", "filter the list", "/"},
-		{"y / Y", "copy the repo's https / ssh URL (or the PR URL)", "y"},
-		{"o", "open in the browser", "o"},
-		{"r", "refresh", "r"},
-		{"esc", "back to the Projects page", "esc"},
+		{keys: "1-3", desc: "Repos, Pull requests, Pipelines tab", hint: "tabs"},
+		{keys: "[ / ]", desc: "previous / next tab", press: "]"},
+		{keys: "enter", desc: "open: repo browser, pull request, pipeline runs", press: "enter", hint: "open"},
+		{keys: "/", desc: "filter the list", press: "/", hint: "filter"},
+		{keys: "y", desc: "copy menu", press: "y", hint: "copy"},
+		{keys: "o", desc: "open in the browser", press: "o", hint: "browser"},
+		{keys: "r", desc: "refresh", press: "r", hint: "refresh"},
+		{keys: "esc", desc: "back to the Projects page", press: "esc", hint: "back"},
 	}
 	repoKeys = []binding{
-		{"tab", "next pane: branches, files, content", "tab"},
-		{"h / l", "collapse / expand a folder, or move between panes", ""},
-		{"enter", "switch branch, open folder or file", "enter"},
-		{"/", "branches: filter · files: go to any file · content: find text", "/"},
-		{"n / N", "next / previous match in the file", "n"},
-		{"M", "markdown: rendered ⇄ raw", "M"},
-		{"y", "copy the branch name or file path", "y"},
-		{"Y", "copy the web link to the file on this branch", "Y"},
-		{"c", "check out a branch (asks where)", "c"},
-		{"z", "hide / show the branches", "z"},
-		{"o", "open in the browser", "o"},
-		{"esc", "back to the repos", "esc"},
+		{keys: "tab / shift+tab", desc: "next / previous pane: branches, files, content", press: "tab", hint: "pane"},
+		{keys: "h / l", desc: "collapse / expand a folder, or move between panes", hint: "fold"},
+		{keys: "enter", desc: "switch branch, open folder or file", press: "enter", hint: "open"},
+		{keys: "/", desc: "branches: filter · files: go to any file · content: find text", press: "/", hint: "find"},
+		{keys: "n / N", desc: "next / previous match in the file", press: "n"},
+		{keys: "M", desc: "markdown: rendered ⇄ raw", press: "M"},
+		{keys: "y", desc: "copy menu: branch, or file path and link", press: "y", hint: "copy"},
+		{keys: "c", desc: "check out a branch (asks where)", press: "c", hint: "checkout"},
+		{keys: "z", desc: "hide / show the branches", press: "z"},
+		{keys: "o", desc: "open in the browser", press: "o"},
+		{keys: "esc", desc: "side pane: back to the tree · tree: back to the repos", press: "esc", hint: "back"},
 	}
 	runsKeys = []binding{
-		{"enter", "open the run", "enter"},
-		{"o", "open in the browser", "o"},
-		{"/", "filter runs", "/"},
-		{"esc", "back to the pipelines", "esc"},
+		{keys: "enter", desc: "open the run", press: "enter", hint: "open"},
+		{keys: "/", desc: "filter runs", press: "/", hint: "filter"},
+		{keys: "y", desc: "copy menu: URL, number, branch", press: "y", hint: "copy"},
+		{keys: "o", desc: "open in the browser", press: "o", hint: "browser"},
+		{keys: "r", desc: "refresh", press: "r", hint: "refresh"},
+		{keys: "esc", desc: "back to the pipelines", press: "esc", hint: "back"},
 	}
 	runKeys = []binding{
-		{"j / k", "move (steps) or scroll (log)", ""},
-		{"tab / h / l", "steps ⇄ log", "tab"},
-		{"G", "jump to the end and follow new lines", "G"},
-		{"g", "top of the log", "g"},
-		{"o", "open the run in the browser", "o"},
-		{"esc", "back to the runs", "esc"},
+		{keys: "tab / h / l", desc: "steps ⇄ log", press: "tab", hint: "pane"},
+		{keys: "/", desc: "steps: filter · log: find text; n / N next / previous", press: "/", hint: "find"},
+		{keys: "G", desc: "log: jump to the end and follow new lines", press: "G", hint: "follow"},
+		{keys: "y", desc: "copy menu: URL, number, branch", press: "y", hint: "copy"},
+		{keys: "o", desc: "open the run in the browser", press: "o"},
+		{keys: "r", desc: "refresh", press: "r"},
+		{keys: "esc", desc: "log: back to the steps · steps: back to the runs", press: "esc", hint: "back"},
 	}
 	globalKeys = []binding{
-		{"?", "this help", ""},
-		{"ctrl+c", "quit", ""},
-		{"mouse", "click selects, click again opens, wheel scrolls", ""},
+		{keys: "?", desc: "this help", hint: "help"},
+		{keys: "q", desc: "quit (anywhere outside a text box)", hint: "quit"},
+		{keys: "ctrl+c", desc: "quit, even while typing"},
+		{keys: "mouse", desc: "click selects, click again opens, wheel scrolls"},
 	}
 )
 
 // helpGroups lists the bindings for where the user is, most specific first.
 func (m Model) helpGroups() []bindingGroup {
-	d := m.detail
-	if d == nil {
-		return m.pageHelpGroups()
+	switch {
+	case m.detail != nil:
+		return m.detail.helpGroups()
+	case m.project != nil:
+		return m.project.helpGroups()
+	case m.page == pageProjects:
+		return withCommon(bindingGroup{"Projects", projectsPageKeys}, bindingGroup{"Pages", pageKeys})
 	}
+	return withCommon(bindingGroup{"Dashboard", dashboardKeys}, bindingGroup{"Pages", pageKeys})
+}
+
+// withCommon appends the movement and global keys every view shares.
+func withCommon(groups ...bindingGroup) []bindingGroup {
+	return append(groups, bindingGroup{"Move", moveKeys}, bindingGroup{"Global", globalKeys})
+}
+
+func (d *detailModel) helpGroups() []bindingGroup {
 	var groups []bindingGroup
 	switch d.tab {
 	case tabOverview:
@@ -163,32 +194,38 @@ func (m Model) helpGroups() []bindingGroup {
 		}
 		groups = append(groups, bindingGroup{"Files", filesKeys})
 	case tabCommits:
-		groups = append(groups, bindingGroup{"Commits", listKeys})
+		groups = append(groups, bindingGroup{"Commits", commitsKeys})
 	case tabConflicts:
-		groups = append(groups, bindingGroup{"Conflicts", listKeys})
+		groups = append(groups, bindingGroup{"Conflicts", conflictsKeys})
 	case tabCount:
 	}
-	return append(groups, bindingGroup{"Pull request", detailKeys}, bindingGroup{"Global", globalKeys})
+	return withCommon(append(groups, bindingGroup{"Pull request", detailKeys})...)
 }
 
-func (m Model) pageHelpGroups() []bindingGroup {
-	global := bindingGroup{"Global", globalKeys}
-	if p := m.project; p != nil {
-		switch p.level {
-		case levelRepo:
-			return []bindingGroup{{"Repo", repoKeys}, global}
-		case levelRuns:
-			return []bindingGroup{{"Runs", runsKeys}, global}
-		case levelRun:
-			return []bindingGroup{{"Run", runKeys}, global}
-		case levelTabs:
+func (m *projectModel) helpGroups() []bindingGroup {
+	switch m.level {
+	case levelRepo:
+		return withCommon(bindingGroup{"Repo", repoKeys})
+	case levelRuns:
+		return withCommon(bindingGroup{"Runs", runsKeys})
+	case levelRun:
+		return withCommon(bindingGroup{"Run", runKeys})
+	case levelTabs:
+	}
+	return withCommon(bindingGroup{"Project", projectKeys})
+}
+
+// footer renders the hints of the given groups as the bottom help line.
+func footer(groups []bindingGroup) string {
+	var parts []string
+	for _, g := range groups {
+		for _, b := range g.bindings {
+			if b.hint != "" {
+				parts = append(parts, strings.ReplaceAll(b.keys, " / ", "/")+" "+b.hint)
+			}
 		}
-		return []bindingGroup{{"Project", projectKeys}, global}
 	}
-	if m.page == pageProjects {
-		return []bindingGroup{{"Projects", projectsPageKeys}, {"Pages", pageKeys}, global}
-	}
-	return []bindingGroup{{"Dashboard", dashboardKeys}, {"Pages", pageKeys}, global}
+	return strings.Join(parts, "  ")
 }
 
 // keyMsg turns a binding's press string back into the key it stands for.

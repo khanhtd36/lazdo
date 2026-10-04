@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/khanhtd36/lazdo/internal/ado"
 )
@@ -19,65 +20,76 @@ type listLine struct {
 	url    string
 	change *ado.Change
 	commit string
+	path   string // a conflict's file
 }
 
-func (d *detailModel) listLines() []listLine {
+// lineItems turns rows into list items; rows with nothing to open (folders,
+// push groups, notes) become headers the cursor skips.
+func lineItems(lines []listLine) []pickItem {
+	items := make([]pickItem, 0, len(lines))
+	for _, l := range lines {
+		it := pickItem{value: l, render: func(int) string { return l.text }}
+		switch {
+		case l.change != nil:
+			it.search = l.change.Item.Path
+		case l.commit != "" || l.url != "":
+			it.search = ansi.Strip(l.text)
+		default:
+			it.header = true
+		}
+		items = append(items, it)
+	}
+	return items
+}
+
+// rebuildLists refreshes the Commits and Conflicts lists from the data.
+func (d *detailModel) rebuildLists() {
 	if d.data == nil {
-		return nil
+		return
 	}
-	switch d.tab {
-	case tabFiles:
-		return d.treeLines()
-	case tabCommits:
-		return d.commitLines()
-	case tabConflicts:
-		return d.conflictLines()
-	case tabOverview, tabCount:
-	}
-	return nil
+	d.lists[tabCommits].setItems(lineItems(d.commitLines()))
+	d.lists[tabConflicts].setItems(lineItems(d.conflictLines()))
 }
 
 func (d *detailModel) listKey(msg tea.KeyMsg) tea.Cmd {
-	lines := d.listLines()
-	cur := &d.cursor[d.tab]
-	switch msg.String() {
-	case "j", "down":
-		*cur++
-	case "k", "up":
-		*cur--
-	case "g", "home":
-		*cur = 0
-	case "G", "end":
-		*cur = len(lines) - 1
-	case "enter":
-		if *cur < len(lines) && lines[*cur].commit != "" {
-			return d.openCommitDiff(lines[*cur].commit)
-		}
-		if *cur < len(lines) && lines[*cur].url != "" {
-			return openURL(lines[*cur].url, "opened in browser")
-		}
+	l := &d.lists[d.tab]
+	handled, activate := l.key(msg, d.bodyHeight())
+	it, ok := l.selected()
+	line, _ := it.value.(listLine)
+	switch {
+	case activate && ok && line.commit != "":
+		return d.openCommitDiff(line.commit)
+	case activate && ok && line.url != "":
+		return openURL(line.url, "opened in browser")
+	case handled:
+		return nil
 	}
-	*cur = max(0, min(*cur, len(lines)-1))
+	if msg.String() == "y" && ok {
+		if line.commit != "" {
+			return d.copyCommit(line.commit)
+		}
+		return copyMenu("conflict", copyItem{"Path", line.path})
+	}
 	return nil
 }
 
-func (d *detailModel) renderList() string {
-	lines := d.listLines()
-	if len(lines) == 0 {
-		return styleDim.Render("  nothing here")
-	}
-	h := d.bodyHeight()
-	cur := d.cursor[d.tab]
-	offset := max(0, cur-h+1)
-	var b strings.Builder
-	for i := offset; i < min(len(lines), offset+h); i++ {
-		prefix := "  "
-		if i == cur {
-			prefix = styleSelected.Render("▌ ")
+func (d *detailModel) copyCommit(id string) tea.Cmd {
+	msg := ""
+	for _, c := range d.data.Commits {
+		if c.ID == id {
+			msg = firstLine(c.Comment)
 		}
-		b.WriteString(truncate(prefix+lines[i].text, d.width-1) + "\n")
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return copyMenu("commit "+shortSHA(id),
+		copyItem{"Commit ID", id},
+		copyItem{"Short ID", shortSHA(id)},
+		copyItem{"Message", msg},
+		copyItem{"Web URL", d.commitURL(id)},
+	)
+}
+
+func (d *detailModel) renderList() string {
+	return strings.Join(d.lists[d.tab].view(d.width-1, d.bodyHeight()), "\n")
 }
 
 // --- Files ---
@@ -248,7 +260,7 @@ func (d *detailModel) conflictLines() []listLine {
 	lines := []listLine{{text: styleRed.Render(fmt.Sprintf("%d conflicting %s", len(d.data.Conflicts), plural(len(d.data.Conflicts), "file", "files"))) +
 		styleDim.Render(" · resolve locally (merge "+d.pr.TargetBranch()+" into "+d.pr.SourceBranch()+") or in the browser")}}
 	for _, c := range d.data.Conflicts {
-		lines = append(lines, listLine{text: c.Path + styleDim.Render("  "+c.Type), url: d.pr.WebURL(d.client.Org) + "?_a=conflicts"})
+		lines = append(lines, listLine{text: c.Path + styleDim.Render("  "+c.Type), url: d.pr.WebURL(d.client.Org) + "?_a=conflicts", path: c.Path})
 	}
 	return lines
 }

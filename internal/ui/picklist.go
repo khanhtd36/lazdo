@@ -165,6 +165,10 @@ func (l *pickList) key(msg tea.KeyMsg, height int) (handled, activate bool) {
 	case "G", "end":
 		l.cursor = len(l.visible()) - 1
 		l.clamp(-1)
+	case "J":
+		l.jumpGroup(1)
+	case "K":
+		l.jumpGroup(-1)
 	case "enter":
 		_, ok := l.selected()
 		return true, ok
@@ -172,6 +176,38 @@ func (l *pickList) key(msg tea.KeyMsg, height int) (handled, activate bool) {
 		return false, false
 	}
 	return true, false
+}
+
+// jumpGroup moves to the first row of the next (dir 1) or current/previous
+// (dir -1) group; groups start after a header. Without headers it does nothing.
+func (l *pickList) jumpGroup(dir int) {
+	vis := l.visible()
+	isHeader := func(i int) bool { return l.items[vis[i]].header }
+	if dir > 0 {
+		for i := l.cursor + 1; i < len(vis); i++ {
+			if isHeader(i) {
+				l.cursor = i
+				l.clamp(1)
+				return
+			}
+		}
+		return
+	}
+	// Back to this group's first row, or the previous group's if already there.
+	start := l.cursor
+	for start > 0 && !isHeader(start-1) {
+		start--
+	}
+	if start == l.cursor {
+		for i := start - 2; i >= 0; i-- {
+			if isHeader(i) {
+				start = i + 1
+				break
+			}
+		}
+	}
+	l.cursor = start
+	l.clamp(1)
 }
 
 // filterLine is shown above the rows while a filter is typed or kept.

@@ -114,8 +114,9 @@ func (h *helpModal) update(msg tea.KeyMsg) (closed bool, run *tea.KeyMsg) {
 		case "esc":
 			h.filter, h.typing = "", false
 			h.resetCursor()
-		case "enter":
+		case "enter": // like every / filter: run the selected match
 			h.typing = false
+			return h.run()
 		case "backspace":
 			if r := []rune(h.filter); len(r) > 0 {
 				h.filter = string(r[:len(r)-1])
@@ -138,7 +139,7 @@ func (h *helpModal) update(msg tea.KeyMsg) (closed bool, run *tea.KeyMsg) {
 		return false, nil
 	}
 	switch key {
-	case "esc", "q", "?":
+	case "esc", "?":
 		if h.filter != "" && key == "esc" {
 			h.filter = ""
 			h.resetCursor()
@@ -160,11 +161,17 @@ func (h *helpModal) update(msg tea.KeyMsg) (closed bool, run *tea.KeyMsg) {
 	case "G", "end":
 		h.move(len(h.rows()))
 	case "enter":
-		rows := h.rows()
-		if h.cursor < len(rows) && rows[h.cursor].binding != nil && rows[h.cursor].binding.press != "" {
-			k := keyMsg(rows[h.cursor].binding.press)
-			return true, &k
-		}
+		return h.run()
+	}
+	return false, nil
+}
+
+// run closes help and replays the selected shortcut, if it has a key.
+func (h *helpModal) run() (closed bool, key *tea.KeyMsg) {
+	rows := h.rows()
+	if h.cursor < len(rows) && rows[h.cursor].binding != nil && rows[h.cursor].binding.press != "" {
+		k := keyMsg(rows[h.cursor].binding.press)
+		return true, &k
 	}
 	return false, nil
 }

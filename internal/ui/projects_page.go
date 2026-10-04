@@ -10,7 +10,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/khanhtd36/lazdo/internal/actions"
 	"github.com/khanhtd36/lazdo/internal/ado"
 )
 
@@ -220,20 +219,16 @@ func (p *projectsPage) key(msg tea.KeyMsg, height int, client *ado.Client) (cmd 
 			pr := it.value.(ado.ProjectInfo)
 			return openURL(client.ProjectURL(pr), "opened "+pr.Name), nil
 		}
-	case "y", "Y":
-		if r, isRepo := it.value.(ado.Repo); ok && isRepo {
-			return copyRepoURL(r, msg.String() == "Y"), nil
+	case "y":
+		if !ok {
+			return nil, nil
 		}
+		if r, isRepo := it.value.(ado.Repo); isRepo {
+			return copyRepo(r), nil
+		}
+		return copyProject(client, it.value.(ado.ProjectInfo)), nil
 	}
 	return nil, nil
-}
-
-func copyRepoURL(r ado.Repo, ssh bool) tea.Cmd {
-	u := r.RemoteURL
-	if ssh {
-		u = r.SSHURL
-	}
-	return func() tea.Msg { return resultMsg(actions.CopyToClipboard(u), "copied "+u) }
 }
 
 // openSelected opens the selected project, or a repo's project at that

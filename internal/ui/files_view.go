@@ -55,7 +55,7 @@ type filesView struct {
 	changes                  []ado.Change
 	threads                  []ado.Thread
 
-	treeCursor int
+	tree       pickList
 	pane       filePane
 	hideTree   bool
 	modeChosen bool // the user toggled the mode; stop following the width
@@ -170,35 +170,30 @@ func (d *detailModel) onFilesLoaded(msg filesLoadedMsg) tea.Cmd {
 	f.loadedKey = msg.key
 	f.baseCommit, f.targetCommit = msg.baseCommit, msg.targetCommit
 	f.changes, f.threads = msg.changes, msg.threads
-	lines := d.treeLines()
-	f.treeCursor = max(0, min(f.treeCursor, len(lines)-1))
-	if ch := d.selectedChange(); ch == nil {
-		d.moveTree(1) // land on the first file
-	}
+	// Folders are headers, so the cursor lands on (and stays on) files.
+	f.tree.setItems(lineItems(d.fileLines(f.changes)))
 	return d.ensureDiff()
 }
 
-func (d *detailModel) treeLines() []listLine {
-	return d.fileLines(d.files.changes)
-}
-
 func (d *detailModel) selectedChange() *ado.Change {
-	lines := d.treeLines()
-	if c := d.files.treeCursor; c >= 0 && c < len(lines) {
-		return lines[c].change
+	it, ok := d.files.tree.selected()
+	if !ok {
+		return nil
 	}
-	return nil
+	line, _ := it.value.(listLine)
+	return line.change
 }
 
-func (d *detailModel) moveTree(delta int) {
-	lines := d.treeLines()
+// resetDiffCursor starts the diff of a newly selected file at the top.
+func (d *detailModel) resetDiffCursor() {
 	f := &d.files
-	f.treeCursor = max(0, min(f.treeCursor+delta, len(lines)-1))
-	// Skip folders when moving so the diff always follows a file.
-	for f.treeCursor > 0 && f.treeCursor < len(lines)-1 && lines[f.treeCursor].change == nil {
-		f.treeCursor += sign(delta)
-	}
 	f.cursor, f.top, f.anchor, f.inThread = 0, 0, -1, false
+}
+
+// resetTree forgets the tree position for a new comparison.
+func (d *detailModel) resetTree() {
+	d.files.tree = pickList{}
+	d.resetDiffCursor()
 }
 
 func sign(n int) int {

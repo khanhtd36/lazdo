@@ -35,13 +35,22 @@ type menuModal struct {
 }
 
 func (m *menuModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
+	last := len(m.items) - 1
 	switch msg.String() {
-	case "esc", "q":
+	case "esc":
 		return nil, nil
-	case "j", "down", "tab":
-		m.cursor = (m.cursor + 1) % len(m.items)
-	case "k", "up", "shift+tab":
-		m.cursor = (m.cursor + len(m.items) - 1) % len(m.items)
+	case "j", "down":
+		m.cursor = min(m.cursor+1, last)
+	case "k", "up":
+		m.cursor = max(m.cursor-1, 0)
+	case "ctrl+d", "pgdown":
+		m.cursor = min(m.cursor+max(1, len(m.items)/2), last)
+	case "ctrl+u", "pgup":
+		m.cursor = max(m.cursor-max(1, len(m.items)/2), 0)
+	case "g", "home":
+		m.cursor = 0
+	case "G", "end":
+		m.cursor = last
 	case "enter":
 		it := m.items[m.cursor]
 		if it.disabled != "" {
@@ -72,9 +81,12 @@ func (m *menuModal) view(int) string {
 
 // --- Confirm ---
 
+// confirmModal asks yes/no; only y confirms, so enter can't do it by habit.
+// No returns to back (nil closes).
 type confirmModal struct {
 	prompt string
 	onYes  tea.Cmd
+	back   modal
 }
 
 func newConfirm(prompt string, onYes tea.Cmd) *confirmModal {
@@ -85,8 +97,8 @@ func (c *confirmModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 	switch msg.String() {
 	case "y", "Y":
 		return nil, c.onYes
-	case "n", "N", "esc", "q":
-		return nil, nil
+	case "n", "N", "esc":
+		return c.back, nil
 	}
 	return c, nil
 }
@@ -108,6 +120,7 @@ type editorModal struct {
 	title    string
 	ta       textarea.Model
 	onSubmit func(content string) tea.Cmd
+	initial  string // text the editor opened with; esc only asks if it changed
 }
 
 func newEditor(title, initial string, width int, onSubmit func(string) tea.Cmd) *editorModal {
@@ -119,12 +132,15 @@ func newEditor(title, initial string, width int, onSubmit func(string) tea.Cmd) 
 	ta.SetValue(initial)
 	ta.Cursor.SetMode(cursor.CursorStatic) // a blinking cursor needs tick messages we don't route
 	ta.Focus()
-	return &editorModal{title: title, ta: ta, onSubmit: onSubmit}
+	return &editorModal{title: title, ta: ta, onSubmit: onSubmit, initial: initial}
 }
 
 func (e *editorModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
+		if v := strings.TrimSpace(e.ta.Value()); v != "" && v != strings.TrimSpace(e.initial) {
+			return &confirmModal{prompt: "Discard this draft?", back: e}, nil
+		}
 		return nil, nil
 	case "ctrl+s":
 		content := strings.TrimSpace(e.ta.Value())

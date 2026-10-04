@@ -47,52 +47,65 @@ lazdo --org arbinSW      # or a full https://dev.azure.com/<org> URL
 lazdo --interval 30s     # auto-refresh period (default 2m)
 ```
 
-| Key | Action |
+### Keys
+
+The same keys mean the same thing in every view (outside text boxes); `?`
+lists everything available where you are.
+
+| Key | Everywhere |
 | --- | --- |
-| `j` / `k`, arrows | move |
-| `tab` / `shift+tab` | next / previous section |
-| `enter` | collapse section, or open the PR detail |
-| `o` | open PR in browser |
-| `y` | copy PR URL |
-| `c` | check out PR branch (run lazdo inside a clone of that repo) |
-| `r` | refresh now |
-| `q` | quit |
+| `j` / `k`, arrows | move down / up (or scroll a reading pane) |
+| `ctrl+d` / `ctrl+u` | half page down / up |
+| `g` / `G` | top / bottom |
+| `enter` | one level deeper, or run |
+| `esc` | back exactly one level (filter, thread, pane, view) |
+| `q` | quit (`ctrl+c` quits even while typing) |
+| `1`–`9`, `[` / `]` | pages or tabs at the current level |
+| `tab` / `shift+tab` | next / previous pane in split views |
+| `h` / `l` | left / right: pane, folder fold, or diff side |
+| `J` / `K` | next / previous group (section, activity entry, push) |
+| `/` | filter a list, or find text in a reading pane |
+| `n` / `N` | next / previous match (in a diff: change) |
+| `y` | copy menu for the selection (URLs, names, paths, IDs) |
+| `o` | open in the browser |
+| `r` | refresh |
+| `c` | check out the branch (asks where) |
+
+Dashboard: `enter` opens a PR or collapses a section, `/` filters by title,
+author, ID or branch.
 
 ### Projects page
 
 `2` (or `[` / `]`) switches to the Projects page: your recent projects,
 then other projects with open pull requests, then all projects A–Z. `/`
 searches projects **and every repo in the organization**; `enter` on a
-found repo jumps straight to its branches.
+found repo opens its browser.
 
-Inside a project (`esc` goes back a level):
+Inside a project:
 
-- **Repos**: default branch, last push, size. `y` / `Y` copy the https /
-  ssh clone URL. `enter` opens the repo browser: branches (ahead/behind the
-  default branch) │ file tree │ file content. Folders load as you open
-  them; `/` in the tree finds any file in the repo (the full list loads in
-  the background the first time). Files are syntax highlighted, markdown is
-  rendered (`M` for raw), `/` finds text in the file (`n`/`N`). Switching
-  branch keeps your open folders and file. `tab` moves between panes, `z`
+- **Repos**: default branch, last push, size. `enter` opens the repo
+  browser: branches (ahead/behind the default branch) │ file tree │ file
+  content. Folders load as you open them; `/` in the tree finds any file in
+  the repo (the full list loads in the background the first time). Files
+  are syntax highlighted, markdown is rendered (`M` for raw), `/` finds
+  text in the file. Switching branch keeps your open folders and file. `z`
   folds the branches away (automatic on narrow screens).
+- **Pull requests**: everyone's active PRs; `enter` opens the PR detail.
+- **Pipelines**: latest run of each; `enter` lists runs, `enter` on a run
+  shows its stages, jobs and steps beside the selected step's log (`/` finds
+  text in it). A running run refreshes every few seconds; a step's log
+  appears once the step ends (Azure DevOps only streams live logs to the
+  browser).
 
 **Checkout** (`c`, wherever a branch is shown) asks for a folder: the working
 directory if it is a clone of the repo, the last folder you used, or a new
 `./<repo>` folder. An existing clone is fetched and switched, a missing or
 empty folder gets a fresh clone; nothing is ever forced.
-- **Pull requests**: everyone's active PRs; `enter` opens the PR detail.
-- **Pipelines**: latest run of each; `enter` lists runs, `enter` on a run
-  shows its stages, jobs and steps beside the selected step's log. A running
-  run refreshes every few seconds; a step's log appears once the step ends
-  (Azure DevOps only streams live logs to the browser).
-
-`/` filters every list; `o` opens the selection in the browser.
 
 ### Help
 
-`?` lists the shortcuts for where you are, most specific first. `j`/`k`
-scroll, `/` filters fuzzily as you type (`enter` keeps the filter, `esc`
-clears it), and `enter` on a shortcut runs it.
+`?` lists the shortcuts for where you are, most specific first. `/` filters
+them fuzzily; `enter` runs the selected one.
 
 ### Mouse
 
@@ -114,39 +127,23 @@ Tabs: **Overview** (checks, description, activity, reviewers, tags, work
 items), **Files** (file tree and syntax-highlighted diff), **Commits**
 (grouped by push; `enter` diffs one commit), **Conflicts**.
 
-Files tab:
+Keys specific to a pull request (on top of the ones above):
 
 | Key | Action |
 | --- | --- |
-| `j` / `k` | next / previous file (tree) or line (diff) |
-| `enter`, `l`, `tab` | tree: focus the diff · diff: step into the thread on the line |
-| `h` / `l` | diff side in side-by-side; `h` on the old side, or `tab`, back to the tree |
-| `n` / `N` (or `p`) | next / previous change |
-| `ctrl+d` / `ctrl+u` | half page down / up |
-| `V` | start or clear a line range |
-| `a` | comment on the line or range, on the cursor's side |
-| `R` / `s` / `e` / `d` | reply / status / edit / delete on the line's thread |
-| `S` | side-by-side ⇄ inline (default follows terminal width) |
-| `u` | compare: all changes, since my last visit, one update, or any two |
-| `z` | hide / show the file tree |
-| `o` | open the file in the browser |
-
-| Key | Action |
-| --- | --- |
-| `1`–`4`, `[` / `]` | switch tab |
 | `v` | vote: approve, approve with suggestions, wait for author, reject, reset |
 | `m` | complete, set/cancel auto-complete, mark as draft/publish, abandon |
-| `j` / `k` | scroll (Overview), move (other tabs) |
-| `J` / `K` | previous / next activity entry |
-| `enter` | step into a comment thread (then `j`/`k` picks a comment); open file/commit in browser |
-| `f` | cycle activity filter |
-| `n` / `R` | new comment / reply |
-| `s` | set thread status |
-| `e` / `d` | edit / delete your comment |
-| `esc` | leave thread, then back to the list |
+| `a` | add a comment (Overview: on the PR · diff: on the line or `V` range) |
+| `R` / `s` / `e` / `d` | reply / status / edit / delete on the selected thread |
+| `f` | Overview: cycle the activity filter |
+| `S` | Files: side-by-side ⇄ inline (default follows terminal width) |
+| `u` | Files: compare all changes, since my last visit, one update, or any two |
+| `V` | diff: start or clear a line range |
+| `z` | Files: hide / show the file tree |
 
-Comments are typed in a text box: `ctrl+s` posts, `ctrl+e` continues the
-draft in `$EDITOR`.
+`enter` steps into a comment thread (then `j`/`k` picks a comment). Comments
+are typed in a text box: `ctrl+s` posts, `ctrl+e` continues the draft in
+`$EDITOR`, `esc` asks before discarding a changed draft.
 
 ## Release
 

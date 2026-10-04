@@ -11,7 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/khanhtd36/lazdo/internal/actions"
 	"github.com/khanhtd36/lazdo/internal/ado"
 )
 
@@ -428,6 +427,13 @@ func (b *repoBrowser) key(msg tea.KeyMsg, width, height int) (bool, tea.Cmd) {
 		b.searchKey(msg, width, height)
 		return true, nil
 	}
+	// A typed filter takes every key: letters are text, not commands.
+	switch {
+	case b.pane == paneBranches && b.branches.typing:
+		return b.branchesKey(msg, height)
+	case b.pane == paneFiles && b.tree.typing:
+		return b.treeKey(msg, width, height)
+	}
 	k := msg.String()
 	switch k {
 	case "z":
@@ -436,16 +442,22 @@ func (b *repoBrowser) key(msg tea.KeyMsg, width, height int) (bool, tea.Cmd) {
 			b.pane = paneFiles
 		}
 		return true, nil
-	case "tab":
-		b.pane = (b.pane + 1) % 3
+	case "tab", "shift+tab":
+		step := browserPane(1)
+		if k == "shift+tab" {
+			step = 2
+		}
+		b.pane = (b.pane + step) % 3
 		if b.pane == paneBranches && b.foldBranches(width) {
-			b.pane = paneFiles
+			b.pane = (b.pane + step) % 3
 		}
 		return true, nil
 	case "r":
 		return true, b.refresh()
-	case "Y", "o":
+	case "o":
 		return true, b.linkKey(k)
+	case "y":
+		return true, b.copySelection()
 	case "c":
 		br := b.branch
 		if it, ok := b.branches.selected(); ok && b.pane == paneBranches {
@@ -473,15 +485,36 @@ func (b *repoBrowser) refresh() tea.Cmd {
 	return tea.Batch(b.loadBranches(), b.loadFolder("/"), b.loadContent(b.file))
 }
 
-func (b *repoBrowser) linkKey(k string) tea.Cmd {
+func (b *repoBrowser) linkKey(string) tea.Cmd {
 	u := b.repo.WebURL + "?version=GB" + b.branch
 	if b.file != "" && b.pane != paneBranches {
 		u = b.client.FileURL(b.repo, b.branch, b.file)
 	}
-	if k == "o" {
-		return openURL(u, "opened in browser")
+	return openURL(u, "opened in browser")
+}
+
+// copySelection opens the Copy menu for the branch or file in focus.
+func (b *repoBrowser) copySelection() tea.Cmd {
+	if b.pane == paneBranches {
+		if it, ok := b.branches.selected(); ok {
+			name := it.value.(ado.Branch).Name
+			return copyMenu("branch "+name,
+				copyItem{"Name", name},
+				copyItem{"Web URL", b.client.BranchURL(b.repo, name)})
+		}
+		return nil
 	}
-	return func() tea.Msg { return resultMsg(actions.CopyToClipboard(u), "copied "+u) }
+	p := b.file
+	if it, ok := b.selectedItem(); ok && b.pane == paneFiles {
+		p = it.Path
+	}
+	if p == "" {
+		return copyRepo(b.repo)
+	}
+	return copyMenu("file",
+		copyItem{"Path", p},
+		copyItem{"Web URL", b.client.FileURL(b.repo, b.branch, p)},
+		copyItem{"File name", pathBase(p)})
 }
 
 func (b *repoBrowser) branchesKey(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
@@ -495,14 +528,9 @@ func (b *repoBrowser) branchesKey(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 		return true, nil
 	}
 	switch msg.String() {
-	case "l", "right":
-		b.pane = paneFiles
+	case "l", "right", "esc":
+		b.pane = paneFiles // esc from a side pane returns to the tree
 		return true, nil
-	case "y":
-		if ok {
-			name := it.value.(ado.Branch).Name
-			return true, func() tea.Msg { return resultMsg(actions.CopyToClipboard(name), "copied "+name) }
-		}
 	}
 	return false, nil
 }
@@ -538,11 +566,6 @@ func (b *repoBrowser) treeKey(msg tea.KeyMsg, width, height int) (bool, tea.Cmd)
 			b.pane = paneBranches
 		}
 		return true, nil
-	case "y":
-		if ok {
-			p := it.Path
-			return true, func() tea.Msg { return resultMsg(actions.CopyToClipboard(p), "copied "+p) }
-		}
 	}
 	return false, nil
 }
@@ -573,17 +596,13 @@ func (b *repoBrowser) contentKey(msg tea.KeyMsg, width, height int) (bool, tea.C
 		return true, nil
 	case "h", "left":
 		b.pane = paneFiles
-	case "y":
-		if b.file != "" {
-			p := b.file
-			return true, func() tea.Msg { return resultMsg(actions.CopyToClipboard(p), "copied "+p) }
-		}
 	case "esc":
 		if b.search != "" {
 			b.search, b.matches = "", nil
-			return true, nil
+		} else {
+			b.pane = paneFiles // esc from a side pane returns to the tree
 		}
-		return false, nil
+		return true, nil
 	default:
 		return false, nil
 	}

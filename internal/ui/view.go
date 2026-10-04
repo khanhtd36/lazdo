@@ -135,7 +135,7 @@ func (m Model) View() string {
 			b.WriteString(truncate(line, m.width-1) + "\n")
 		}
 		b.WriteString(m.statusLine() + "\n")
-		b.WriteString(styleDim.Render(truncate("? help  1/2 pages  j/k move  enter open  / search projects and repos  o browser  y copy repo URL  r refresh  q quit", m.width-1)))
+		b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width-1)))
 		return b.String()
 	}
 
@@ -152,7 +152,7 @@ func (m Model) View() string {
 		b.WriteString("\n")
 	}
 	b.WriteString(m.statusLine() + "\n")
-	b.WriteString(styleDim.Render(truncate("? help  j/k move  tab section  enter detail  o open  y copy URL  c checkout  r refresh  q quit", m.width-1)))
+	b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width-1)))
 	return b.String()
 }
 
@@ -210,6 +210,10 @@ func (m Model) titleLine() string {
 
 func (m Model) statusLine() string {
 	switch {
+	case m.filterTyping:
+		return styleSelected.Render("/"+m.filter+"▏") + styleDim.Render("  enter open · esc clear")
+	case m.filter != "":
+		return styleDim.Render("/" + m.filter + "  · / edit · esc clear")
 	case m.err != nil:
 		return styleRed.Render(truncate("error: "+m.err.Error(), m.width))
 	case m.status != "":

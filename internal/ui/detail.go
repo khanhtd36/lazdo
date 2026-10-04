@@ -66,7 +66,8 @@ type detailModel struct {
 	rowCaches map[string]*diffRows
 
 	// Commits, Conflicts
-	cursor [tabCount]int
+	lists [tabCount]pickList
+	find  textFind // Overview's / find
 
 	modal modal
 }
@@ -154,6 +155,7 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 			d.pr = msg.d.PullRequest
 		}
 		d.rebuildOverview()
+		d.rebuildLists()
 		if d.tab == tabFiles {
 			return d.ensureFiles()
 		}
@@ -191,8 +193,39 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
+// typing reports whether a / filter or find box in the current tab is
+// taking keys as text.
+func (d *detailModel) typing() bool {
+	switch d.tab {
+	case tabOverview:
+		return d.find.typing
+	case tabFiles:
+		return d.files.tree.typing
+	case tabCommits, tabConflicts:
+		return d.lists[d.tab].typing
+	case tabCount:
+	}
+	return false
+}
+
+func (d *detailModel) tabKey(msg tea.KeyMsg) tea.Cmd {
+	switch d.tab {
+	case tabOverview:
+		return d.overviewKey(msg)
+	case tabFiles:
+		return d.filesKey(msg)
+	case tabCommits, tabConflicts:
+		return d.listKey(msg)
+	case tabCount:
+	}
+	return nil
+}
+
 func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 	d.status = ""
+	if d.typing() {
+		return d.tabKey(msg)
+	}
 	switch msg.String() {
 	case "1", "2", "3", "4":
 		d.tab = detailTab(msg.String()[0] - '1')
@@ -210,9 +243,6 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 			return openURL(d.fileURL(ch.Item.Path), "opened "+ch.Item.Path)
 		}
 		return openURL(d.pr.WebURL(d.client.Org), fmt.Sprintf("opened !%d", d.pr.ID))
-	case "y":
-		u := d.pr.WebURL(d.client.Org)
-		return func() tea.Msg { return resultMsg(actions.CopyToClipboard(u), "copied "+u) }
 	case "c":
 		return prCheckout(d.client.Org, d.pr)
 	case "v":
@@ -224,15 +254,7 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 			d.modal = d.completeMenu()
 		}
 	default:
-		switch d.tab {
-		case tabOverview:
-			return d.overviewKey(msg)
-		case tabFiles:
-			return d.filesKey(msg)
-		case tabCommits, tabConflicts:
-			return d.listKey(msg)
-		case tabCount:
-		}
+		return d.tabKey(msg)
 	}
 	return nil
 }
@@ -247,10 +269,12 @@ func (d *detailModel) onTabChange() tea.Cmd {
 // closeRequested reports whether esc should leave the detail view; before
 // that, esc backs out of whatever is open inside it.
 func (d *detailModel) closeRequested(msg tea.KeyMsg) bool {
-	if d.modal != nil || msg.String() != "esc" {
-		return false
+	if d.modal != nil || msg.String() != "esc" || d.typing() {
+		return false // a typed filter takes esc itself
 	}
-	if f := &d.files; d.tab == tabFiles {
+	switch d.tab {
+	case tabFiles:
+		f := &d.files
 		switch {
 		case f.inThread:
 			f.inThread = false
@@ -261,12 +285,28 @@ func (d *detailModel) closeRequested(msg tea.KeyMsg) bool {
 		case f.pane == paneDiff && !f.hideTree:
 			f.pane = paneTree
 			return false
+		case f.tree.filter != "":
+			f.tree.filter = ""
+			f.tree.clamp(1)
+			return false
 		}
-	}
-	if d.inThread {
-		d.inThread = false
-		d.rebuildOverview()
-		return false
+	case tabOverview:
+		switch {
+		case d.find.active():
+			d.find = textFind{}
+			return false
+		case d.inThread:
+			d.inThread = false
+			d.rebuildOverview()
+			return false
+		}
+	case tabCommits, tabConflicts:
+		if l := &d.lists[d.tab]; l.filter != "" {
+			l.filter = ""
+			l.clamp(1)
+			return false
+		}
+	case tabCount:
 	}
 	return true
 }

@@ -141,6 +141,9 @@ func (d *detailModel) tabLabels() []string {
 }
 
 func (d *detailModel) statusLine() string {
+	if s, ok := d.find.status(); ok && d.tab == tabOverview {
+		return truncate(s, d.width-1)
+	}
 	switch {
 	case d.status != "" && strings.HasPrefix(d.status, "error"):
 		return styleRed.Render(truncate(d.status, d.width-1))
@@ -152,22 +155,4 @@ func (d *detailModel) statusLine() string {
 	return ""
 }
 
-func (d *detailModel) help() string {
-	common := "? help  v vote  m complete  o browser  y copy  c checkout  r refresh  1-4/[ ] tabs  esc back"
-	switch {
-	case d.tab == tabFiles && d.files.inThread:
-		return "j/k comment  R reply  s status  e edit  d delete  esc leave thread  " + common
-	case d.tab == tabFiles && d.files.pane == paneDiff:
-		return "j/k line  n/N change  h/l side  V range  a comment  enter thread  R/s on thread  S mode  u compare  z tree  tab files  " + common
-	case d.tab == tabFiles:
-		return "j/k file  enter diff  S mode  u compare  z hide tree  " + common
-	case d.tab == tabCommits:
-		return "j/k move  enter diff of commit  " + common
-	case d.tab != tabOverview:
-		return "j/k move  enter open  " + common
-	}
-	if d.inThread {
-		return "j/k comment  R reply  s status  e edit  d delete  esc leave thread  " + common
-	}
-	return "j/k scroll  J/K thread  enter open thread  f filter  n comment  R reply  s status  " + common
-}
+func (d *detailModel) help() string { return footer(d.helpGroups()) }

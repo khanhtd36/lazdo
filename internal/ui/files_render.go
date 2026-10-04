@@ -244,23 +244,7 @@ func (d *detailModel) renderTree(h, width int) []string {
 		out[0] = styleDim.Render("loading files…")
 		return out
 	}
-	lines := d.treeLines()
-	offset := max(0, f.treeCursor-h+1)
-	for i := range h {
-		n := offset + i
-		if n >= len(lines) {
-			break
-		}
-		prefix := "  "
-		if n == f.treeCursor {
-			prefix = styleDim.Render("▌ ")
-			if f.pane == paneTree {
-				prefix = styleSelected.Render("▌ ")
-			}
-		}
-		out[i] = truncate(prefix+lines[n].text, width)
-	}
-	return out
+	return f.tree.view(width, h)
 }
 
 func (d *detailModel) renderDiffPane(h int) []string {

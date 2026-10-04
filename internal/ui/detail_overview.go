@@ -138,8 +138,28 @@ func (d *detailModel) selectedEntry() (entry, bool) {
 }
 
 func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
+	if d.find.typing {
+		d.findKey(msg)
+		return nil
+	}
 	n := len(d.entries(d.filter))
 	switch msg.String() {
+	case "ctrl+d", "pgdown":
+		d.vp.HalfPageDown()
+	case "ctrl+u", "pgup":
+		d.vp.HalfPageUp()
+	case "g", "home":
+		d.vp.GotoTop()
+	case "G", "end":
+		d.vp.GotoBottom()
+	case "/":
+		d.find = textFind{typing: true}
+	case "n", "N":
+		if line, ok := d.find.next(msg.String() == "n"); ok {
+			d.vp.SetYOffset(max(0, line-3))
+		}
+	case "y":
+		return copyPR(d.client.Org, d.pr)
 	case "J":
 		d.threadSel, d.inThread = min(d.threadSel+1, n-1), false
 		d.rebuildOverview()
@@ -168,7 +188,7 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 			return d.moveComment(-1)
 		}
 		d.vp.ScrollUp(1)
-	case "n":
+	case "a":
 		d.modal = d.newCommentEditor()
 	case "R", "s", "e", "d":
 		e, ok := d.selectedEntry()
@@ -176,12 +196,22 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 			return statusCmd("select a comment thread first (J/K)")
 		}
 		return d.threadKey(msg.String(), *e.thread, d.inThread, d.commentSel)
-	default:
-		var cmd tea.Cmd
-		d.vp, cmd = d.vp.Update(msg)
-		return cmd
 	}
 	return nil
+}
+
+// findKey edits the Overview's / find box and jumps to the first match.
+func (d *detailModel) findKey(msg tea.KeyMsg) {
+	d.find.edit(msg)
+	d.find.search(d.overviewLines())
+	if line, ok := d.find.current(); ok {
+		d.vp.SetYOffset(max(0, line-3))
+	}
+}
+
+// overviewLines is the whole rendered Overview, one string per row.
+func (d *detailModel) overviewLines() []string {
+	return strings.Split(d.renderOverview(), "\n")
 }
 
 func (d *detailModel) moveComment(delta int) tea.Cmd {

@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -12,7 +13,15 @@ import (
 
 func (d *detailModel) filesKey(msg tea.KeyMsg) tea.Cmd {
 	f := &d.files
+	if f.tree.typing {
+		return d.treeKey(msg) // letters go into the filter, not commands
+	}
 	switch msg.String() {
+	case "y":
+		if ch := d.selectedChange(); ch != nil {
+			return d.copyFile(ch.Item.Path)
+		}
+		return nil
 	case "z":
 		f.hideTree = !f.hideTree
 		if f.hideTree {
@@ -36,26 +45,42 @@ func (d *detailModel) filesKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (d *detailModel) treeKey(msg tea.KeyMsg) tea.Cmd {
-	switch msg.String() {
-	case "j", "down":
-		d.moveTree(1)
-	case "k", "up":
-		d.moveTree(-1)
-	case "g", "home":
-		d.files.treeCursor = 0
-		d.moveTree(1)
-	case "G", "end":
-		d.files.treeCursor = len(d.treeLines())
-		d.moveTree(-1)
-	case "enter", "l", "right", "tab":
+	before := d.selectedChange()
+	handled, activate := d.files.tree.key(msg, d.bodyHeight())
+	if activate || (!handled && isAnyOf(msg.String(), "l", "right", "tab", "shift+tab")) {
 		if d.selectedChange() != nil {
 			d.files.pane = paneDiff
 		}
-		return nil
-	default:
-		return nil
 	}
-	return d.ensureDiff()
+	if d.selectedChange() != before {
+		d.resetDiffCursor()
+		return d.ensureDiff()
+	}
+	return nil
+}
+
+func isAnyOf(s string, options ...string) bool {
+	for _, o := range options {
+		if s == o {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *detailModel) copyFile(path string) tea.Cmd {
+	return copyMenu("file",
+		copyItem{"Path", path},
+		copyItem{"Web URL", d.fileURL(path)},
+		copyItem{"File name", pathBase(path)},
+	)
+}
+
+func pathBase(p string) string {
+	if i := strings.LastIndex(p, "/"); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
 
 func (d *detailModel) diffKeyPress(msg tea.KeyMsg) tea.Cmd {
@@ -63,7 +88,7 @@ func (d *detailModel) diffKeyPress(msg tea.KeyMsg) tea.Cmd {
 	lines := d.diffLines()
 	half := max(1, d.bodyHeight()/2)
 	switch msg.String() {
-	case "tab":
+	case "tab", "shift+tab":
 		if !f.hideTree {
 			f.pane = paneTree
 		}
@@ -93,9 +118,9 @@ func (d *detailModel) diffKeyPress(msg tea.KeyMsg) tea.Cmd {
 		f.cursor = 0
 	case "G", "end":
 		f.cursor = len(lines) - 1
-	case "n", "p", "N":
+	case "n", "N":
 		dir := 1
-		if msg.String() != "n" {
+		if msg.String() == "N" {
 			dir = -1
 		}
 		f.cursor = nextChange(lines, f.cursor, dir)
@@ -170,7 +195,7 @@ func (d *detailModel) comparisonMenu() modal {
 	pick := func(c comparison) func() (modal, tea.Cmd) {
 		return func() (modal, tea.Cmd) {
 			d.files.cmp = c
-			d.files.treeCursor, d.files.cursor, d.files.top, d.files.anchor = 0, 0, 0, -1
+			d.resetTree()
 			return nil, d.ensureFiles()
 		}
 	}
@@ -232,7 +257,7 @@ func (d *detailModel) compareTargetMenu(base int) modal {
 		}
 		items = append(items, menuItem{label: fmt.Sprintf("Update %d", p.ID), run: func() (modal, tea.Cmd) {
 			d.files.cmp = comparison{label: label, target: p.ID, base: base}
-			d.files.treeCursor, d.files.cursor, d.files.top, d.files.anchor = 0, 0, 0, -1
+			d.resetTree()
 			return nil, d.ensureFiles()
 		}})
 	}
@@ -247,7 +272,7 @@ func (d *detailModel) openCommitDiff(commit string) tea.Cmd {
 		}
 	}
 	d.files.cmp = comparison{label: label, commit: commit}
-	d.files.treeCursor, d.files.cursor, d.files.top, d.files.anchor = 0, 0, 0, -1
+	d.resetTree()
 	d.files.pane = paneTree
 	d.tab = tabFiles
 	return d.ensureFiles()

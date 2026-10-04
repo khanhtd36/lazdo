@@ -281,44 +281,30 @@ func (d *detailModel) filesMouse(msg tea.MouseMsg, by int) tea.Cmd {
 
 func (d *detailModel) treeMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	f := &d.files
+	before := d.selectedChange()
 	if delta := wheelDelta(msg); delta != 0 {
-		d.moveTree(delta)
+		f.tree.wheel(delta)
+	} else if isClick(msg) {
+		f.pane = paneTree
+		if f.tree.click(by) {
+			f.pane = paneDiff
+		}
+	}
+	if d.selectedChange() != before {
+		d.resetDiffCursor()
 		return d.ensureDiff()
 	}
-	if !isClick(msg) {
-		return nil
-	}
-	lines := d.treeLines()
-	idx := max(0, f.treeCursor-d.bodyHeight()+1) + by
-	if idx >= len(lines) || lines[idx].change == nil {
-		return nil
-	}
-	if idx == f.treeCursor {
-		f.pane = paneDiff
-		return nil
-	}
-	f.treeCursor, f.pane = idx, paneTree
-	f.cursor, f.top, f.anchor, f.inThread = 0, 0, -1, false
-	return d.ensureDiff()
+	return nil
 }
 
 func (d *detailModel) listMouse(msg tea.MouseMsg, by int) tea.Cmd {
-	cur := &d.cursor[d.tab]
-	lines := d.listLines()
+	l := &d.lists[d.tab]
 	if delta := wheelDelta(msg); delta != 0 {
-		*cur = max(0, min(*cur+delta, len(lines)-1))
+		l.wheel(delta)
 		return nil
 	}
-	if !isClick(msg) {
-		return nil
-	}
-	idx := max(0, *cur-d.bodyHeight()+1) + by
-	if idx >= len(lines) {
-		return nil
-	}
-	if idx == *cur {
+	if isClick(msg) && l.click(by) {
 		return d.listKey(tea.KeyMsg{Type: tea.KeyEnter})
 	}
-	*cur = idx
 	return nil
 }

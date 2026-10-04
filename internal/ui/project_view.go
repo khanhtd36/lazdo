@@ -20,6 +20,11 @@ func (m *projectModel) view() string {
 		b.WriteString(truncate(line, m.width-1) + "\n")
 	}
 	status := m.status
+	if m.level == levelRun {
+		if s, ok := m.run.find.status(); ok {
+			status = s
+		}
+	}
 	switch {
 	case m.err != nil:
 		status = styleRed.Render("error: " + m.err.Error())
@@ -130,33 +135,7 @@ func padLines(lines []string, h int) []string {
 	return lines[:h]
 }
 
-func (m *projectModel) help() string {
-	common := "? help  / search  o browser  r refresh  esc back"
-	switch m.level {
-	case levelRepo:
-		switch m.browser.pane {
-		case paneBranches:
-			return "j/k move  enter switch branch  y copy name  c checkout  z hide  tab panes  " + common
-		case paneContent:
-			return "j/k scroll  / find  n/N match  M markdown raw  y copy path  Y copy link  tab panes  " + common
-		case paneFiles:
-		}
-		return "j/k move  enter open  h/l fold  / go to file  y copy path  Y copy link  c checkout  tab panes  " + common
-	case levelRuns:
-		return "j/k move  enter open run  " + common
-	case levelRun:
-		return "j/k move  tab/h/l steps ⇄ log  g/G top/follow  " + common
-	case levelTabs:
-	}
-	switch m.tab {
-	case projTabRepos:
-		return "1-3 tabs  enter browse  y copy URL  Y copy ssh URL  " + common
-	case projTabPipelines:
-		return "1-3 tabs  enter runs  " + common
-	case projTabPRs, projTabCount:
-	}
-	return "1-3 tabs  enter open PR  y copy URL  " + common
-}
+func (m *projectModel) help() string { return footer(m.helpGroups()) }
 
 // currentList is the list the body shows, nil on the repo and run views.
 func (m *projectModel) currentList() *pickList {
@@ -176,7 +155,7 @@ func (m *projectModel) typing() bool {
 	case levelRepo:
 		return m.browser.typing()
 	case levelRun:
-		return m.run.tree.typing
+		return m.run.tree.typing || m.run.find.typing
 	case levelTabs, levelRuns:
 	}
 	return m.currentList().typing

@@ -54,6 +54,9 @@ type Model struct {
 	modal  modal        // a dialog over any screen, such as checkout
 
 	lastCheckout map[string]string // repo key → path, this session only
+
+	filter       string // dashboard / filter
+	filterTyping bool
 }
 
 func New(client *ado.Client, interval time.Duration) Model {
@@ -152,12 +155,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case projectsLoadedMsg:
 		m.projects.onLoaded(msg)
 	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg, runLoadedMsg, logMsg, runTickMsg,
-		folderMsg, indexMsg, contentMsg:
+		folderMsg, indexMsg, contentMsg, projectPRsMsg:
 		if m.project != nil {
 			return m, m.project.update(msg)
 		}
 	case openPRMsg:
 		return m.openDetail(&msg.pr)
+	case copyMenuMsg:
+		if len(msg.items) > 0 {
+			m.modal = newCopyMenu(msg)
+		}
 	case checkoutRequestMsg:
 		key := actions.RepoKey(msg.org, msg.project, msg.repo)
 		m.modal = newCheckoutModal(msg, checkoutSuggestions(key, msg.repo, m.lastCheckout), m.width)
@@ -210,6 +217,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = string(msg)
 		}
 	case tea.KeyMsg:
+		if msg.String() == "q" && !m.inTextInput() {
+			return m, tea.Quit
+		}
 		if m.help != nil {
 			return m.onHelpKey(msg)
 		}
@@ -252,18 +262,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// inTextInput reports whether keys are being typed as text (a / filter, a
+// find box, an editor, a path), where q is a character, not "quit".
+func (m Model) inTextInput() bool {
+	switch {
+	case m.help != nil:
+		return m.help.typing
+	case m.modal != nil:
+		_, isCheckout := m.modal.(*checkoutModal)
+		return isCheckout
+	case m.detail != nil && m.detail.modal != nil:
+		switch m.detail.modal.(type) {
+		case *editorModal, *completeDialog:
+			return true
+		}
+		return false
+	}
+	return m.typing()
+}
+
 // typing reports whether keys are going into a text field or a / filter,
 // where ? and page keys are just characters.
 func (m Model) typing() bool {
 	switch {
 	case m.detail != nil:
-		return m.detail.modal != nil
+		return m.detail.modal != nil || m.detail.typing()
 	case m.project != nil:
 		return m.project.typing()
 	case m.page == pageProjects:
 		return m.projects.list.typing
 	}
-	return false
+	return m.filterTyping
 }
 
 func (m Model) pageKey(key string) (page, bool) {
@@ -383,22 +412,34 @@ func (m Model) onList(msg listMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.status = ""
+	if m.filterTyping {
+		return m.onFilterKey(msg)
+	}
 	rows := m.rows()
+	half := max(1, m.listHeight()/2)
 	switch msg.String() {
-	case "q", "ctrl+c":
+	case "ctrl+c":
 		return m, tea.Quit
 	case "j", "down":
 		m.cursor++
 	case "k", "up":
 		m.cursor--
+	case "ctrl+d", "pgdown":
+		m.cursor += half
+	case "ctrl+u", "pgup":
+		m.cursor -= half
 	case "g", "home":
 		m.cursor = 0
 	case "G", "end":
 		m.cursor = len(rows) - 1
-	case "tab":
+	case "J":
 		m.cursor = m.nextHeader(rows, 1)
-	case "shift+tab":
+	case "K":
 		m.cursor = m.nextHeader(rows, -1)
+	case "/":
+		m.filterTyping = true
+	case "esc":
+		m.filter = ""
 	case "r":
 		if !m.loading {
 			m.loading = true
@@ -417,12 +458,46 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "y":
 		if r, ok := m.selected(rows); ok && r.pr != nil {
-			u := r.pr.WebURL(m.client.Org)
-			return m, func() tea.Msg { return resultMsg(actions.CopyToClipboard(u), "copied "+u) }
+			return m, copyPR(m.client.Org, *r.pr)
 		}
 	case "c":
 		if r, ok := m.selected(rows); ok && r.pr != nil {
 			return m, prCheckout(m.client.Org, *r.pr)
+		}
+	}
+	m.clampCursor()
+	return m, nil
+}
+
+// onFilterKey edits the dashboard's / filter; enter opens the selected
+// match, like every other / filter.
+func (m Model) onFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.filter, m.filterTyping = "", false
+	case "enter":
+		m.filterTyping = false
+		if r, ok := m.selected(m.rows()); ok && r.pr != nil {
+			return m.openDetail(r.pr)
+		}
+	case "backspace":
+		if r := []rune(m.filter); len(r) > 0 {
+			m.filter = string(r[:len(r)-1])
+		}
+	case "up", "ctrl+k", "ctrl+p":
+		m.cursor--
+	case "down", "ctrl+j", "ctrl+n":
+		m.cursor++
+	default:
+		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+			s := string(msg.Runes)
+			if s == "" {
+				s = " "
+			}
+			m.filter += s
+			m.cursor = 1 // the first match, below its section header
 		}
 	}
 	m.clampCursor()
@@ -443,16 +518,40 @@ func resultMsg(err error, ok string) statusMsg {
 
 func (m Model) rows() []row {
 	var rows []row
+	matched := m.filterMatches()
 	for i, s := range m.sections {
 		rows = append(rows, row{section: i})
-		if m.collapsed[s.Kind] {
+		if m.collapsed[s.Kind] && matched == nil {
 			continue
 		}
 		for j := range s.PRs {
-			rows = append(rows, row{section: i, pr: &m.sections[i].PRs[j]})
+			if matched == nil || matched[s.PRs[j].ID] {
+				rows = append(rows, row{section: i, pr: &m.sections[i].PRs[j]})
+			}
 		}
 	}
 	return rows
+}
+
+// filterMatches returns the IDs of PRs matching the / filter; nil when no
+// filter is set (everything shows).
+func (m Model) filterMatches() map[int]bool {
+	if m.filter == "" {
+		return nil
+	}
+	var texts []string
+	var ids []int
+	for _, s := range m.sections {
+		for _, pr := range s.PRs {
+			texts = append(texts, fmt.Sprintf("%s %s %d %s", pr.Title, pr.CreatedBy.DisplayName, pr.ID, pr.SourceBranch()))
+			ids = append(ids, pr.ID)
+		}
+	}
+	matched := map[int]bool{}
+	for _, mt := range rankFuzzy(m.filter, texts) {
+		matched[ids[mt.Index]] = true
+	}
+	return matched
 }
 
 func (m Model) selected(rows []row) (row, bool) {

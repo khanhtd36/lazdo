@@ -11,7 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/khanhtd36/lazdo/internal/actions"
 	"github.com/khanhtd36/lazdo/internal/ado"
 )
 
@@ -102,7 +101,12 @@ type (
 		err        error
 	}
 	// openPRMsg asks the root to open a pull request's detail view.
-	openPRMsg struct{ pr ado.PullRequest }
+	openPRMsg     struct{ pr ado.PullRequest }
+	projectPRsMsg struct {
+		projectID string
+		prs       []ado.PullRequest
+		err       error
+	}
 )
 
 func newProject(client *ado.Client, p ado.ProjectInfo, prs []ado.PullRequest, repos []ado.Repo) *projectModel {
@@ -143,6 +147,23 @@ func (m *projectModel) loadPushes() tea.Cmd {
 		}
 		wg.Wait()
 		return repoPushesMsg{projectID: projectID, pushes: pushes}
+	}
+}
+
+// loadPRs refreshes the project's active pull requests.
+func (m *projectModel) loadPRs() tea.Cmd {
+	client, projectID := m.client, m.project.ID
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		all, err := client.AllActivePRs(ctx)
+		var prs []ado.PullRequest
+		for _, pr := range all {
+			if pr.Repository.Project.ID == projectID {
+				prs = append(prs, pr)
+			}
+		}
+		return projectPRsMsg{projectID: projectID, prs: prs, err: err}
 	}
 }
 
@@ -187,6 +208,15 @@ func (m *projectModel) loadRuns() tea.Cmd {
 
 func (m *projectModel) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
+	case projectPRsMsg:
+		if msg.projectID == m.project.ID {
+			m.err = msg.err
+			if msg.err == nil {
+				sort.Slice(msg.prs, func(i, j int) bool { return msg.prs[i].CreationDate.After(msg.prs[j].CreationDate) })
+				m.prs = msg.prs
+				m.lists[projTabPRs].setItems(m.prItems())
+			}
+		}
 	case repoPushesMsg:
 		if msg.projectID == m.project.ID {
 			m.lastPush = msg.pushes
@@ -240,6 +270,8 @@ func (m *projectModel) key(msg tea.KeyMsg) tea.Cmd {
 			m.level, m.run = levelRuns, nil
 		case "o":
 			return openURL(m.client.RunURL(m.project.Name, m.run.run.ID), "opened run "+m.run.run.BuildNumber)
+		case "y":
+			return copyRun(m.client, m.project.Name, m.run.run)
 		case "r":
 			return m.run.refresh()
 		}
@@ -285,7 +317,9 @@ func (m *projectModel) tabsKey(msg tea.KeyMsg) tea.Cmd {
 			return m.loadPushes()
 		case projTabPipelines:
 			return m.loadPipelines()
-		case projTabPRs, projTabCount:
+		case projTabPRs:
+			return m.loadPRs()
+		case projTabCount:
 		}
 	case "o":
 		if !ok {
@@ -299,13 +333,19 @@ func (m *projectModel) tabsKey(msg tea.KeyMsg) tea.Cmd {
 		case ado.Pipeline:
 			return openURL(m.client.PipelineURL(m.project.Name, v.ID), "opened "+v.Name)
 		}
-	case "y", "Y":
-		if r, isRepo := it.value.(ado.Repo); ok && isRepo {
-			return copyRepoURL(r, msg.String() == "Y")
+	case "y":
+		if !ok {
+			return copyProject(m.client, m.project)
 		}
-		if pr, isPR := it.value.(ado.PullRequest); ok && isPR {
-			u := pr.WebURL(m.client.Org)
-			return func() tea.Msg { return resultMsg(actions.CopyToClipboard(u), "copied "+u) }
+		switch v := it.value.(type) {
+		case ado.Repo:
+			return copyRepo(v)
+		case ado.PullRequest:
+			return copyPR(m.client.Org, v)
+		case ado.Pipeline:
+			return copyMenu("pipeline "+v.Name,
+				copyItem{"Web URL", m.client.PipelineURL(m.project.Name, v.ID)},
+				copyItem{"Name", v.Name})
 		}
 	}
 	return nil
@@ -348,6 +388,10 @@ func (m *projectModel) runsKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
 		m.level = levelTabs
+	case "y":
+		if ok {
+			return copyRun(m.client, m.project.Name, it.value.(ado.Run))
+		}
 	case "r":
 		return m.loadRuns()
 	case "o":

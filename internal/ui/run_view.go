@@ -30,6 +30,7 @@ type runView struct {
 	follow  bool // stick to the end as lines arrive
 	logPane bool // focus is on the log
 	logErr  error
+	find    textFind // / find in the log
 }
 
 type (
@@ -162,11 +163,8 @@ func (v *runView) selectInteresting() {
 // selectLog switches the log pane to the selected record's log.
 func (v *runView) selectLog() tea.Cmd {
 	it, ok := v.tree.selected()
-	if !ok {
-		return nil
-	}
-	r := it.value.(ado.TimelineRecord)
-	if r.Log == nil || r.Log.ID == v.logID {
+	r, isRecord := it.value.(ado.TimelineRecord)
+	if !ok || !isRecord || r.Log == nil || r.Log.ID == v.logID {
 		return nil
 	}
 	v.logID, v.lines, v.logTop, v.follow = r.Log.ID, nil, 0, r.State == "inProgress"
@@ -176,10 +174,30 @@ func (v *runView) selectLog() tea.Cmd {
 // key handles run keys; handled false means the project should handle it.
 func (v *runView) key(msg tea.KeyMsg, height int) (handled bool, cmd tea.Cmd) {
 	k := msg.String()
-	switch k {
-	case "tab", "h", "l", "left", "right":
-		v.logPane = k == "l" || k == "right" || (k == "tab" && !v.logPane)
+	switch {
+	case v.tree.typing: // letters go into the steps filter
+		handled, activate := v.tree.key(msg, height)
+		v.logPane = activate
+		return handled, v.selectLog()
+	case v.find.typing:
+		v.find.edit(msg)
+		v.find.search(v.lines)
+		v.showMatch(height)
 		return true, nil
+	}
+	switch k {
+	case "tab", "shift+tab":
+		v.logPane = !v.logPane
+		return true, nil
+	case "l", "right":
+		v.logPane = true
+		return true, nil
+	case "h", "left":
+		if v.logPane {
+			v.logPane = false
+			return true, nil
+		}
+		return false, nil
 	}
 	if !v.logPane {
 		handled, activate := v.tree.key(msg, height)
@@ -191,9 +209,27 @@ func (v *runView) key(msg tea.KeyMsg, height int) (handled bool, cmd tea.Cmd) {
 	return v.logKey(k, height), nil
 }
 
+// showMatch scrolls the log to the current find match.
+func (v *runView) showMatch(height int) {
+	if line, ok := v.find.current(); ok {
+		v.logTop, v.follow = max(0, line-height/3), false
+	}
+}
+
 func (v *runView) logKey(k string, height int) bool {
 	page := max(1, height/2)
 	switch k {
+	case "esc":
+		if v.find.active() {
+			v.find = textFind{}
+		} else {
+			v.logPane = false // back to the steps, one level
+		}
+	case "/":
+		v.find = textFind{typing: true}
+	case "n", "N":
+		v.find.next(k == "n")
+		v.showMatch(height)
 	case "j", "down":
 		v.scrollLog(1, height)
 	case "k", "up":
