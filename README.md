@@ -58,6 +58,12 @@ lazdo --interval 30s     # auto-refresh period (default 2m)
 | `r` | refresh now |
 | `q` | quit |
 
+### Help
+
+`?` lists the shortcuts for where you are, most specific first. `j`/`k`
+scroll, `/` filters fuzzily as you type (`enter` keeps the filter, `esc`
+clears it), and `enter` on a shortcut runs it.
+
 ### Mouse
 
 Click selects; clicking what is already selected opens it (a PR, a comment

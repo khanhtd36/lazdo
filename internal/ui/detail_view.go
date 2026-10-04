@@ -153,7 +153,7 @@ func (d *detailModel) statusLine() string {
 }
 
 func (d *detailModel) help() string {
-	common := "v vote  m complete  o browser  y copy  c checkout  r refresh  1-4/[ ] tabs  esc back"
+	common := "? help  v vote  m complete  o browser  y copy  c checkout  r refresh  1-4/[ ] tabs  esc back"
 	switch {
 	case d.tab == tabFiles && d.files.inThread:
 		return "j/k comment  R reply  s status  e edit  d delete  esc leave thread  " + common

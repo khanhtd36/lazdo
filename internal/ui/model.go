@@ -47,6 +47,7 @@ type Model struct {
 	sem            chan struct{}
 
 	detail *detailModel // non-nil while a pull request's detail is open
+	help   *helpModal   // non-nil while the shortcut help is open
 }
 
 func New(client *ado.Client, interval time.Duration) Model {
@@ -179,12 +180,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = string(msg)
 		}
 	case tea.KeyMsg:
+		if m.help != nil {
+			return m.onHelpKey(msg)
+		}
+		if msg.String() == "?" && (m.detail == nil || m.detail.modal == nil) {
+			m.help = newHelp(m.helpGroups(), m.width, m.height-2)
+			return m, nil
+		}
 		if m.detail != nil {
 			return m.onDetailKey(msg)
 		}
 		return m.onKey(msg)
 	case tea.MouseMsg:
+		if m.help != nil {
+			if d := wheelDelta(msg); d != 0 {
+				m.help.move(d)
+			}
+			return m, nil
+		}
 		return m.onMouse(msg)
+	}
+	return m, nil
+}
+
+func (m Model) onHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+	closed, run := m.help.update(msg)
+	if closed {
+		m.help = nil
+	}
+	if run != nil {
+		return m.Update(*run)
 	}
 	return m, nil
 }

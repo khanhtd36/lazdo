@@ -11,6 +11,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/charmbracelet/x/ansi v0.11.6
 	github.com/mattn/go-runewidth v0.0.19
+	github.com/sahilm/fuzzy v0.1.3
 )
 
 require (
