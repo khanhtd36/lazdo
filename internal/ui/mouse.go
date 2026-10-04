@@ -107,7 +107,7 @@ func (d *detailModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 		case 0:
 			return d.clickTitle(msg.X)
 		case 2:
-			if t, ok := d.tabAt(msg.X); ok {
+			if t, ok := d.tabAt(msg.X); ok && !d.standalone {
 				d.tab = t
 				return d.onTabChange()
 			}
@@ -131,7 +131,7 @@ func (d *detailModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 }
 
 func (d *detailModel) clickTitle(x int) tea.Cmd {
-	if d.data == nil {
+	if d.data == nil || d.standalone {
 		return nil
 	}
 	vote, _, voteX, completeX := d.titleButtons()

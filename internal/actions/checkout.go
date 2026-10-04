@@ -81,15 +81,41 @@ func RepoKeyAt(path string) (string, bool) {
 // CheckoutIn fetches the branch from origin and switches to it in the clone
 // at path. It never forces: uncommitted changes that block the switch fail.
 func CheckoutIn(path, branch string) error {
-	if err := run("git", "-C", path, "fetch", "origin", branch); err != nil {
+	if err := git("-C", path, "fetch", "origin", branch); err != nil {
 		return err
 	}
-	return run("git", "-C", path, "switch", branch)
+	return git("-C", path, "switch", branch)
+}
+
+// CheckoutDetached puts the clone at path on target without a branch
+// (detached HEAD): a tag when fetchBranch is empty, else a commit that
+// fetching fetchBranch brings in.
+func CheckoutDetached(path, fetchBranch, target string) error {
+	fetch := []string{"-C", path, "fetch", "origin", "tag", target}
+	if fetchBranch != "" {
+		fetch = []string{"-C", path, "fetch", "origin", fetchBranch}
+	}
+	if err := git(fetch...); err != nil {
+		return err
+	}
+	return git("-C", path, "switch", "--detach", target)
+}
+
+// CloneDetached clones the repo into path and detaches at target: a tag
+// (cloned directly) or a commit on fetchBranch.
+func CloneDetached(cloneURL, path, fetchBranch, target string) error {
+	if fetchBranch == "" {
+		return git("clone", "--branch", target, cloneURL, path)
+	}
+	if err := git("clone", "--branch", fetchBranch, cloneURL, path); err != nil {
+		return err
+	}
+	return git("-C", path, "switch", "--detach", target)
 }
 
 // Clone clones the repo into path with the branch checked out.
 func Clone(cloneURL, path, branch string) error {
-	return run("git", "clone", "--branch", branch, cloneURL, path)
+	return git("clone", "--branch", branch, cloneURL, path)
 }
 
 // CloneURL is the https clone URL of an Azure DevOps repo.

@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -65,6 +66,13 @@ func (b *repoBrowser) contentRows(width int) []string {
 }
 
 func (b *repoBrowser) view(width, height int) []string {
+	switch b.tab {
+	case repoTabCommits:
+		return b.commitsView(width, height)
+	case repoTabTags:
+		return b.tagsView(width, height)
+	case repoTabFiles, repoTabCount:
+	}
 	bw, tw, cw := b.columns(width)
 	var branchCol []string
 	if bw > 0 {
@@ -83,6 +91,82 @@ func (b *repoBrowser) view(width, height int) []string {
 		out[i] = line + fit(treeCol[i], tw) + sep + contentCol[i]
 	}
 	return out
+}
+
+// tabsLine is the repo's Files / Commits / Tags switcher.
+func (b *repoBrowser) tabsLine() string {
+	parts := make([]string, 0, repoTabCount)
+	for t := range repoTabCount {
+		label := fmt.Sprintf("%d %s", t+1, t.title())
+		if t == b.tab {
+			label = styleTabActive.Render(label)
+		}
+		parts = append(parts, label)
+	}
+	return strings.Join(parts, tabGap)
+}
+
+func (b *repoBrowser) tabAt(x int) (repoTab, bool) {
+	start := 0
+	for t := range repoTabCount {
+		end := start + len(fmt.Sprintf("%d %s", t+1, t.title()))
+		if x >= start && x < end {
+			return t, true
+		}
+		start = end + len(tabGap)
+	}
+	return 0, false
+}
+
+// commitsView is the branch pane beside the branch's commits, or a tag's
+// release changes.
+func (b *repoBrowser) commitsView(width, height int) []string {
+	h := &b.hist
+	bw := 0
+	if !b.foldBranches(width) {
+		bw = browserBranchesWidth
+	}
+	cw := width - bw
+	if bw > 0 {
+		cw--
+	}
+	head := "commits on " + b.branch
+	switch {
+	case h.release != nil && h.release.hasPrev:
+		head = fmt.Sprintf("%s · release changes since %s (%d)", h.release.tag.Name, h.release.prev.Name, len(h.commitList.items))
+	case h.release != nil:
+		head = h.release.tag.Name + " · no earlier version tag"
+	}
+	loading := h.commitList.items == nil && (h.commitsLoading || h.release != nil)
+	list := b.paneList(&h.commitList, cw, height, paneFiles, head, loading)
+	if bw == 0 {
+		return list
+	}
+	branches := b.paneList(&b.branches, bw, height, paneBranches, "branches", !b.branchesLoaded)
+	out := make([]string, height)
+	for i := range height {
+		out[i] = fit(branches[i], bw) + styleDim.Render("│") + list[i]
+	}
+	return out
+}
+
+// tagsView lists the tags with the selected annotated tag's message below.
+func (b *repoBrowser) tagsView(width, height int) []string {
+	h := &b.hist
+	head := fmt.Sprintf("tags (%d) · newest version first", len(h.tags))
+	list := b.paneList(&h.tagList, width, height-2, paneFiles, head, !h.tagsLoaded)
+	detail := ""
+	if t, ok := b.selectedTag(); ok {
+		switch info, seen := h.tagInfo[t.Name]; {
+		case !t.Annotated():
+			detail = "lightweight tag on " + shortSHA(t.CommitID)
+		case !seen || info == nil:
+			detail = "loading…"
+		default:
+			detail = info.Tagger + " · " + relTime(time.Since(info.Date), info.Date) + " · " + strings.ReplaceAll(info.Message, "\n", " ")
+		}
+	}
+	return append(list, styleDim.Render(strings.Repeat("─", max(0, width))), truncate(styleDim.Render(detail), width))
 }
 
 // paneList renders a list with a one-line heading; the heading is

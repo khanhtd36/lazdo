@@ -41,6 +41,14 @@ func TestClassify(t *testing.T) {
 	}
 }
 
+func TestParseLooseTime(t *testing.T) {
+	for _, s := range []string{"2026-10-02T06:38:59", "2026-10-02T06:38:59Z", "2026-10-02T06:38:59.123+00:00"} {
+		if got := parseLooseTime(s); got.Year() != 2026 || got.Hour() != 6 {
+			t.Errorf("parseLooseTime(%q) = %v", s, got)
+		}
+	}
+}
+
 func TestOrgName(t *testing.T) {
 	for in, want := range map[string]string{
 		"arbinSW":                        "arbinSW",

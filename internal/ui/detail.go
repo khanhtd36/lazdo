@@ -70,6 +70,23 @@ type detailModel struct {
 	find  textFind // Overview's / find
 
 	modal modal
+
+	// standalone is a repo diff (a commit or a tag range) shown with the
+	// Files view alone: no pull request header, tabs, votes or comments.
+	standalone bool
+	repo       ado.Repo
+}
+
+// newRepoDiff opens the Files view on a commit (from empty: against its
+// parent) or on the range from..commit.
+func newRepoDiff(client *ado.Client, r ado.Repo, label, from, commit string, width, height int) (*detailModel, tea.Cmd) {
+	pr := ado.PullRequest{Title: label, Repository: ado.Repository{ID: r.ID, Name: r.Name, Project: r.Project}}
+	d := newDetail(client, ado.Identity{}, pr, width, height)
+	d.standalone, d.repo, d.loading = true, r, false
+	d.data = &ado.PRDetail{PullRequest: pr}
+	d.tab = tabFiles
+	d.files.cmp = comparison{label: label, commit: commit, fromCommit: from}
+	return d, d.ensureFiles()
 }
 
 type (
@@ -226,6 +243,9 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 	if d.typing() {
 		return d.tabKey(msg)
 	}
+	if d.standalone {
+		return d.standaloneKey(msg)
+	}
 	switch msg.String() {
 	case "1", "2", "3", "4":
 		d.tab = detailTab(msg.String()[0] - '1')
@@ -257,6 +277,24 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 		return d.tabKey(msg)
 	}
 	return nil
+}
+
+// standaloneKey handles a repo diff: only the Files keys plus browser and
+// refresh; there is no pull request to vote on, complete or check out.
+func (d *detailModel) standaloneKey(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "o":
+		if ch := d.selectedChange(); ch != nil {
+			return openURL(d.fileURL(ch.Item.Path), "opened "+ch.Item.Path)
+		}
+		return openURL(d.repo.WebURL+"/commit/"+d.files.cmp.commit, "opened in browser")
+	case "r":
+		d.files.loadedKey = ""
+		return d.ensureFiles()
+	case "u", "a", "v", "m", "c":
+		return nil
+	}
+	return d.filesKey(msg)
 }
 
 func (d *detailModel) onTabChange() tea.Cmd {

@@ -75,12 +75,18 @@ func (d *detailModel) titleButtons() (vote, complete string, voteX, completeX in
 }
 
 func (d *detailModel) titleLine() string {
+	if d.standalone {
+		return truncate(styleTitle.Render(d.pr.Title), d.width-1)
+	}
 	vote, complete, voteX, _ := d.titleButtons()
 	title := truncate(styleTitle.Render(d.pr.Title), voteX-2)
 	return fit(title, voteX) + vote + " " + complete
 }
 
 func (d *detailModel) subtitleLine() string {
+	if d.standalone {
+		return truncate(styleDim.Render(d.repo.Project.Name+" › "+d.repo.Name), d.width-1)
+	}
 	badge := styleBadge.Render("Active")
 	if d.pr.IsDraft {
 		badge = styleBadgeDim.Render("Draft")
@@ -109,6 +115,9 @@ func (d *detailModel) tabAt(x int) (detailTab, bool) {
 }
 
 func (d *detailModel) tabsLine() string {
+	if d.standalone {
+		return styleTabActive.Render("Files") + styleDim.Render(fmt.Sprintf(" (%d)", len(d.files.changes)))
+	}
 	parts := make([]string, 0, tabCount)
 	for t, label := range d.tabLabels() {
 		if detailTab(t) == d.tab {

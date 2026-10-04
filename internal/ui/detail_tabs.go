@@ -177,6 +177,9 @@ func changeGlyph(changeType string) string {
 }
 
 func (d *detailModel) fileURL(path string) string {
+	if d.standalone {
+		return d.repo.WebURL + "?path=" + url.QueryEscape(path) + "&version=GC" + d.files.cmp.commit
+	}
 	return d.pr.WebURL(d.client.Org) + "?_a=files&path=" + url.QueryEscape(path)
 }
 

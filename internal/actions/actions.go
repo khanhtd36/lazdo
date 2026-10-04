@@ -71,15 +71,16 @@ func keyFromEscaped(org, project, repo string) (string, bool) {
 	return RepoKey(parts[0], parts[1], parts[2]), true
 }
 
-func run(name string, args ...string) error {
-	out, err := exec.Command(name, args...).CombinedOutput()
+// git runs a git command; on failure the error carries git's last line.
+func git(args ...string) error {
+	out, err := exec.Command("git", args...).CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
 		if msg == "" {
 			return err
 		}
 		lines := strings.Split(msg, "\n")
-		return fmt.Errorf("%s %s: %s", name, args[0], lines[len(lines)-1])
+		return fmt.Errorf("git %s: %s", args[0], lines[len(lines)-1])
 	}
 	return nil
 }

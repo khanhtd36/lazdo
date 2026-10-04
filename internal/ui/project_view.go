@@ -82,6 +82,9 @@ func (m *projectModel) tabLabels() []string {
 }
 
 func (m *projectModel) tabsLine() string {
+	if m.level == levelRepo {
+		return m.browser.tabsLine()
+	}
 	parts := make([]string, 0, projTabCount)
 	for t, label := range m.tabLabels() {
 		if projectTab(t) == m.tab {
@@ -162,6 +165,13 @@ func (m *projectModel) typing() bool {
 }
 
 func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
+	if isClick(msg) && msg.Y == 1 && m.level == levelRepo {
+		if t, ok := m.browser.tabAt(msg.X); ok {
+			m.browser.tab, m.browser.pane = t, paneFiles
+			return m.browser.ensureHistory()
+		}
+		return nil
+	}
 	if isClick(msg) && msg.Y == 1 && m.level == levelTabs {
 		if t, ok := m.tabAt(msg.X); ok {
 			m.tab = t

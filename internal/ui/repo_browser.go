@@ -74,6 +74,10 @@ type repoBrowser struct {
 	pane         browserPane
 	hideBranches bool
 	err          error
+
+	tab  repoTab
+	hist history
+	prs  []ado.PullRequest // the project's active PRs, to warn before deleting a branch
 }
 
 type (
@@ -100,6 +104,7 @@ func newRepoBrowser(client *ado.Client, p ado.ProjectInfo, r ado.Repo) *repoBrow
 		index: map[string][]ado.RepoItem{}, indexLoading: map[string]bool{},
 		contents: map[string]*fileContent{}, md: newMarkdownCache(),
 		pane: paneFiles,
+		hist: history{tagInfo: map[string]*ado.TagInfo{}},
 	}
 }
 
@@ -187,6 +192,10 @@ func loadFileContent(ctx context.Context, client *ado.Client, r ado.Repo, branch
 }
 
 func (b *repoBrowser) update(msg tea.Msg) tea.Cmd {
+	switch msg.(type) {
+	case commitsMsg, releaseMsg, tagsMsg, tagInfoMsg, refsChangedMsg:
+		return b.historyUpdate(msg)
+	}
 	switch msg := msg.(type) {
 	case branchesMsg:
 		if msg.repoID == b.repo.ID {
@@ -414,7 +423,7 @@ func (b *repoBrowser) switchBranch(name string) tea.Cmd {
 // --- Keys ---
 
 func (b *repoBrowser) typing() bool {
-	return b.branches.typing || b.tree.typing || b.searching
+	return b.branches.typing || b.tree.typing || b.searching || b.hist.commitList.typing || b.hist.tagList.typing
 }
 
 func (b *repoBrowser) foldBranches(width int) bool {
@@ -431,10 +440,23 @@ func (b *repoBrowser) key(msg tea.KeyMsg, width, height int) (bool, tea.Cmd) {
 	switch {
 	case b.pane == paneBranches && b.branches.typing:
 		return b.branchesKey(msg, height)
-	case b.pane == paneFiles && b.tree.typing:
+	case b.tab == repoTabFiles && b.pane == paneFiles && b.tree.typing:
 		return b.treeKey(msg, width, height)
+	case b.hist.commitList.typing || b.hist.tagList.typing:
+		return b.historyKey(msg, width, height)
 	}
 	k := msg.String()
+	switch k {
+	case "1", "2", "3":
+		b.tab = repoTab(k[0] - '1')
+		if b.pane == paneContent || b.tab == repoTabTags {
+			b.pane = paneFiles
+		}
+		return true, b.ensureHistory()
+	}
+	if b.tab != repoTabFiles {
+		return b.historyKey(msg, width, height)
+	}
 	switch k {
 	case "z":
 		b.hideBranches = !b.hideBranches
@@ -531,6 +553,8 @@ func (b *repoBrowser) branchesKey(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 	case "l", "right", "esc":
 		b.pane = paneFiles // esc from a side pane returns to the tree
 		return true, nil
+	case "d":
+		return true, b.deleteBranchKey()
 	}
 	return false, nil
 }

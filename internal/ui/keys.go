@@ -98,6 +98,12 @@ var (
 		{keys: "u", desc: "compare: all changes, since last visit, updates", press: "u", hint: "compare"},
 		{keys: "z", desc: "hide / show the file tree", press: "z"},
 	}
+	diffViewKeys = []binding{
+		{keys: "S", desc: "side-by-side ⇄ inline", press: "S", hint: "mode"},
+		{keys: "z", desc: "hide / show the file tree", press: "z"},
+		{keys: "o", desc: "open in the browser", press: "o", hint: "browser"},
+		{keys: "esc", desc: "back to the repo", press: "esc", hint: "back"},
+	}
 	commitsKeys = []binding{
 		{keys: "enter", desc: "show the commit's diff", press: "enter", hint: "diff"},
 		{keys: "J / K", desc: "next / previous push", press: "J", hint: "push"},
@@ -118,6 +124,30 @@ var (
 		{keys: "o", desc: "open in the browser", press: "o", hint: "browser"},
 		{keys: "r", desc: "refresh", press: "r", hint: "refresh"},
 		{keys: "esc", desc: "back to the Projects page", press: "esc", hint: "back"},
+	}
+	repoTabKeys = []binding{
+		{keys: "1-3", desc: "Files, Commits, Tags tab", hint: "tabs"},
+		{keys: "d", desc: "branch pane: delete the branch (asks first; never the default)", press: "d"},
+	}
+	repoCommitsKeys = []binding{
+		{keys: "enter", desc: "show the commit's diff", press: "enter", hint: "diff"},
+		{keys: "tab", desc: "branches ⇄ commits (switch branch in the branch pane)", press: "tab", hint: "pane"},
+		{keys: "/", desc: "filter the loaded commits (more load as you scroll)", press: "/", hint: "filter"},
+		{keys: "T", desc: "tag the commit (empty message: lightweight tag)", press: "T", hint: "tag"},
+		{keys: "y", desc: "copy menu: ID, message, web URL", press: "y", hint: "copy"},
+		{keys: "c", desc: "check out the commit, detached (asks where)", press: "c", hint: "checkout"},
+		{keys: "o", desc: "open in the browser", press: "o"},
+		{keys: "esc", desc: "release changes: back to the tags · else back to the repos", press: "esc", hint: "back"},
+	}
+	repoTagsKeys = []binding{
+		{keys: "enter", desc: "release changes: commits since the previous tag", press: "enter", hint: "changes"},
+		{keys: "D", desc: "one diff of everything since the previous tag", press: "D", hint: "diff"},
+		{keys: "/", desc: "filter tags", press: "/", hint: "filter"},
+		{keys: "d", desc: "delete the tag (asks first)", press: "d", hint: "delete"},
+		{keys: "y", desc: "copy menu: name, commit ID, web URL", press: "y", hint: "copy"},
+		{keys: "c", desc: "check out the tag, detached (asks where)", press: "c", hint: "checkout"},
+		{keys: "o", desc: "open in the browser", press: "o"},
+		{keys: "esc", desc: "back to the repos", press: "esc", hint: "back"},
 	}
 	repoKeys = []binding{
 		{keys: "tab / shift+tab", desc: "next / previous pane: branches, files, content", press: "tab", hint: "pane"},
@@ -176,6 +206,13 @@ func withCommon(groups ...bindingGroup) []bindingGroup {
 }
 
 func (d *detailModel) helpGroups() []bindingGroup {
+	if d.standalone {
+		pane := bindingGroup{"File tree", treeKeys}
+		if d.files.pane == paneDiff {
+			pane = bindingGroup{"Diff", diffKeys}
+		}
+		return withCommon(pane, bindingGroup{"Diff view", diffViewKeys})
+	}
 	var groups []bindingGroup
 	switch d.tab {
 	case tabOverview:
@@ -205,7 +242,15 @@ func (d *detailModel) helpGroups() []bindingGroup {
 func (m *projectModel) helpGroups() []bindingGroup {
 	switch m.level {
 	case levelRepo:
-		return withCommon(bindingGroup{"Repo", repoKeys})
+		tab := bindingGroup{"Repo", repoTabKeys}
+		switch m.browser.tab {
+		case repoTabCommits:
+			return withCommon(bindingGroup{"Commits", repoCommitsKeys}, tab)
+		case repoTabTags:
+			return withCommon(bindingGroup{"Tags", repoTagsKeys}, tab)
+		case repoTabFiles, repoTabCount:
+		}
+		return withCommon(bindingGroup{"Files", repoKeys}, tab)
 	case levelRuns:
 		return withCommon(bindingGroup{"Runs", runsKeys})
 	case levelRun:

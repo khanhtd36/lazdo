@@ -58,6 +58,11 @@ func (pr PullRequest) TargetBranch() string {
 	return strings.TrimPrefix(pr.TargetRefName, "refs/heads/")
 }
 
+// AsRepo is the PR's repository as a Repo, for repo-level calls.
+func (pr PullRequest) AsRepo() Repo {
+	return Repo{ID: pr.Repository.ID, Name: pr.Repository.Name, Project: pr.Repository.Project}
+}
+
 // WebURL is the browser link to the PR.
 func (pr PullRequest) WebURL(org string) string {
 	return fmt.Sprintf("https://dev.azure.com/%s/%s/_git/%s/pullrequest/%d",

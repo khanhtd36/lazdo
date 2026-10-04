@@ -90,6 +90,17 @@ Inside a project:
   are syntax highlighted, markdown is rendered (`M` for raw), `/` finds
   text in the file. Switching branch keeps your open folders and file. `z`
   folds the branches away (automatic on narrow screens).
+  The repo view has tabs **1 Files · 2 Commits · 3 Tags**:
+  - **Commits**: the selected branch's history (branch pane on the left),
+    with tag badges and change counts; more load as you scroll. `enter`
+    shows the commit's diff, `T` tags it (empty message: lightweight tag),
+    `c` checks it out detached.
+  - **Tags**: newest version first, with the selected annotated tag's
+    tagger, date and message. `enter` shows the release changes (commits
+    since the previous version tag), `D` one diff of everything since it,
+    `d` deletes the tag.
+  - `d` in the branch pane deletes a branch (never the default; a PR using
+    it is named in the question).
 - **Pull requests**: everyone's active PRs; `enter` opens the PR detail.
 - **Pipelines**: latest run of each; `enter` lists runs, `enter` on a run
   shows its stages, jobs and steps beside the selected step's log (`/` finds

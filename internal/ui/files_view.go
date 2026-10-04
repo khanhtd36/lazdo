@@ -25,9 +25,14 @@ type comparison struct {
 	target int
 	base   int
 	commit string
+	// fromCommit, with commit, compares two commits (a tag range) instead
+	// of one commit against its parent.
+	fromCommit string
 }
 
-func (c comparison) key() string { return fmt.Sprintf("%d:%d:%s", c.target, c.base, c.commit) }
+func (c comparison) key() string {
+	return fmt.Sprintf("%d:%d:%s:%s", c.target, c.base, c.commit, c.fromCommit)
+}
 
 type filePane int
 
@@ -128,6 +133,11 @@ func (d *detailModel) ensureFiles() tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		msg := filesLoadedMsg{key: cmp.key()}
+		if cmp.commit != "" && cmp.fromCommit != "" {
+			msg.baseCommit, msg.targetCommit = cmp.fromCommit, cmp.commit
+			msg.changes, msg.err = client.RangeChanges(ctx, pr.AsRepo(), cmp.fromCommit, cmp.commit)
+			return msg
+		}
 		if cmp.commit != "" {
 			msg.targetCommit = cmp.commit
 			if msg.baseCommit, msg.err = client.CommitParent(ctx, pr, cmp.commit); msg.err != nil {

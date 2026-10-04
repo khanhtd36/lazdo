@@ -17,6 +17,9 @@ type (
 	// checkoutRequestMsg asks the root to open the checkout dialog.
 	checkoutRequestMsg struct {
 		org, project, repo, branch string
+		// detach, when set, checks out this tag or commit without a branch;
+		// branch is then what to fetch for a commit (empty for a tag).
+		detach, label string
 	}
 	checkoutDoneMsg struct {
 		repoKey, path, text string
@@ -26,6 +29,21 @@ type (
 
 func requestCheckout(org, project, repo, branch string) tea.Cmd {
 	return func() tea.Msg { return checkoutRequestMsg{org: org, project: project, repo: repo, branch: branch} }
+}
+
+// requestDetached opens the checkout dialog for a tag or commit.
+func requestDetached(org, project, repo, fetchBranch, target, label string) tea.Cmd {
+	return func() tea.Msg {
+		return checkoutRequestMsg{org: org, project: project, repo: repo, branch: fetchBranch, detach: target, label: label}
+	}
+}
+
+// what names the checkout target for the dialog.
+func (r checkoutRequestMsg) what() string {
+	if r.detach != "" {
+		return r.label + " (detached)"
+	}
+	return r.branch
 }
 
 // checkoutModal asks where to check a branch out: an existing clone of the
@@ -125,12 +143,21 @@ func (c *checkoutModal) run() tea.Cmd {
 	plan, req, key := c.plan, c.req, c.key
 	return func() tea.Msg {
 		done := checkoutDoneMsg{repoKey: key, path: plan.Path}
-		if plan.Kind == actions.PlanClone {
-			done.err = actions.Clone(actions.CloneURL(req.org, req.project, req.repo), plan.Path, req.branch)
-			done.text = "cloned " + req.repo + " at " + req.branch + " into " + plan.Path
-		} else {
+		url := actions.CloneURL(req.org, req.project, req.repo)
+		switch {
+		case plan.Kind == actions.PlanClone && req.detach != "":
+			done.err = actions.CloneDetached(url, plan.Path, req.branch, req.detach)
+		case plan.Kind == actions.PlanClone:
+			done.err = actions.Clone(url, plan.Path, req.branch)
+		case req.detach != "":
+			done.err = actions.CheckoutDetached(plan.Path, req.branch, req.detach)
+		default:
 			done.err = actions.CheckoutIn(plan.Path, req.branch)
-			done.text = "switched " + plan.Path + " to " + req.branch
+		}
+		if plan.Kind == actions.PlanClone {
+			done.text = "cloned " + req.repo + " at " + req.what() + " into " + plan.Path
+		} else {
+			done.text = "switched " + plan.Path + " to " + req.what()
 		}
 		return done
 	}
@@ -145,7 +172,7 @@ func (c *checkoutModal) preview() string {
 	}
 	switch c.plan.Kind {
 	case actions.PlanSwitch:
-		return styleGreen.Render("✓ switch this existing clone to " + c.req.branch)
+		return styleGreen.Render("✓ switch this existing clone to " + c.req.what())
 	case actions.PlanClone:
 		return styleGreen.Render("✓ clone " + c.req.repo + " into a new folder here")
 	case actions.PlanRefuse:
@@ -154,7 +181,7 @@ func (c *checkoutModal) preview() string {
 }
 
 func (c *checkoutModal) view(int) string {
-	title := styleSection.Render("Check out "+c.req.branch) + styleDim.Render("  "+c.req.repo)
+	title := styleSection.Render("Check out "+c.req.what()) + styleDim.Render("  "+c.req.repo)
 	hint := "enter check out · tab complete folder · ctrl+n/ctrl+p suggestions · esc cancel"
 	return styleModal.Render(strings.Join([]string{title, "", c.input.View(), c.preview(), "", styleDim.Render(hint)}, "\n"))
 }

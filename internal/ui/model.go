@@ -155,12 +155,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case projectsLoadedMsg:
 		m.projects.onLoaded(msg)
 	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg, runLoadedMsg, logMsg, runTickMsg,
-		folderMsg, indexMsg, contentMsg, projectPRsMsg:
+		folderMsg, indexMsg, contentMsg, projectPRsMsg,
+		commitsMsg, releaseMsg, tagsMsg, tagInfoMsg, refsChangedMsg:
 		if m.project != nil {
 			return m, m.project.update(msg)
 		}
 	case openPRMsg:
 		return m.openDetail(&msg.pr)
+	case openRepoDiffMsg:
+		d, cmd := newRepoDiff(m.client, msg.repo, msg.label, msg.from, msg.commit, m.width, m.height)
+		m.detail = d
+		return m, cmd
+	case showModalMsg:
+		m.modal = msg.modal
 	case copyMenuMsg:
 		if len(msg.items) > 0 {
 			m.modal = newCopyMenu(msg)
@@ -269,8 +276,11 @@ func (m Model) inTextInput() bool {
 	case m.help != nil:
 		return m.help.typing
 	case m.modal != nil:
-		_, isCheckout := m.modal.(*checkoutModal)
-		return isCheckout
+		switch m.modal.(type) {
+		case *checkoutModal, *tagDialog:
+			return true
+		}
+		return false
 	case m.detail != nil && m.detail.modal != nil:
 		switch m.detail.modal.(type) {
 		case *editorModal, *completeDialog:

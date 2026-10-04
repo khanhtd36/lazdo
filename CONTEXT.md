@@ -48,6 +48,17 @@ _Avoid_: repository (in on-screen text), repo URL (ambiguous: clone or web)
 **Branch**:
 A branch of a repo, compared against the repo's default branch as ahead and behind counts.
 
+**Commit**:
+One recorded change to a repo, shown in a branch's history or a tag's release changes.
+
+**Tag**:
+A name fixed to one commit, usually a version. Annotated tags also carry a tagger, date and message; lightweight tags are only the name.
+_Avoid_: label (Azure DevOps uses labels for pull request tags)
+
+**Release changes**:
+The commits a tag adds over the previous tag by version order.
+_Avoid_: changelog, diff (for the commit list)
+
 **Pipeline**:
 A build pipeline definition in a project, YAML or classic.
 _Avoid_: build definition, release (release pipelines are out of scope)

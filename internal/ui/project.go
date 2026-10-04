@@ -192,6 +192,7 @@ func (m *projectModel) loadPipelines() tea.Cmd {
 func (m *projectModel) openRepo(r ado.Repo) tea.Cmd {
 	m.tab, m.level, m.repo = projTabRepos, levelRepo, r
 	m.browser = newRepoBrowser(m.client, m.project, r)
+	m.browser.prs = m.prs
 	return m.browser.init()
 }
 
@@ -236,7 +237,8 @@ func (m *projectModel) update(msg tea.Msg) tea.Cmd {
 			m.pipelines = msg.pipelines
 			m.lists[projTabPipelines].setItems(m.pipelineItems())
 		}
-	case branchesMsg, folderMsg, indexMsg, contentMsg:
+	case branchesMsg, folderMsg, indexMsg, contentMsg,
+		commitsMsg, releaseMsg, tagsMsg, tagInfoMsg, refsChangedMsg:
 		if m.browser != nil {
 			return m.browser.update(msg)
 		}
