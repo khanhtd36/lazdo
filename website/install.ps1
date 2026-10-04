@@ -11,6 +11,10 @@ param(
     [switch]$SkipPath = ($env:LAZDO_SKIP_PATH -eq "1")
 )
 
+# Everything runs in its own script block: `irm | iex` executes in the
+# caller's session, so strict mode and the error preference would otherwise
+# stay switched on in the user's shell, and `exit` would close it.
+& {
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
@@ -24,18 +28,14 @@ function Write-Step {
 }
 
 if ($env:OS -ne "Windows_NT") {
-    Write-Error "install.ps1 supports Windows only. Use install.sh on Linux or macOS."
-    exit 1
+    throw "install.ps1 supports Windows only. Use install.sh on Linux or macOS."
 }
 
 $architecture = [System.Runtime.InteropServices.RuntimeInformation,mscorlib]::OSArchitecture.ToString()
 switch ($architecture) {
     "X64" { $arch = "x86_64" }
     "Arm64" { $arch = "arm64" }
-    default {
-        Write-Error "Unsupported Windows architecture: $architecture"
-        exit 1
-    }
+    default { throw "Unsupported Windows architecture: $architecture" }
 }
 
 if ([string]::IsNullOrWhiteSpace($InstallDir)) {
@@ -143,3 +143,4 @@ if ($SkipPath) {
 }
 
 Write-Host "lazdo $version installed. It signs in with the Azure CLI: run 'az login' once, then 'lazdo'."
+}
