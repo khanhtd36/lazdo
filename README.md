@@ -19,7 +19,7 @@ Sections, across every project of the organization:
 - **Created by me**.
 
 Each row: title, draft/required badges, author, ID, repo → target branch, resolved/total
-comment threads, build policy (`✓` `✗` `●` running), last update. Reviewer votes
+comment threads, checks: build policies and required external ones (`✓` `✗` `●` running), last update. Reviewer votes
 are in the PR detail.
 
 ## Install
@@ -177,6 +177,11 @@ shows what arrived since your previous visit.
 Tabs: **Overview** (checks, description, activity, reviewers, tags, work
 items), **Files** (file tree and syntax-highlighted diff), **Commits**
 (grouped by push; `enter` diffs one commit), **Conflicts**.
+
+Checks include external ones, statuses a CI outside Azure DevOps posts
+(GitHub Actions, say): each shows its latest description and state, like
+the web's Checks panel. On Overview, `o` and `y` offer each check's run
+next to the pull request.
 
 Files can show a run of commits instead of the whole PR: `enter` on a
 commit, or `u` → Commits… to mark them (`space`; `a` all or none). The

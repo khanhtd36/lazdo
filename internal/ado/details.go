@@ -6,6 +6,12 @@ import (
 	"net/url"
 )
 
+// Policy types the dashboard and the detail view tell apart.
+const (
+	PolicyTypeBuild  = "0609b952-1397-4640-95ec-e00a01b2c241"
+	PolicyTypeStatus = "cbdc66da-9728-4af8-aada-9a5a32e4a226" // an external service's status check
+)
+
 type BuildState int
 
 const (
@@ -15,8 +21,9 @@ const (
 	BuildFailed
 )
 
-// Build summarizes the PR's enabled build policies. There is no batch
-// endpoint for policy evaluations, so this is one call per PR.
+// Build summarizes the PR's checks: its enabled build policies and its
+// required external status checks. There is no batch endpoint for policy
+// evaluations, so this is one call per PR.
 func (c *Client) Build(ctx context.Context, pr PullRequest) (BuildState, error) {
 	path := "/" + url.PathEscape(pr.Repository.Project.ID) + "/_apis/policy/evaluations"
 	q := url.Values{
@@ -27,9 +34,10 @@ func (c *Client) Build(ctx context.Context, pr PullRequest) (BuildState, error) 
 		Value []struct {
 			Status        string `json:"status"`
 			Configuration struct {
-				IsEnabled bool `json:"isEnabled"`
-				Type      struct {
-					DisplayName string `json:"displayName"`
+				IsEnabled  bool `json:"isEnabled"`
+				IsBlocking bool `json:"isBlocking"`
+				Type       struct {
+					ID string `json:"id"`
 				} `json:"type"`
 			} `json:"configuration"`
 		} `json:"value"`
@@ -39,7 +47,10 @@ func (c *Client) Build(ctx context.Context, pr PullRequest) (BuildState, error) 
 	}
 	state := BuildNone
 	for _, e := range resp.Value {
-		if !e.Configuration.IsEnabled || e.Configuration.Type.DisplayName != "Build" {
+		cfg := e.Configuration
+		build := cfg.Type.ID == PolicyTypeBuild
+		external := cfg.Type.ID == PolicyTypeStatus && cfg.IsBlocking
+		if !cfg.IsEnabled || (!build && !external) {
 			continue
 		}
 		switch e.Status {

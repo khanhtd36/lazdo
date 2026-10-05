@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -188,5 +190,65 @@ func TestTrimStyledRight(t *testing.T) {
 	in := "\x1b[38;5;252mhello\x1b[0m\x1b[38;5;252m \x1b[0m\x1b[38;5;252m \x1b[0m"
 	if got := ansi.Strip(trimStyledRight(in)); got != "hello" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// fakeExternalChecks adds two required Status policies like arbin-ci's: one
+// passed, one running, plus a status no policy asks for.
+func fakeExternalChecks(t *testing.T) *detailModel {
+	t.Helper()
+	d := fakeDetail(t, 140)
+	policy := func(status, name string, latest int) ado.Policy {
+		var p ado.Policy
+		raw := fmt.Sprintf(`{"status":%q,"configuration":{"isBlocking":true,"isEnabled":true,
+			"type":{"id":%q,"displayName":"Status"},
+			"settings":{"statusName":%q,"statusGenre":"github-actions"}},
+			"context":{"latestStatusId":%d}}`, status, ado.PolicyTypeStatus, name, latest)
+		if err := json.Unmarshal([]byte(raw), &p); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	status := func(id int, state, genreName, desc string) ado.Status {
+		s := ado.Status{ID: id, State: state, Description: desc, TargetURL: fmt.Sprintf("https://ci/%d", id)}
+		s.Context.Genre, s.Context.Name, _ = strings.Cut(genreName, "/")
+		s.CreationDate = time.Unix(int64(id), 0)
+		return s
+	}
+	d.data.Policies = []ado.Policy{policy("approved", "mits-cloud", 13), policy("running", "mits-cloud-e2e", 14)}
+	d.data.Statuses = []ado.Status{
+		status(11, "failed", "github-actions/mits-cloud-e2e", "E2E: failure"),
+		status(13, "succeeded", "github-actions/mits-cloud", "arbin-ci: success"),
+		status(14, "pending", "github-actions/mits-cloud-e2e", "E2E on arbin-ci"),
+		status(15, "pending", "lint/style", "Linting"),
+		status(16, "succeeded", "lint/style", "Lint clean"),
+	}
+	d.rebuildOverview()
+	return d
+}
+
+func TestDetailExternalChecks(t *testing.T) {
+	d := fakeExternalChecks(t)
+	text := ansi.Strip(strings.Join(d.renderChecks(140), "\n"))
+	for _, want := range []string{
+		"✓ arbin-ci: success  external · succeeded",
+		"● E2E on arbin-ci  external · running",
+		"Optional checks",
+		"✓ Lint clean  external · succeeded",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("checks should show %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "E2E: failure") || strings.Contains(text, "Linting") {
+		t.Errorf("only the latest status of each check shows:\n%s", text)
+	}
+	links := d.checkLinks()
+	if len(links) != 3 || links[1].value != "https://ci/14" {
+		t.Fatalf("each check's run should be in the menus: %+v", links)
+	}
+	press(d, "o")
+	if m, ok := d.modal.(*menuModal); !ok || len(m.items) != 4 {
+		t.Fatalf("o should ask: the PR or one of 3 checks, got %T", d.modal)
 	}
 }

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -162,7 +163,7 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		if e, ok := d.selectedEntry(); ok && d.inThread && e.isHuman {
 			return d.copyComment(*e.thread, d.commentSel)
 		}
-		return copyPR(d.client.Org, d.pr)
+		return copyPR(d.client.Org, d.pr, d.checkLinks()...)
 	case "J":
 		d.threadSel, d.inThread = max(0, min(d.threadSel+1, n-1)), false
 		d.rebuildOverview()
@@ -390,10 +391,14 @@ func (d *detailModel) renderChecks(width int) []string {
 	for _, p := range required {
 		out = append(out, "  "+truncate(d.policyLine(p), width-2))
 	}
-	if len(optional) > 0 {
+	unrequired := d.data.UnrequiredStatuses()
+	if len(optional) > 0 || len(unrequired) > 0 {
 		out = append(out, styleDim.Render("Optional checks"))
 		for _, p := range optional {
 			out = append(out, "  "+truncate(d.policyLine(p), width-2))
+		}
+		for _, s := range unrequired {
+			out = append(out, "  "+truncate(statusIcon(s.State)+" "+statusText(s, s.Key()), width-2))
 		}
 	}
 	out = append(out, d.mergeLine())
@@ -463,8 +468,92 @@ func (d *detailModel) policyText(p ado.Policy) string {
 			return "Work items linked"
 		}
 		return "Work items must be linked"
+	case ado.PolicyTypeStatus:
+		return d.statusPolicyText(p)
 	}
 	return p.Configuration.Type.DisplayName + ": " + p.Status
+}
+
+// statusPolicyText reads like the web's Checks panel: the external
+// service's latest description, then its state.
+func (d *detailModel) statusPolicyText(p ado.Policy) string {
+	name, _ := p.Configuration.Settings["defaultDisplayName"].(string)
+	if name == "" {
+		name = p.StatusKey()
+	}
+	s, ok := d.data.LatestStatus(p)
+	if !ok {
+		return name + styleDim.Render("  external · waiting for status")
+	}
+	return statusText(s, name)
+}
+
+func statusText(s ado.Status, fallback string) string {
+	text := cmp.Or(s.Description, fallback)
+	state := s.State
+	switch state {
+	case "pending":
+		state = "running"
+	case "notApplicable":
+		state = "not applicable"
+	}
+	return text + styleDim.Render("  external · "+state)
+}
+
+// checkLinks are the external checks' runs (a GitHub Actions run, say), for
+// the Overview's copy and open menus.
+func (d *detailModel) checkLinks() []copyItem {
+	if d.data == nil {
+		return nil
+	}
+	var out []copyItem
+	add := func(s ado.Status) {
+		if s.TargetURL != "" {
+			out = append(out, copyItem{"Check: " + cmp.Or(s.Description, s.Key()), s.TargetURL})
+		}
+	}
+	for _, p := range d.data.Policies {
+		if p.Configuration.Type.ID == ado.PolicyTypeStatus {
+			if s, ok := d.data.LatestStatus(p); ok {
+				add(s)
+			}
+		}
+	}
+	for _, s := range d.data.UnrequiredStatuses() {
+		add(s)
+	}
+	return out
+}
+
+// openMenu opens the pull request, or asks which when it has external
+// checks to open too.
+func (d *detailModel) openMenu() tea.Cmd {
+	pr := openURL(d.pr.WebURL(d.client.Org), fmt.Sprintf("opened !%d", d.pr.ID))
+	links := d.checkLinks()
+	if len(links) == 0 {
+		return pr
+	}
+	items := []menuItem{{label: "Pull request", run: func() (modal, tea.Cmd) { return nil, pr }}}
+	for _, l := range links {
+		items = append(items, menuItem{label: l.label, run: func() (modal, tea.Cmd) {
+			return nil, openURL(l.value, "opened "+l.label)
+		}})
+	}
+	d.modal = &menuModal{title: "Open", items: items}
+	return nil
+}
+
+// statusIcon is policyIcon for a status posted without a policy.
+func statusIcon(state string) string {
+	switch state {
+	case "succeeded":
+		return policyIcon("approved")
+	case "failed", "error":
+		return policyIcon("rejected")
+	case "pending":
+		return policyIcon("running")
+	}
+	return policyIcon("")
 }
 
 func buildStatusText(status string) string {

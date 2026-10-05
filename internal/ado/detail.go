@@ -32,12 +32,94 @@ type PRDetail struct {
 	MergeFailure      string    `json:"mergeFailureMessage"`
 
 	Policies  []Policy
+	Statuses  []Status
 	Threads   []Thread
 	Commits   []Commit
 	Pushes    []Push
 	Changes   []Change
 	Conflicts []Conflict
 	WorkItems []WorkItem
+}
+
+// Status is one report an external service (a CI outside Azure DevOps)
+// posted on the pull request; a Status policy requires the latest of a name.
+type Status struct {
+	ID          int    `json:"id"`
+	State       string `json:"state"` // pending, succeeded, failed, error, notApplicable
+	Description string `json:"description"`
+	TargetURL   string `json:"targetUrl"`
+	Context     struct {
+		Name  string `json:"name"`
+		Genre string `json:"genre"`
+	} `json:"context"`
+	CreationDate time.Time `json:"creationDate"`
+}
+
+// Key is the genre/name a Status policy asks for.
+func (s Status) Key() string { return statusKey(s.Context.Genre, s.Context.Name) }
+
+func statusKey(genre, name string) string {
+	if genre == "" {
+		return name
+	}
+	return genre + "/" + name
+}
+
+// StatusKey is the genre/name a Status policy requires.
+func (p Policy) StatusKey() string {
+	genre, _ := p.Configuration.Settings["statusGenre"].(string)
+	name, _ := p.Configuration.Settings["statusName"].(string)
+	return statusKey(genre, name)
+}
+
+// LatestStatus finds the status a Status policy last evaluated: the one its
+// context names, else the newest with its genre/name.
+func (d *PRDetail) LatestStatus(p Policy) (Status, bool) {
+	if id, ok := p.Context["latestStatusId"].(float64); ok {
+		for _, s := range d.Statuses {
+			if s.ID == int(id) {
+				return s, true
+			}
+		}
+	}
+	key, found := p.StatusKey(), Status{}
+	for _, s := range d.Statuses {
+		if s.Key() == key && (found.ID == 0 || s.CreationDate.After(found.CreationDate)) {
+			found = s
+		}
+	}
+	return found, found.ID != 0
+}
+
+// UnrequiredStatuses is the newest status of each genre/name no Status
+// policy asks for, oldest name first.
+func (d *PRDetail) UnrequiredStatuses() []Status {
+	required := map[string]bool{}
+	for _, p := range d.Policies {
+		if p.Configuration.Type.ID == PolicyTypeStatus {
+			required[p.StatusKey()] = true
+		}
+	}
+	latest := map[string]Status{}
+	var order []string
+	for _, s := range d.Statuses {
+		k := s.Key()
+		if required[k] {
+			continue
+		}
+		old, seen := latest[k]
+		if !seen {
+			order = append(order, k)
+		}
+		if !seen || s.CreationDate.After(old.CreationDate) {
+			latest[k] = s
+		}
+	}
+	out := make([]Status, 0, len(order))
+	for _, k := range order {
+		out = append(out, latest[k])
+	}
+	return out
 }
 
 type Label struct {
@@ -214,6 +296,11 @@ func (c *Client) Detail(ctx context.Context, pr PullRequest) (*PRDetail, error) 
 		d.Policies, err = c.policies(ctx, pr)
 		return err
 	})
+	run("statuses", func() error {
+		var err error
+		d.Statuses, err = c.statuses(ctx, pr)
+		return err
+	})
 	run("threads", func() error {
 		var err error
 		d.Threads, err = c.threads(ctx, pr)
@@ -311,6 +398,14 @@ func (c *Client) threadsQuery(ctx context.Context, pr PullRequest, q url.Values)
 		}
 	}
 	return out, err
+}
+
+func (c *Client) statuses(ctx context.Context, pr PullRequest) ([]Status, error) {
+	var resp struct {
+		Value []Status `json:"value"`
+	}
+	err := c.get(ctx, pr.prPath()+"/statuses", url.Values{"api-version": {apiVersion}}, &resp)
+	return resp.Value, err
 }
 
 func (c *Client) commits(ctx context.Context, pr PullRequest) ([]Commit, error) {

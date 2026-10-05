@@ -274,6 +274,9 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 		if ch := d.selectedChange(); d.tab == tabFiles && ch != nil {
 			return openURL(d.fileURL(ch.Item.Path), "opened "+ch.Item.Path)
 		}
+		if d.tab == tabOverview {
+			return d.openMenu()
+		}
 		return openURL(d.pr.WebURL(d.client.Org), fmt.Sprintf("opened !%d", d.pr.ID))
 	case "c":
 		return prCheckout(d.client.Org, d.pr)

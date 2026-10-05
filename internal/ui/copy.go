@@ -38,13 +38,13 @@ func copyText(text, done string) tea.Cmd {
 	return func() tea.Msg { return resultMsg(actions.CopyToClipboard(text), done) }
 }
 
-func copyPR(org string, pr ado.PullRequest) tea.Cmd {
-	return copyMenu(fmt.Sprintf("!%d", pr.ID),
-		copyItem{"Web URL", pr.WebURL(org)},
-		copyItem{"Source branch", pr.SourceBranch()},
-		copyItem{"ID", fmt.Sprintf("!%d", pr.ID)},
-		copyItem{"Title", pr.Title},
-	)
+func copyPR(org string, pr ado.PullRequest, extra ...copyItem) tea.Cmd {
+	return copyMenu(fmt.Sprintf("!%d", pr.ID), append([]copyItem{
+		{"Web URL", pr.WebURL(org)},
+		{"Source branch", pr.SourceBranch()},
+		{"ID", fmt.Sprintf("!%d", pr.ID)},
+		{"Title", pr.Title},
+	}, extra...)...)
 }
 
 func copyRepo(r ado.Repo) tea.Cmd {
