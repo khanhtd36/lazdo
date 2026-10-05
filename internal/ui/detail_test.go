@@ -252,3 +252,12 @@ func TestDetailExternalChecks(t *testing.T) {
 		t.Fatalf("o should ask: the PR or one of 3 checks, got %T", d.modal)
 	}
 }
+
+func TestDetailSubtitleKeepsTargetBranch(t *testing.T) {
+	d := fakeDetail(t, 100)
+	d.pr.SourceRefName = "refs/heads/QA-11284-workflow-worker-is-orphaned-when-the-main-das-process-is-killed-the-next-start"
+	line := ansi.Strip(d.subtitleLine())
+	if !strings.HasSuffix(line, "… into develop") || ansi.StringWidth(line) > 99 {
+		t.Fatalf("a long source branch should be cut so the target shows: %q", line)
+	}
+}

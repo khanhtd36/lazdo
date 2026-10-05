@@ -91,12 +91,15 @@ func (d *detailModel) subtitleLine() string {
 	if d.pr.IsDraft {
 		badge = styleBadgeDim.Render("Draft")
 	}
-	s := fmt.Sprintf("%s !%d %s proposes to merge %s into %s", badge, d.pr.ID, d.pr.CreatedBy.DisplayName,
-		styleCyan.Render(d.pr.SourceBranch()), styleCyan.Render(d.pr.TargetBranch()))
+	head := fmt.Sprintf("%s !%d %s proposes to merge ", badge, d.pr.ID, d.pr.CreatedBy.DisplayName)
+	tail := " into " + styleCyan.Render(d.pr.TargetBranch())
 	if d.loading {
-		s += styleYellow.Render("  refreshing…")
+		tail += styleYellow.Render("  refreshing…")
 	}
-	return truncate(s, d.width-1)
+	// A long source branch gives way first, so the target stays in view.
+	room := d.width - 1 - ansi.StringWidth(head) - ansi.StringWidth(tail)
+	source := styleCyan.Render(truncate(d.pr.SourceBranch(), max(12, room)))
+	return truncate(head+source+tail, d.width-1)
 }
 
 const tabGap = "   "
