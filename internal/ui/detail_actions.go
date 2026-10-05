@@ -130,7 +130,7 @@ func (d *detailModel) newCompleteDialog(auto bool) *completeDialog {
 	msg.CharLimit = 0
 	msg.SetWidth(min(80, max(40, d.width-14)))
 	msg.SetHeight(6)
-	msg.SetValue(fmt.Sprintf("Merged PR %d: %s\n\n%s", d.pr.ID, d.pr.Title, truncateRunes(d.data.Description, 3000)))
+	msg.SetValue(d.mergeMessage())
 	msg.Cursor.SetMode(cursor.CursorStatic)
 	reason := textinput.New()
 	reason.Cursor.SetMode(cursor.CursorStatic)
@@ -151,12 +151,15 @@ func (d *detailModel) newCompleteDialog(auto bool) *completeDialog {
 	}
 }
 
-func truncateRunes(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
+// mergeMessage is the merge commit message the web UI writes. The web page
+// composes it and sends it; completing through the API without one gets the
+// server's "Merge pull request N from <branch> into <target>" instead.
+func (d *detailModel) mergeMessage() string {
+	msg := fmt.Sprintf("Merged PR %d: %s", d.pr.ID, d.pr.Title)
+	if desc := strings.TrimSpace(d.data.Description); desc != "" {
+		msg += "\n\n" + desc
 	}
-	return string(r[:n])
+	return msg
 }
 
 func (c *completeDialog) fields() []completeField {
@@ -275,16 +278,24 @@ func (c *completeDialog) submitBlocked() string {
 	return ""
 }
 
+// options is what completing sends; the message always goes along, the
+// web UI's unless customized.
+func (c *completeDialog) options() ado.CompletionOptions {
+	o := c.opts
+	o.MergeType = c.types[c.typeIdx]
+	o.MergeCommitMessage = c.d.mergeMessage()
+	if c.custom {
+		o.MergeCommitMessage = c.message.Value()
+	}
+	return o
+}
+
 func (c *completeDialog) submit() (modal, tea.Cmd) {
 	if why := c.submitBlocked(); why != "" {
 		return c, statusCmd(why)
 	}
 	d := c.d
-	o := c.opts
-	o.MergeType = c.types[c.typeIdx]
-	if c.custom {
-		o.MergeCommitMessage = c.message.Value()
-	}
+	o := c.options()
 	if c.auto {
 		return nil, d.act("auto-complete set", false, func(ctx context.Context) error {
 			return d.client.SetAutoComplete(ctx, d.pr, d.me.ID, o)

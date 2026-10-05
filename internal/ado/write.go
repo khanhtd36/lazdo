@@ -91,8 +91,10 @@ type CompletionOptions struct {
 	MergeType           MergeType
 	DeleteSourceBranch  bool
 	TransitionWorkItems bool
-	MergeCommitMessage  string // empty keeps the Azure DevOps default
-	BypassReason        string // non-empty overrides blocking policies
+	// MergeCommitMessage, when empty, gets the server's "Merge pull request
+	// N from <branch> into <target>", not the web UI's "Merged PR N: title".
+	MergeCommitMessage string
+	BypassReason       string // non-empty overrides blocking policies
 }
 
 func (o CompletionOptions) body() map[string]any {

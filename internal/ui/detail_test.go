@@ -261,3 +261,21 @@ func TestDetailSubtitleKeepsTargetBranch(t *testing.T) {
 		t.Fatalf("a long source branch should be cut so the target shows: %q", line)
 	}
 }
+
+func TestCompleteSendsWebMergeMessage(t *testing.T) {
+	d := fakeDetail(t, 120)
+	c := d.newCompleteDialog(false)
+	want := "Merged PR 7: fix: something\n\n" + d.data.Description
+	if got := c.options().MergeCommitMessage; got != want {
+		t.Fatalf("an uncustomized merge should still send the web's message:\n%q\nwant\n%q", got, want)
+	}
+	c.custom = true
+	c.message.SetValue("my own words")
+	if got := c.options().MergeCommitMessage; got != "my own words" {
+		t.Fatalf("a customized message should be sent as typed, got %q", got)
+	}
+	auto := d.newCompleteDialog(true)
+	if auto.options().MergeCommitMessage != want {
+		t.Fatal("auto-complete should store the web's message too")
+	}
+}
