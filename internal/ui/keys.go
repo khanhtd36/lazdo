@@ -69,7 +69,7 @@ var (
 		{keys: "a", desc: "add a comment on the pull request", press: "a", hint: "comment"},
 		{keys: "R / s", desc: "reply / status on the selected thread", press: "R"},
 		{keys: "f", desc: "choose the activity filter", press: "f", hint: "filter"},
-		{keys: "/", desc: "find text; n / N next / previous match", press: "/", hint: "find"},
+		{keys: "/", desc: "find text; n / N (or p) next / previous match", press: "/", hint: "find"},
 		{keys: "y", desc: "copy menu: URL, branch, ID, title", press: "y", hint: "copy"},
 	}
 	threadKeys = []binding{
@@ -85,7 +85,7 @@ var (
 		{keys: "y", desc: "copy menu: path, web URL, name", press: "y", hint: "copy"},
 	}
 	diffKeys = []binding{
-		{keys: "n / N", desc: "next / previous change; at the last (first) one, again for the next (previous) file", press: "n", hint: "change"},
+		{keys: "n / N", desc: "next / previous change (p is N too); at the last (first) one, again for the next (previous) file", press: "n", hint: "change"},
 		{keys: "h / l", desc: "old / new side (side-by-side); h on old goes to the tree", hint: "side"},
 		{keys: "tab", desc: "focus the file tree", press: "tab", hint: "tree"},
 		{keys: "V / drag", desc: "select lines: a comments on them, y copies them", press: "V", hint: "select"},
@@ -155,7 +155,7 @@ var (
 		{keys: "h / l", desc: "collapse / expand a folder, or move between panes", hint: "fold"},
 		{keys: "enter", desc: "switch branch, open folder or file", press: "enter", hint: "open"},
 		{keys: "/", desc: "branches: filter · files: go to any file · content: find text", press: "/", hint: "find"},
-		{keys: "n / N", desc: "next / previous match in the file", press: "n"},
+		{keys: "n / N", desc: "next / previous match in the file (p is N too)", press: "n"},
 		{keys: "M", desc: "markdown: rendered ⇄ raw", press: "M"},
 		{keys: "V / drag", desc: "content: select lines", press: "V", hint: "select"},
 		{keys: "y", desc: "copy the selected lines (none: copy menu for branch or file)", press: "y", hint: "copy"},
@@ -174,7 +174,7 @@ var (
 	}
 	runKeys = []binding{
 		{keys: "tab / h / l", desc: "steps ⇄ log", press: "tab", hint: "pane"},
-		{keys: "/", desc: "steps: filter · log: find text; n / N next / previous", press: "/", hint: "find"},
+		{keys: "/", desc: "steps: filter · log: find text; n / N (or p) next / previous", press: "/", hint: "find"},
 		{keys: "G", desc: "log: jump to the end and follow new lines", press: "G", hint: "follow"},
 		{keys: "V / drag", desc: "log: select lines", press: "V", hint: "select"},
 		{keys: "y", desc: "log: copy the selected lines (none: current line or whole log) · steps: copy menu", press: "y", hint: "copy"},

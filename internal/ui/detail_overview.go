@@ -155,7 +155,7 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		d.vp.GotoBottom()
 	case "/":
 		d.find = textFind{typing: true}
-	case "n", "N":
+	case "n", "N", "p":
 		if line, ok := d.find.next(msg.String() == "n"); ok {
 			d.vp.SetYOffset(max(0, line-3))
 		}

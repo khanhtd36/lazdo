@@ -240,7 +240,7 @@ func (v *runView) logKey(k string, height int) (bool, tea.Cmd) {
 	case "/":
 		v.find = textFind{typing: true}
 		return true, nil
-	case "n", "N":
+	case "n", "N", "p":
 		v.find.next(k == "n")
 		v.showMatch(height)
 		return true, nil

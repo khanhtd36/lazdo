@@ -636,7 +636,7 @@ func (b *repoBrowser) contentKey(msg tea.KeyMsg, width, height int) (bool, tea.C
 	case "/":
 		b.searching, b.search = true, ""
 		return true, nil
-	case "n", "N":
+	case "n", "N", "p":
 		b.jumpMatch(msg.String() == "n")
 		return true, nil
 	case "M":

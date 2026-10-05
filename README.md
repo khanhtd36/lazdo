@@ -95,7 +95,7 @@ lists everything available where you are.
 | `h` / `l` | left / right: pane, folder fold, or diff side |
 | `J` / `K` | next / previous group (section, activity entry, push) |
 | `/` | filter a list, or find text in a reading pane |
-| `n` / `N` | next / previous match (in a diff: change; past the file's last or first change, pressing again opens the next or previous file) |
+| `n` / `N` (or `p`) | next / previous match (in a diff: change; past the file's last or first change, pressing again opens the next or previous file) |
 | `y` | copy menu for the selection (URLs, names, paths, IDs) |
 | `o` | open in the browser |
 | `r` | refresh |

@@ -211,7 +211,7 @@ func TestDiffNextChangeCrossesFiles(t *testing.T) {
 	if path() != "/b.go" || f.cursor != first {
 		t.Fatalf("n again should open b.go at its first change %d, got %s at %d", first, path(), f.cursor)
 	}
-	press(d, "N", "N") // stay at b's first change, then back to a.go
+	press(d, "N", "p") // stay at b's first change, then back to a.go (p is N)
 	if path() != "/a.go" || f.cursor != last {
 		t.Fatalf("N N should go back to a.go's last change %d, got %s at %d", last, path(), f.cursor)
 	}
