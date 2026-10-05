@@ -77,6 +77,12 @@ type filesView struct {
 	drag       int // line a mouse drag started on
 	inThread   bool
 	commentSel int
+	// edge is the direction n (1) or N (-1) last stopped at the file's end
+	// in; pressing it again moves to the next or previous file.
+	edge int
+	// land is where to put the cursor once the newly opened file's diff
+	// loads: its first change (1) or last change (-1).
+	land int
 }
 
 func newFilesView() filesView {
@@ -210,6 +216,7 @@ func (d *detailModel) selectedChange() *ado.Change {
 func (d *detailModel) resetDiffCursor() {
 	f := &d.files
 	f.cursor, f.top, f.anchor, f.inThread = 0, 0, -1, false
+	f.edge, f.land = 0, 0
 }
 
 // resetTree forgets the tree position for a new comparison.

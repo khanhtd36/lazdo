@@ -85,7 +85,7 @@ var (
 		{keys: "y", desc: "copy menu: path, web URL, name", press: "y", hint: "copy"},
 	}
 	diffKeys = []binding{
-		{keys: "n / N", desc: "next / previous change", press: "n", hint: "change"},
+		{keys: "n / N", desc: "next / previous change; at the last (first) one, again for the next (previous) file", press: "n", hint: "change"},
 		{keys: "h / l", desc: "old / new side (side-by-side); h on old goes to the tree", hint: "side"},
 		{keys: "tab", desc: "focus the file tree", press: "tab", hint: "tree"},
 		{keys: "V / drag", desc: "select lines: a comments on them, y copies them", press: "V", hint: "select"},

@@ -138,6 +138,9 @@ func (d *detailModel) diffKeyPress(msg tea.KeyMsg) tea.Cmd {
 	f := &d.files
 	lines := d.diffLines()
 	half := max(1, d.bodyHeight()/2)
+	edge := f.edge
+	f.edge = 0 // only n/N right after stopping at the end moves to another file
+	var cmd tea.Cmd
 	switch msg.String() {
 	case "tab", "shift+tab":
 		if !f.hideTree {
@@ -174,7 +177,16 @@ func (d *detailModel) diffKeyPress(msg tea.KeyMsg) tea.Cmd {
 		if msg.String() == "N" {
 			dir = -1
 		}
-		f.cursor = nextChange(lines, f.cursor, dir)
+		next := nextChange(lines, f.cursor, dir)
+		if next == f.cursor {
+			// No change left this way: stop once, then go to the next file.
+			if edge == dir {
+				return d.jumpFile(dir)
+			}
+			f.edge, cmd = dir, statusCmd(d.edgeHint(dir))
+			return cmd
+		}
+		f.cursor = next
 		f.top = max(0, f.cursor-changeContextRows) // show a few lines above the change
 	case "V":
 		if f.anchor >= 0 {
@@ -197,7 +209,75 @@ func (d *detailModel) diffKeyPress(msg tea.KeyMsg) tea.Cmd {
 	f.inThread = false // any cursor move leaves the thread
 	f.cursor = max(0, min(f.cursor, len(lines)-1))
 	d.scrollDiffToCursor()
-	return nil
+	return cmd
+}
+
+// fileStep is the tree index of the next (dir 1) or previous (dir -1) file
+// row, skipping folders; -1 when there is none.
+func (d *detailModel) fileStep(dir int) int {
+	t := &d.files.tree
+	vis := t.visible()
+	for i := t.cursor + dir; i >= 0 && i < len(vis); i += dir {
+		if line, _ := t.items[vis[i]].value.(listLine); line.change != nil {
+			return i
+		}
+	}
+	return -1
+}
+
+func (d *detailModel) edgeHint(dir int) string {
+	switch {
+	case dir > 0 && d.fileStep(1) < 0:
+		return "last change of the last file"
+	case dir > 0:
+		return "last change in this file · n again for the next file"
+	case d.fileStep(-1) < 0:
+		return "first change of the first file"
+	}
+	return "first change in this file · N again for the previous file"
+}
+
+// jumpFile opens the next or previous file, landing on its first change
+// going forward and its last change going back.
+func (d *detailModel) jumpFile(dir int) tea.Cmd {
+	i := d.fileStep(dir)
+	if i < 0 {
+		return statusCmd(d.edgeHint(dir))
+	}
+	d.files.tree.cursor = i
+	d.resetDiffCursor()
+	d.files.land = dir
+	d.landCursor()
+	return d.ensureDiff()
+}
+
+// landCursor puts the cursor on the first or last change of a file opened
+// by jumpFile, once its diff is there.
+func (d *detailModel) landCursor() {
+	f := &d.files
+	if _, fd := d.currentDiff(); f.land == 0 || fd == nil {
+		return
+	}
+	lines := d.diffLines()
+	first, last := -1, -1
+	for i, l := range lines {
+		if l.kind == lineContext {
+			continue
+		}
+		if first < 0 {
+			first = i
+		}
+		if i == 0 || lines[i-1].kind == lineContext {
+			last = i // start of the latest change run
+		}
+	}
+	f.cursor = max(0, first)
+	if f.land < 0 {
+		f.cursor = max(0, last)
+	}
+	f.top = max(0, f.cursor-changeContextRows)
+	f.land = 0
+	d.scrollDiffToCursor()
 }
 
 func (d *detailModel) moveDiffComment(delta int) tea.Cmd {

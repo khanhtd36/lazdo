@@ -158,3 +158,88 @@ func TestCommitPickerAllIsAllChanges(t *testing.T) {
 		t.Fatalf("every commit is All changes, got %+v", d.files.cmp)
 	}
 }
+
+// fakeTwoFiles opens Files on a.go and b.go, each with changes on lines 2
+// and 5 of 6.
+func fakeTwoFiles(t *testing.T) *detailModel {
+	t.Helper()
+	d := fakeDetail(t, 140)
+	d.data.Pushes = []ado.Push{{ID: 1}}
+	d.tab = tabFiles
+	d.files.cmp = comparison{label: "All changes", target: 1}
+	changes := []ado.Change{
+		{ChangeType: "edit", Item: ado.ChangeItem{Path: "/a.go"}},
+		{ChangeType: "edit", Item: ado.ChangeItem{Path: "/b.go"}},
+	}
+	d.onFilesLoaded(filesLoadedMsg{key: d.files.cmp.key(), changes: changes})
+	for i := range changes {
+		d.files.diffs[d.diffKey(&changes[i])] = twoChangeDiff()
+	}
+	if ch := d.selectedChange(); ch == nil || ch.Item.Path != "/a.go" {
+		t.Fatalf("the tree should start on a.go, got %+v", ch)
+	}
+	d.files.pane = paneDiff
+	return d
+}
+
+func twoChangeDiff() *fileDiff {
+	text := "1\n2\n3\n4\n5\n6\n"
+	fd := &fileDiff{leftRaw: splitLines(text), rightRaw: splitLines(text)}
+	fd.sbs = sideBySideLines([]ado.LineBlock{
+		{ChangeType: "none", OriginalStart: 1, OriginalCount: 1, ModifiedStart: 1, ModifiedCount: 1},
+		{ChangeType: "edit", OriginalStart: 2, OriginalCount: 1, ModifiedStart: 2, ModifiedCount: 1},
+		{ChangeType: "none", OriginalStart: 3, OriginalCount: 2, ModifiedStart: 3, ModifiedCount: 2},
+		{ChangeType: "edit", OriginalStart: 5, OriginalCount: 1, ModifiedStart: 5, ModifiedCount: 1},
+		{ChangeType: "none", OriginalStart: 6, OriginalCount: 1, ModifiedStart: 6, ModifiedCount: 1},
+	}, 6, 6)
+	fd.inline = inlineLines(fd.sbs)
+	return fd
+}
+
+func TestDiffNextChangeCrossesFiles(t *testing.T) {
+	d := fakeTwoFiles(t)
+	f := &d.files
+	path := func() string { return d.selectedChange().Item.Path }
+	press(d, "n", "n")
+	last := f.cursor
+	press(d, "n") // no change left: stays, warns
+	if path() != "/a.go" || f.cursor != last || f.edge != 1 {
+		t.Fatalf("n at the last change should stay once: %s cursor %d edge %d", path(), f.cursor, f.edge)
+	}
+	press(d, "n") // again: next file, first change
+	first := firstChanged(d.diffLines())
+	if path() != "/b.go" || f.cursor != first {
+		t.Fatalf("n again should open b.go at its first change %d, got %s at %d", first, path(), f.cursor)
+	}
+	press(d, "N", "N") // stay at b's first change, then back to a.go
+	if path() != "/a.go" || f.cursor != last {
+		t.Fatalf("N N should go back to a.go's last change %d, got %s at %d", last, path(), f.cursor)
+	}
+	press(d, "n", "j", "n") // a key in between disarms
+	if path() != "/a.go" || f.edge != 1 {
+		t.Fatalf("j between should disarm the jump: %s edge %d", path(), f.edge)
+	}
+}
+
+func TestDiffNextFileLandsWhenLoaded(t *testing.T) {
+	d := fakeTwoFiles(t)
+	bKey := d.files.cmp.key() + "|/b.go"
+	delete(d.files.diffs, bKey) // b.go not loaded yet
+	press(d, "n", "n", "n", "n")
+	if d.selectedChange().Item.Path != "/b.go" || d.files.land != 1 {
+		t.Fatalf("should wait on b.go to land on its first change, land %d", d.files.land)
+	}
+	d.update(fileDiffMsg{key: bKey, diff: twoChangeDiff()})
+	if want := firstChanged(d.diffLines()); d.files.cursor != want || d.files.land != 0 {
+		t.Fatalf("after loading, cursor should be on the first change %d, got %d", want, d.files.cursor)
+	}
+}
+
+func firstChanged(lines []diffLine) int {
+	for i, l := range lines {
+		if l.kind != lineContext {
+			return i
+		}
+	}
+	return -1
+}

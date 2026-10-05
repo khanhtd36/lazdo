@@ -192,6 +192,7 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		}
 	case fileDiffMsg:
 		d.files.diffs[msg.key] = msg.diff
+		d.landCursor()
 		d.scrollDiffToCursor()
 	case visitMsg:
 		if msg.err != nil {
