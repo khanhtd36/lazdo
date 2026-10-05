@@ -13,16 +13,15 @@ import (
 )
 
 var (
-	styleTitle    = lipgloss.NewStyle().Bold(true)
-	styleHeader   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	styleCursor   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
-	styleDim      = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	styleGreen    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	styleYellow   = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	styleRed      = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	styleCyan     = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
-	styleDraft    = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-	styleRequired = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	styleTitle  = lipgloss.NewStyle().Bold(true)
+	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	styleCursor = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
+	styleDim    = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	styleGreen  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	styleYellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	styleRed    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	styleCyan   = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	styleDraft  = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 )
 
 // Fixed widths of the right-hand columns; the title takes what's left.
@@ -88,9 +87,9 @@ func (m Model) rowLayout() rowLayout {
 	for c := range columnCount {
 		l.shown[c] = true
 	}
-	badges := 22 // room for typical badges like "[draft] [required]"
+	badges := 22 // room for typical badges like "[draft] [2 new pushes]"
 	if l.compact {
-		badges = 9 // "[d] [r] [+8p]"
+		badges = 9 // "[d] [+8p]"
 	}
 	minTitle := max(24, m.width/3)
 	for _, drop := range columnDropOrder {
@@ -239,9 +238,6 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	var badges []string
 	if pr.IsDraft {
 		badges = append(badges, styleDraft.Render(pick2(layout.compact, "[d]", "[draft]")))
-	}
-	if me, ok := pr.ReviewerFor(m.me.ID); ok && me.IsRequired {
-		badges = append(badges, styleRequired.Render(pick2(layout.compact, "[r]", "[required]")))
 	}
 	if hasStats {
 		badges = append(badges, sinceLastVisit(stats, layout.compact)...)

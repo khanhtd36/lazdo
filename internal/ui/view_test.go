@@ -69,8 +69,11 @@ func TestDashboardCompactLayout(t *testing.T) {
 		view := ansi.Strip(next.View())
 
 		compact := width < compactWidth
-		if compact != strings.Contains(view, "[r]") || compact == strings.Contains(view, "[required]") {
+		if compact != strings.Contains(view, "[d]") || compact == strings.Contains(view, "[draft]") {
 			t.Errorf("width %d: compact=%v but badges are wrong:\n%s", width, compact, view)
+		}
+		if strings.Contains(view, "[r]") || strings.Contains(view, "[required]") {
+			t.Errorf("width %d: no required badge:\n%s", width, view)
 		}
 		if compact && (!strings.Contains(view, "TDK") || !strings.Contains(view, "[+8p]")) {
 			t.Errorf("width %d: want initials TDK and [+8p]:\n%s", width, view)
