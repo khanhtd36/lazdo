@@ -272,8 +272,8 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	// Badges follow the title text, like the web list; the padding goes
 	// after them so the right-hand columns still line up.
 	title := truncate(pr.Title, max(titleWidth, 10))
-	if hasStats && stats.Visited && (stats.NewPushes > 0 || stats.NewComments > 0) {
-		title = styleTitle.Render(title) // something new to look at since my last visit
+	if hasStats && hasNews(stats, pr.IsDraft) {
+		title = styleTitle.Render(title)
 	}
 	cellWidth := max(titleWidth, 10)
 	if badgeText != "" {
@@ -281,6 +281,15 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 		cellWidth += 1 + ansi.StringWidth(badgeText)
 	}
 	return "  " + padRight(title, cellWidth) + " " + right // indent under the section header
+}
+
+// hasNews is whether a PR has something to look at: pushes or comments since
+// my last visit, or, when it's ready for review, no visit at all yet.
+func hasNews(s ado.Stats, draft bool) bool {
+	if !s.Visited {
+		return !draft
+	}
+	return s.NewPushes > 0 || s.NewComments > 0
 }
 
 func votes(reviewers []ado.Reviewer) string {

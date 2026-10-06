@@ -117,16 +117,17 @@ func TestDashboardBoldsNewActivity(t *testing.T) {
 	m := New(ado.NewClient("org"), time.Minute)
 	m.width, m.height = 200, 20
 	pr := func(id int, title string) *ado.PullRequest {
-		return &ado.PullRequest{ID: id, Title: title, Repository: ado.Repository{Name: "r"}}
+		return &ado.PullRequest{ID: id, Title: title, IsDraft: id == 5, Repository: ado.Repository{Name: "r"}}
 	}
 	m.stats = map[int]ado.Stats{
 		1: {Visited: true, NewComments: 1},
 		2: {Visited: true, NewPushes: 2},
 		3: {Visited: true, NewVotes: 1},
 		4: {Visited: false},
+		5: {Visited: false}, // a draft
 	}
 	bold := lipgloss.NewStyle().Bold(true)
-	for id, want := range map[int]bool{1: true, 2: true, 3: false, 4: false} {
+	for id, want := range map[int]bool{1: true, 2: true, 3: false, 4: true, 5: false} {
 		title := fmt.Sprintf("title %d", id)
 		got := strings.Contains(m.renderPR(pr(id, title)), bold.Render(title))
 		if got != want {
