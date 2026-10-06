@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/khanhtd36/lazdo/internal/ado"
 )
@@ -104,6 +107,30 @@ func TestInitials(t *testing.T) {
 	} {
 		if got := initials(in); got != want {
 			t.Errorf("initials(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestDashboardBoldsNewActivity(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+	m := New(ado.NewClient("org"), time.Minute)
+	m.width, m.height = 200, 20
+	pr := func(id int, title string) *ado.PullRequest {
+		return &ado.PullRequest{ID: id, Title: title, Repository: ado.Repository{Name: "r"}}
+	}
+	m.stats = map[int]ado.Stats{
+		1: {Visited: true, NewComments: 1},
+		2: {Visited: true, NewPushes: 2},
+		3: {Visited: true, NewVotes: 1},
+		4: {Visited: false},
+	}
+	bold := lipgloss.NewStyle().Bold(true)
+	for id, want := range map[int]bool{1: true, 2: true, 3: false, 4: false} {
+		title := fmt.Sprintf("title %d", id)
+		got := strings.Contains(m.renderPR(pr(id, title)), bold.Render(title))
+		if got != want {
+			t.Errorf("PR %d: bold title = %v, want %v", id, got, want)
 		}
 	}
 }

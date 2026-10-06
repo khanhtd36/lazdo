@@ -21,7 +21,7 @@ var (
 	styleYellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 	styleRed    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 	styleCyan   = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
-	styleDraft  = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+	styleDraft  = lipgloss.NewStyle().Foreground(lipgloss.Color("244")) // grayed: a draft isn't asking for review yet
 )
 
 // Fixed widths of the right-hand columns; the title takes what's left.
@@ -272,6 +272,9 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	// Badges follow the title text, like the web list; the padding goes
 	// after them so the right-hand columns still line up.
 	title := truncate(pr.Title, max(titleWidth, 10))
+	if hasStats && stats.Visited && (stats.NewPushes > 0 || stats.NewComments > 0) {
+		title = styleTitle.Render(title) // something new to look at since my last visit
+	}
 	cellWidth := max(titleWidth, 10)
 	if badgeText != "" {
 		title += " " + badgeText
