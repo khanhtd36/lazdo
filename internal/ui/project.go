@@ -444,7 +444,7 @@ func (m *projectModel) prItems() []pickItem {
 func projectPRRow(pr ado.PullRequest, width int) string {
 	draft := ""
 	if pr.IsDraft {
-		draft = styleDraft.Render("[d]")
+		draft = draftBadge(true)
 	}
 	right := joinCols(
 		styleDim.Render(fit(nameInitials(pr.CreatedBy.DisplayName), colAuthorCompact)),

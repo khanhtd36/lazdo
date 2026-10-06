@@ -237,7 +237,7 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 
 	var badges []string
 	if pr.IsDraft {
-		badges = append(badges, styleDraft.Render(pick2(layout.compact, "[d]", "[draft]")))
+		badges = append(badges, draftBadge(layout.compact))
 	}
 	if hasStats {
 		badges = append(badges, sinceLastVisit(stats, layout.compact)...)
@@ -328,31 +328,6 @@ func nameInitials(name string) string {
 		}
 	}
 	return b.String()
-}
-
-// sinceLastVisit mirrors the "N new pushes" note of the Azure DevOps list;
-// compact gives "[+8p]", "[+2c]", "[+1v]" and "[u]" for unvisited.
-func sinceLastVisit(s ado.Stats, compact bool) []string {
-	if !s.Visited {
-		return []string{styleCyan.Render(pick2(compact, "[u]", "[unvisited]"))}
-	}
-	var out []string
-	for _, c := range []struct {
-		n    int
-		noun string
-	}{{s.NewPushes, "push"}, {s.NewComments, "comment"}, {s.NewVotes, "vote"}} {
-		switch {
-		case c.n > 0 && compact:
-			out = append(out, styleCyan.Render(fmt.Sprintf("[+%d%c]", c.n, c.noun[0])))
-		case c.n == 1:
-			out = append(out, styleCyan.Render("[1 new "+c.noun+"]"))
-		case c.n > 1 && c.noun == "push":
-			out = append(out, styleCyan.Render(fmt.Sprintf("[%d new pushes]", c.n)))
-		case c.n > 1:
-			out = append(out, styleCyan.Render(fmt.Sprintf("[%d new %ss]", c.n, c.noun)))
-		}
-	}
-	return out
 }
 
 func (m Model) comments(s ado.Stats, ok bool) string {

@@ -135,3 +135,30 @@ func TestDashboardBoldsNewActivity(t *testing.T) {
 		}
 	}
 }
+
+func TestSinceLastVisitMarkers(t *testing.T) {
+	news := ado.Stats{Visited: true, NewPushes: 3, NewComments: 1, NewVotes: 2}
+	cases := []struct {
+		symbols, compact bool
+		stats            ado.Stats
+		want             string
+	}{
+		{true, false, news, "↑3 “1 ★2"},
+		{true, true, news, "↑3 “1 ★2"}, // symbols are already short
+		{false, false, news, "[+3 pushes] [+1 comment] [+2 votes]"},
+		{false, true, news, "[+3p] [+1c] [+2v]"},
+		{true, false, ado.Stats{}, "●"},
+		{false, true, ado.Stats{}, "[new]"},
+	}
+	defer UseSymbols(false)
+	for _, c := range cases {
+		UseSymbols(c.symbols)
+		if got := ansi.Strip(strings.Join(sinceLastVisit(c.stats, c.compact), " ")); got != c.want {
+			t.Errorf("symbols=%v compact=%v: got %q, want %q", c.symbols, c.compact, got, c.want)
+		}
+	}
+	UseSymbols(true)
+	if got := ansi.Strip(draftBadge(false)); got != "◌" {
+		t.Errorf("draft symbol: %q", got)
+	}
+}

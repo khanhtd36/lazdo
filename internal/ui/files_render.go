@@ -200,7 +200,7 @@ func (d *detailModel) threadRows(ch *ado.Change, i int) []string {
 		if t.IsResolved() {
 			status = styleGreen.Render(ado.ThreadStatusTitle(t.Status))
 		}
-		out = append(out, "    💬 "+status)
+		out = append(out, "    "+threadMark()+status)
 		for ci, c := range t.LiveComments() {
 			mark := "      "
 			if selected && ci == d.files.commentSel {

@@ -200,7 +200,7 @@ func (m Model) helpGroups() []bindingGroup {
 	case m.page == pageProjects:
 		return withCommon(bindingGroup{"Projects", projectsPageKeys}, bindingGroup{"Pages", pageKeys})
 	}
-	return withCommon(bindingGroup{"Dashboard", dashboardKeys}, bindingGroup{"Pages", pageKeys})
+	return withCommon(bindingGroup{"Dashboard", dashboardKeys}, bindingGroup{"Markers", markerLegend()}, bindingGroup{"Pages", pageKeys})
 }
 
 // withCommon appends the movement and global keys every view shares.

@@ -659,7 +659,7 @@ func (d *detailModel) renderEntry(e entry, selected bool, width int) []string {
 	if t.IsResolved() {
 		status = styleGreen.Render(ado.ThreadStatusTitle(t.Status))
 	}
-	head := marker + "💬 " + status
+	head := marker + threadMark() + status
 	if t.ThreadContext != nil && t.ThreadContext.FilePath != "" {
 		head += styleDim.Render("  " + t.ThreadContext.FilePath)
 	}

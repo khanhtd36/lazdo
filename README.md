@@ -14,13 +14,27 @@ Lazy Azure DevOps pull requests: the "My pull requests" page of Azure DevOps, in
 Sections, across every project of the organization:
 
 - **Wait for approval**: you're a reviewer, haven't voted, PR isn't a draft.
-- **Waiting for author**: you voted "waiting for author" or "rejected". `[+N push]` flags pushes since your vote.
+- **Waiting for author**: you voted "waiting for author" or "rejected". `↑N` flags pushes since your last visit.
 - **Assigned to me**: every other PR you review (drafts, ones you approved).
 - **Created by me**.
 
-Each row: title, draft and new-since-last-visit badges, author, ID, repo → target branch, resolved/total
+Each row: title, markers, author, ID, repo → target branch, resolved/total
 comment threads, checks: build policies and required external ones (`✓` `✗` `●` running), last update. Reviewer votes
 are in the PR detail.
+
+The title is bold when there is something new: pushes or comments since
+your last visit, or a PR ready for review you haven't opened. The markers:
+
+| Symbol | Words | Meaning |
+| --- | --- | --- |
+| `↑3` `“2` `★1` | `[+3 pushes]` `[+2 comments]` `[+1 vote]` | new since your last visit |
+| `●` | `[new]` | not opened yet |
+| `◌` | `[draft]` | draft |
+
+Symbols are used when the terminal draws them one column wide, checked at
+start-up (East Asian width settings draw them two wide); otherwise words,
+shortened to `[+3p]` and `[d]` on narrow screens. `--symbols` / `--ascii`
+or `LAZDO_SYMBOLS=1` / `0` decide instead.
 
 ## Install
 
@@ -75,6 +89,7 @@ az devops configure -d organization=https://dev.azure.com/<org>   # optional, el
 lazdo                    # default org from `az devops configure`
 lazdo --org arbinSW      # or a full https://dev.azure.com/<org> URL
 lazdo --interval 30s     # auto-refresh period (default 2m)
+lazdo --ascii            # markers as words, without checking the terminal
 ```
 
 ### Keys
