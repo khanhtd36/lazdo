@@ -11,11 +11,11 @@ import (
 )
 
 var (
-	styleTabActive = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("14"))
-	styleButton    = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("238")).Padding(0, 1)
-	styleButtonCTA = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("25")).Padding(0, 1)
-	styleBadge     = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("25")).Padding(0, 1)
-	styleBadgeDim  = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("240")).Padding(0, 1)
+	styleTabActive  = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("14"))
+	styleButton     = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("238")).Padding(0, 1)
+	styleButtonCTA  = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("25")).Padding(0, 1)
+	styleBadge      = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("25")).Padding(0, 1)
+	styleBadgeDraft = lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("214")).Padding(0, 1) // amber: not ready yet
 )
 
 func (d *detailModel) view() string {
@@ -79,7 +79,11 @@ func (d *detailModel) titleLine() string {
 		return truncate(styleTitle.Render(d.pr.Title), d.width-1)
 	}
 	vote, complete, voteX, _ := d.titleButtons()
-	title := truncate(styleTitle.Render(d.pr.Title), voteX-2)
+	title := styleTitle.Render(d.pr.Title)
+	if d.pr.IsDraft {
+		title = draftBadge(false) + " " + title // the dashboard's draft marker
+	}
+	title = truncate(title, voteX-2)
 	return fit(title, voteX) + vote + " " + complete
 }
 
@@ -89,7 +93,7 @@ func (d *detailModel) subtitleLine() string {
 	}
 	badge := styleBadge.Render("Active")
 	if d.pr.IsDraft {
-		badge = styleBadgeDim.Render("Draft")
+		badge = styleBadgeDraft.Render("Draft")
 	}
 	head := fmt.Sprintf("%s !%d %s proposes to merge ", badge, d.pr.ID, d.pr.CreatedBy.DisplayName)
 	tail := " into " + styleCyan.Render(d.pr.TargetBranch())

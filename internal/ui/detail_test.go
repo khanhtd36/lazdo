@@ -317,3 +317,14 @@ func TestEditFormRoundTrip(t *testing.T) {
 		t.Fatalf("got %q / %q", title, desc)
 	}
 }
+
+func TestDetailMarksDraft(t *testing.T) {
+	d := fakeDetail(t, 120)
+	d.pr.IsDraft = true
+	if title := ansi.Strip(d.titleLine()); !strings.HasPrefix(title, "[draft] fix: something") {
+		t.Fatalf("a draft's title should carry the draft marker: %q", title)
+	}
+	if sub := ansi.Strip(d.subtitleLine()); !strings.HasPrefix(sub, " Draft ") {
+		t.Fatalf("the badge should read Draft: %q", sub)
+	}
+}
