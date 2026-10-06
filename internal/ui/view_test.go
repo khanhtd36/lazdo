@@ -162,3 +162,20 @@ func TestSinceLastVisitMarkers(t *testing.T) {
 		t.Errorf("draft symbol: %q", got)
 	}
 }
+
+func TestDashboardGraysDraftTitles(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+	m := New(ado.NewClient("org"), time.Minute)
+	m.width, m.height = 200, 20
+	m.stats = map[int]ado.Stats{1: {Visited: true}, 2: {Visited: true, NewPushes: 1}}
+	gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	draft := &ado.PullRequest{ID: 1, Title: "wip thing", IsDraft: true, Repository: ado.Repository{Name: "r"}}
+	if !strings.Contains(m.renderPR(draft), gray.Render("wip thing")) {
+		t.Error("a draft's title should be gray")
+	}
+	news := &ado.PullRequest{ID: 2, Title: "wip pushed", IsDraft: true, Repository: ado.Repository{Name: "r"}}
+	if !strings.Contains(m.renderPR(news), gray.Bold(true).Render("wip pushed")) {
+		t.Error("a draft with new pushes should be gray and bold")
+	}
+}

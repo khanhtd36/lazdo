@@ -272,9 +272,14 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	// Badges follow the title text, like the web list; the padding goes
 	// after them so the right-hand columns still line up.
 	title := truncate(pr.Title, max(titleWidth, 10))
-	if hasStats && hasNews(stats, pr.IsDraft) {
-		title = styleTitle.Render(title)
+	style := lipgloss.NewStyle()
+	if pr.IsDraft {
+		style = style.Foreground(lipgloss.Color("240")) // grayer than the dim columns: not up for review yet
 	}
+	if hasStats && hasNews(stats, pr.IsDraft) {
+		style = style.Bold(true)
+	}
+	title = style.Render(title)
 	cellWidth := max(titleWidth, 10)
 	if badgeText != "" {
 		title += " " + badgeText
