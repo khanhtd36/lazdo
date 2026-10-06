@@ -279,3 +279,41 @@ func TestCompleteSendsWebMergeMessage(t *testing.T) {
 		t.Fatal("auto-complete should store the web's message too")
 	}
 }
+
+func TestPREditorSendsOnlyChanges(t *testing.T) {
+	d := fakeDetail(t, 120)
+	press(d, "E")
+	p, ok := d.modal.(*prEditor)
+	if !ok {
+		t.Fatalf("E should open the editor, got %T", d.modal)
+	}
+	if title, desc, why := p.edits(); title != nil || desc != nil || why != "" {
+		t.Fatal("nothing changed yet, nothing to send")
+	}
+	p.title.SetValue("fix: something better")
+	if title, desc, _ := p.edits(); title == nil || *title != "fix: something better" || desc != nil {
+		t.Fatal("only the title changed, only it should be sent")
+	}
+	p.desc.SetValue(strings.Repeat("x", 4001))
+	if _, _, why := p.edits(); !strings.Contains(why, "4000") {
+		t.Fatalf("a description over the limit should be refused, got %q", why)
+	}
+	p.title.SetValue("  ")
+	if _, _, why := p.edits(); why == "" {
+		t.Fatal("an empty title should be refused")
+	}
+	press(d, "esc")
+	if _, ok := d.modal.(*confirmModal); !ok {
+		t.Fatalf("esc with changes should ask, got %T", d.modal)
+	}
+}
+
+func TestEditFormRoundTrip(t *testing.T) {
+	title, desc := splitEditForm(joinEditForm(" fix: x ", "## Problem\n\nIt broke.\n"))
+	if title != "fix: x" || desc != "## Problem\n\nIt broke." {
+		t.Fatalf("got %q / %q", title, desc)
+	}
+	if title, desc := splitEditForm("only a title\n"); title != "only a title" || desc != "" {
+		t.Fatalf("got %q / %q", title, desc)
+	}
+}

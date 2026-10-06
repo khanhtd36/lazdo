@@ -212,6 +212,7 @@ Keys specific to a pull request (on top of the ones above):
 | --- | --- |
 | `v` | vote: approve, approve with suggestions, wait for author, reject, reset |
 | `m` | complete, set/cancel auto-complete, mark as draft/publish, abandon |
+| `E` | edit the title and description (`ctrl+e` in `$EDITOR`: title, blank line, description) |
 | `a` | add a comment (Overview: on the PR · diff: on the line or `V` range) |
 | `R` / `s` / `e` / `d` | reply / status / edit / delete on the selected thread |
 | `f` | Overview: choose the activity filter (each with its count) |

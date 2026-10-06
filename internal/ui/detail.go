@@ -209,7 +209,7 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		d.files.loadedKey = "" // refetch threads so new line comments show
 		return tea.Batch(d.reload(), d.ensureFiles())
 	case editorDoneMsg:
-		if e, ok := d.modal.(*editorModal); ok {
+		if e, ok := d.modal.(editorDoner); ok {
 			return e.editorDone(msg)
 		}
 	case tea.KeyMsg:
@@ -288,6 +288,10 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 	case "m":
 		if d.data != nil {
 			d.modal = d.completeMenu()
+		}
+	case "E":
+		if d.data != nil {
+			d.modal = d.newPREditor()
 		}
 	default:
 		return d.tabKey(msg)

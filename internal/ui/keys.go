@@ -58,6 +58,7 @@ var (
 		{keys: "[ / ]", desc: "previous / next tab", press: "]"},
 		{keys: "v", desc: "vote: approve, suggestions, wait for author, reject, reset", press: "v", hint: "vote"},
 		{keys: "m", desc: "complete, auto-complete, draft/publish, abandon", press: "m", hint: "complete"},
+		{keys: "E", desc: "edit the title and description", press: "E"},
 		{keys: "o", desc: "open in the browser (the file, on the Files tab)", press: "o", hint: "browser"},
 		{keys: "c", desc: "check out the source branch (asks where)", press: "c", hint: "checkout"},
 		{keys: "r", desc: "refresh", press: "r"},

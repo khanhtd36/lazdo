@@ -156,12 +156,21 @@ func (e *editorModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 	return e, cmd
 }
 
-func (e *editorModal) openEditor() tea.Cmd {
+func (e *editorModal) openEditor() tea.Cmd { return editExternally(e.ta.Value()) }
+
+// editorDoner takes text back from $EDITOR.
+type editorDoner interface {
+	editorDone(msg editorDoneMsg) tea.Cmd
+}
+
+// editExternally opens text in $EDITOR and reports the result as an
+// editorDoneMsg, with Windows line endings made plain.
+func editExternally(text string) tea.Cmd {
 	f, err := os.CreateTemp("", "lazdo-*.md")
 	if err != nil {
 		return statusCmd("error: " + err.Error())
 	}
-	_, err = f.WriteString(e.ta.Value())
+	_, err = f.WriteString(text)
 	_ = f.Close()
 	if err != nil {
 		return statusCmd("error: " + err.Error())
@@ -174,7 +183,7 @@ func (e *editorModal) openEditor() tea.Cmd {
 			return editorDoneMsg{err: err}
 		}
 		b, err := os.ReadFile(f.Name())
-		return editorDoneMsg{content: string(b), err: err}
+		return editorDoneMsg{content: strings.ReplaceAll(string(b), "\r\n", "\n"), err: err}
 	})
 }
 

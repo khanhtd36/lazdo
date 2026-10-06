@@ -147,6 +147,25 @@ func (c *Client) Complete(ctx context.Context, d *PRDetail, o CompletionOptions)
 	})
 }
 
+// Pull request text limits. A longer description is refused; a longer
+// title is silently cut to 400 characters, so callers check first.
+const (
+	MaxTitleLength       = 400
+	MaxDescriptionLength = 4000
+)
+
+// EditPR changes the title and/or the description; a nil one is left alone.
+func (c *Client) EditPR(ctx context.Context, pr PullRequest, title, description *string) error {
+	body := map[string]any{}
+	if title != nil {
+		body["title"] = *title
+	}
+	if description != nil {
+		body["description"] = *description
+	}
+	return c.patchPR(ctx, pr, body)
+}
+
 func (c *Client) SetDraft(ctx context.Context, pr PullRequest, draft bool) error {
 	return c.patchPR(ctx, pr, map[string]any{"isDraft": draft})
 }
