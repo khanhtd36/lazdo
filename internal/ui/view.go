@@ -50,9 +50,10 @@ const (
 	columnCount
 )
 
-// columnDropOrder is which columns give way, first to last, when the title
-// would otherwise get squeezed. The ID always stays.
-var columnDropOrder = []column{columnRepo, columnUpdated, columnAuthor, columnComments, columnBuild}
+// columnPriority is which columns get room first when the title would
+// otherwise get squeezed; one that doesn't fit gives way to smaller ones
+// after it. The ID always stays.
+var columnPriority = []column{columnID, columnBuild, columnRepo, columnComments, columnAuthor, columnUpdated}
 
 // rowLayout is how dashboard rows fit the current width.
 type rowLayout struct {
@@ -84,25 +85,17 @@ func (l rowLayout) width(c column) int {
 
 func (m Model) rowLayout() rowLayout {
 	l := rowLayout{compact: m.width < compactWidth}
-	for c := range columnCount {
-		l.shown[c] = true
-	}
 	badges := 22 // room for typical badges like "[draft] [2 new pushes]"
 	if l.compact {
 		badges = 9 // "[d] [+8p]"
 	}
-	minTitle := max(24, m.width/3)
-	for _, drop := range columnDropOrder {
-		used := 6 + badges // cursor, indent, gaps
-		for c := range columnCount {
-			if l.shown[c] {
-				used += l.width(c) + 1
-			}
+	// What's left once the title has its third, after cursor, indent, gaps.
+	room := m.width - 6 - badges - max(24, m.width/3)
+	for _, c := range columnPriority {
+		if need := l.width(c) + 1; need <= room || c == columnID {
+			l.shown[c] = true
+			room -= need
 		}
-		if m.width-used >= minTitle {
-			break
-		}
-		l.shown[drop] = false
 	}
 	return l
 }

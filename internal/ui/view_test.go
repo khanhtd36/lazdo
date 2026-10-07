@@ -179,3 +179,26 @@ func TestDashboardGraysDraftTitles(t *testing.T) {
 		t.Error("a draft with new pushes should be gray and bold")
 	}
 }
+
+func TestDashboardNarrowKeepsRepoOverComments(t *testing.T) {
+	m := New(ado.NewClient("org"), time.Minute)
+	m.width = 100
+	l := m.rowLayout()
+	if !l.shown[columnRepo] || !l.shown[columnID] || !l.shown[columnBuild] {
+		t.Fatalf("at width 100 the repo → target branch column should stay: %+v", l.shown)
+	}
+	m.width = 90 // room for the repo column or the comments, not both
+	if l := m.rowLayout(); !l.shown[columnRepo] || l.shown[columnComments] {
+		t.Fatalf("when only one fits, the repo column wins over comments: %+v", l.shown)
+	}
+	m.width = 80 // too narrow for the repo column at all: comments may show
+	if l := m.rowLayout(); l.shown[columnRepo] {
+		t.Fatalf("the repo column can't fit at width 80: %+v", l.shown)
+	}
+	m.width = 220
+	for c := range columnCount {
+		if !m.rowLayout().shown[c] {
+			t.Fatalf("a wide screen shows every column, missing %d", c)
+		}
+	}
+}
