@@ -128,7 +128,8 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("%s %s: %s: %s", method, path, resp.Status, apiMessage(msg))
+		// The reason first: a status line cuts from the right.
+		return fmt.Errorf("%s (%s, %s %s)", apiMessage(msg), resp.Status, method, path)
 	}
 	if out == nil {
 		return nil
@@ -144,8 +145,11 @@ func apiMessage(body []byte) string {
 	var e struct {
 		Message string `json:"message"`
 	}
+	text := strings.TrimSpace(string(body))
 	if json.Unmarshal(body, &e) == nil && e.Message != "" {
-		return e.Message
+		text = e.Message
 	}
-	return strings.TrimSpace(string(body))
+	// One line: messages like "Invalid argument value.\nParameter name: …"
+	// end up in a status line, where a line break would push the screen.
+	return strings.Join(strings.Fields(text), " ")
 }

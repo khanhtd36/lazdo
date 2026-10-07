@@ -328,3 +328,25 @@ func TestDetailMarksDraft(t *testing.T) {
 		t.Fatalf("the badge should read Draft: %q", sub)
 	}
 }
+
+func TestCompleteFitsALongDescription(t *testing.T) {
+	d := fakeDetail(t, 120)
+	d.data.Description = strings.Repeat("A line of the description, as in !15077.\n", 97) // 3,977 characters
+	c := d.newCompleteDialog(false)
+	o := c.options()
+	if o.EncodedLength() > completionBudget {
+		t.Fatalf("the options measure %d, over the %d budget", o.EncodedLength(), completionBudget)
+	}
+	if !strings.HasPrefix(o.MergeCommitMessage, "Merged PR 7: fix: something\n\nA line") || !strings.HasSuffix(o.MergeCommitMessage, "…") {
+		t.Fatalf("the description should be cut, not the title: %q…", o.MergeCommitMessage[:60])
+	}
+	c.custom = true
+	c.message.SetValue(strings.Repeat("x", 4100))
+	if why := c.submitBlocked(); !strings.Contains(why, "too long") {
+		t.Fatalf("an over-long custom message should be refused, got %q", why)
+	}
+	c.message.SetValue("short")
+	c.opts.BypassReason = strings.Repeat("r", 5000) // can't fit at all: must not loop
+	c.custom = false
+	_ = c.options()
+}

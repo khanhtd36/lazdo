@@ -267,6 +267,9 @@ func (c *completeDialog) toggle() {
 
 // submitBlocked explains why the submit button is disabled, if it is.
 func (c *completeDialog) submitBlocked() string {
+	if over := c.options().EncodedLength() - completionBudget; c.custom && over > 0 {
+		return fmt.Sprintf("the merge commit message is about %d characters too long", over)
+	}
 	switch {
 	case c.auto:
 		return ""
@@ -283,9 +286,28 @@ func (c *completeDialog) submitBlocked() string {
 func (c *completeDialog) options() ado.CompletionOptions {
 	o := c.opts
 	o.MergeType = c.types[c.typeIdx]
-	o.MergeCommitMessage = c.d.mergeMessage()
 	if c.custom {
 		o.MergeCommitMessage = c.message.Value()
+		return o
+	}
+	o.MergeCommitMessage = c.d.mergeMessage()
+	return fitMessage(o)
+}
+
+// completionBudget is what the options may measure, with room for the
+// server counting a little more than json.Marshal does.
+const completionBudget = ado.MaxCompletionOptionsLength - 150
+
+// fitMessage shortens the merge commit message, ending it with "…", until
+// the options fit Azure DevOps' limit. A long description would otherwise
+// get the completion refused.
+func fitMessage(o ado.CompletionOptions) ado.CompletionOptions {
+	for over := o.EncodedLength() - completionBudget; over > 0; over = o.EncodedLength() - completionBudget {
+		r := []rune(strings.TrimSuffix(o.MergeCommitMessage, "…"))
+		if len(r) == 0 {
+			break // the other options alone are too long; the server will say so
+		}
+		o.MergeCommitMessage = strings.TrimRight(string(r[:max(0, len(r)-over-1)]), " \n") + "…"
 	}
 	return o
 }

@@ -2,6 +2,7 @@ package ado
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -95,6 +96,18 @@ type CompletionOptions struct {
 	// N from <branch> into <target>", not the web UI's "Merged PR N: title".
 	MergeCommitMessage string
 	BypassReason       string // non-empty overrides blocking policies
+}
+
+// MaxCompletionOptionsLength caps the completion options as Azure DevOps
+// encodes them, merge commit message included. Its count runs a little
+// above json.Marshal's (4069 for options this measures at 4050), so
+// callers keep a margin.
+const MaxCompletionOptionsLength = 4000
+
+// EncodedLength estimates the server's count of these options.
+func (o CompletionOptions) EncodedLength() int {
+	b, _ := json.Marshal(o.body())
+	return len(b)
 }
 
 func (o CompletionOptions) body() map[string]any {
