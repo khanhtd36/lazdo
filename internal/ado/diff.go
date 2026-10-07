@@ -109,7 +109,7 @@ func (c *Client) CommitChanges(ctx context.Context, pr PullRequest, commitID str
 		}
 		for _, ch := range resp.Changes {
 			if !ch.Item.IsFolder {
-				out = append(out, ch)
+				out = append(out, ch.withPath())
 			}
 		}
 		if len(resp.Changes) < 100 {

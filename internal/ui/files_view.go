@@ -266,7 +266,7 @@ func (d *detailModel) ensureDiff() tea.Cmd {
 
 func loadFileDiff(ctx context.Context, client *ado.Client, pr ado.PullRequest, ch ado.Change, base, target string) *fileDiff {
 	leftID, rightID := ch.Item.OriginalObjectID, ch.Item.ObjectID
-	originalPath := ch.OriginalPath
+	path, originalPath := ch.Item.Path, ch.OriginalPath
 	if originalPath == "" {
 		originalPath = ch.Item.Path
 	}
@@ -274,7 +274,7 @@ func loadFileDiff(ctx context.Context, client *ado.Client, pr ado.PullRequest, c
 	case strings.Contains(ch.ChangeType, "add"):
 		leftID, originalPath = "", ""
 	case strings.Contains(ch.ChangeType, "delete"):
-		rightID = ""
+		rightID, path = "", "" // the file is gone on the new side
 	}
 	var (
 		wg                   sync.WaitGroup
@@ -288,7 +288,7 @@ func loadFileDiff(ctx context.Context, client *ado.Client, pr ado.PullRequest, c
 	if rightID != "" {
 		wg.Go(func() { right, errR = client.Blob(ctx, pr, rightID) })
 	}
-	wg.Go(func() { blocks, errBlock = client.FileDiff(ctx, pr, base, target, ch.Item.Path, originalPath) })
+	wg.Go(func() { blocks, errBlock = client.FileDiff(ctx, pr, base, target, path, originalPath) })
 	wg.Wait()
 	fd := &fileDiff{err: firstErr(errL, errR, errBlock)}
 	if fd.err != nil {

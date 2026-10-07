@@ -162,6 +162,15 @@ type Change struct {
 	Item             ChangeItem `json:"item"`
 }
 
+// withPath fills in a deleted file's path: Azure DevOps leaves item.path
+// empty for a deletion and puts the path in originalPath.
+func (c Change) withPath() Change {
+	if c.Item.Path == "" {
+		c.Item.Path = c.OriginalPath
+	}
+	return c
+}
+
 type ChangeItem struct {
 	Path             string `json:"path"`
 	ObjectID         string `json:"objectId"`
@@ -440,7 +449,9 @@ func (c *Client) IterationChanges(ctx context.Context, pr PullRequest, target, b
 		if err := c.get(ctx, fmt.Sprintf("%s/iterations/%d/changes", pr.prPath(), target), q, &resp); err != nil {
 			return changes, err
 		}
-		changes = append(changes, resp.ChangeEntries...)
+		for _, ch := range resp.ChangeEntries {
+			changes = append(changes, ch.withPath())
+		}
 		if resp.NextSkip == 0 {
 			break
 		}

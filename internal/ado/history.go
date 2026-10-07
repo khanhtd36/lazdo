@@ -69,7 +69,7 @@ func (c *Client) RangeChanges(ctx context.Context, r Repo, base, target string) 
 		}
 		for _, ch := range resp.Changes {
 			if !ch.Item.IsFolder {
-				out = append(out, ch)
+				out = append(out, ch.withPath())
 			}
 		}
 		if len(resp.Changes) < 100 {
