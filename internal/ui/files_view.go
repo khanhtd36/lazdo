@@ -13,7 +13,9 @@ import (
 )
 
 const (
-	maxDiffLines    = 10000
+	// maxDiffLines bounds the files lazdo colors and lays out, off the UI
+	// thread: about 1.3s and 90MB at the limit (an 11k-line file takes 0.3s).
+	maxDiffLines    = 50000
 	sideBySideWidth = 160
 )
 
