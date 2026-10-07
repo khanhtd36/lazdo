@@ -113,9 +113,29 @@ type seg struct {
 const tabWidth = 4
 
 // highlight splits a file into lines of colored segments with chroma.
-func highlight(filename, text string) [][]seg {
+// displayText makes file text safe to draw: tabs become spaces, and
+// characters a terminal might draw at a different width than counted, or
+// act on, are dropped (a byte order mark) or shown as "?" (control
+// characters such as a lone carriage return or an escape). A row drawn
+// wider than counted wraps and scrolls the whole screen.
+func displayText(text string) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\t", strings.Repeat(" ", tabWidth))
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n':
+			return r
+		case r == 0xfeff: // byte order mark
+			return -1
+		case r < 0x20 || r == 0x7f:
+			return '?'
+		}
+		return r
+	}, text)
+}
+
+func highlight(filename, text string) [][]seg {
+	text = displayText(text)
 	lexer := lexers.Match(path.Base(filename))
 	if lexer == nil {
 		lexer = lexers.Analyse(text)
