@@ -52,6 +52,7 @@ var (
 	pageKeys = []binding{
 		{keys: "1 / 2", desc: "Pull requests / Projects page", hint: "pages"},
 		{keys: "[ / ]", desc: "previous / next page", press: "]"},
+		{keys: "U", desc: "update lazdo, when the title shows a newer release", press: "U"},
 	}
 	detailKeys = []binding{
 		{keys: "1-4", desc: "Overview, Files, Commits, Conflicts tab", hint: "tabs"},

@@ -28,5 +28,11 @@ checksum:
 snapshot:
   version_template: '{{ .Tag }}-next'
 changelog:
-  use: github-native
+  # Commit subjects since the previous tag: lazdo is pushed straight to
+  # master, so GitHub's pull-request based notes come out empty. These are
+  # also what `lazdo update` and U show before updating.
+  use: git
   sort: asc
+  filters:
+    exclude:
+      - '^Merge '

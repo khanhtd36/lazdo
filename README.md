@@ -60,8 +60,15 @@ brew install khanhtd36/tap/lazdo
 With Go: `go install github.com/khanhtd36/lazdo@latest`. Binaries and
 checksums: [releases](https://github.com/khanhtd36/lazdo/releases).
 
-The scripts verify the download against the release's `checksums.txt`. Run
-the same command again to update. To pick a version or folder:
+The scripts verify the download against the release's `checksums.txt`.
+
+**Updating:** lazdo checks for a newer release at most once a day, in the
+background, and shows `↑ v0.2.14 (U)` in the title when there is one. `U`
+lists what changed and installs it, even while lazdo runs (restart to use
+it); `lazdo update` does the same from a shell. Copies installed with
+Homebrew or `go install` show their own update command instead.
+
+To pick a version or folder when installing:
 `LAZDO_VERSION=0.1.0` / `LAZDO_INSTALL_DIR=<dir>` (sh), or
 `$env:LAZDO_VERSION`, `$env:LAZDO_INSTALL_DIR`, and `$env:LAZDO_SKIP_PATH=1`
 to leave PATH alone (PowerShell).

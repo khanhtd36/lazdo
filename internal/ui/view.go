@@ -185,7 +185,7 @@ func (m Model) titleLine() string {
 		if m.projects.loading {
 			s += styleYellow.Render("  refreshing…")
 		}
-		return truncate(s, m.width-1)
+		return truncate(s+m.updateNote(), m.width-1)
 	}
 	switch {
 	case m.loading:
@@ -193,7 +193,7 @@ func (m Model) titleLine() string {
 	case !m.fetchedAt.IsZero():
 		s += styleDim.Render("  updated " + m.fetchedAt.Format("15:04:05"))
 	}
-	return truncate(s, m.width-1)
+	return truncate(s+m.updateNote(), m.width-1)
 }
 
 func (m Model) statusLine() string {

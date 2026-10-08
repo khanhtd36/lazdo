@@ -12,6 +12,7 @@ import (
 	"github.com/muesli/termenv"
 
 	"github.com/khanhtd36/lazdo/internal/ado"
+	"github.com/khanhtd36/lazdo/internal/update"
 )
 
 func TestViewFitsWidth(t *testing.T) {
@@ -200,5 +201,42 @@ func TestDashboardNarrowKeepsRepoOverComments(t *testing.T) {
 		if !m.rowLayout().shown[c] {
 			t.Fatalf("a wide screen shows every column, missing %d", c)
 		}
+	}
+}
+
+func TestUpdateNoticeAndDialog(t *testing.T) {
+	SetVersion("0.2.13")
+	defer SetVersion("dev")
+	m := New(ado.NewClient("org"), time.Minute)
+	m.width, m.height, m.loading = 160, 20, false
+	next, _ := m.Update(updatesMsg{releases: []update.Release{
+		{Tag: "v0.2.14", Notes: "## Changelog\n* 10529aa fix(checks): list a policy set on both branch and repo once\n"},
+	}})
+	m = next.(Model)
+	if !strings.Contains(ansi.Strip(m.titleLine()), "update v0.2.14 (U)") {
+		t.Fatalf("the title should offer the update: %q", ansi.Strip(m.titleLine()))
+	}
+	next, _ = m.Update(keyMsg("U"))
+	m = next.(Model)
+	u, ok := m.modal.(*updateModal)
+	if !ok {
+		t.Fatalf("U should open the update dialog, got %T", m.modal)
+	}
+	view := ansi.Strip(u.view(160))
+	if !strings.Contains(view, "v0.2.13 → v0.2.14") || !strings.Contains(view, "list a policy set on both branch and repo once") {
+		t.Fatalf("the dialog should show what changes:\n%s", view)
+	}
+	next, _ = m.Update(keyMsg("n"))
+	if next.(Model).modal != nil {
+		t.Fatal("n should close the dialog without updating")
+	}
+}
+
+func TestQIsTypedInThePREditor(t *testing.T) {
+	m := New(ado.NewClient("org"), time.Minute)
+	m.detail = fakeDetail(t, 120)
+	m.detail.modal = m.detail.newPREditor()
+	if !m.inTextInput() {
+		t.Fatal("q must type into the title, not quit lazdo")
 	}
 }

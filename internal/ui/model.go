@@ -10,6 +10,7 @@ import (
 
 	"github.com/khanhtd36/lazdo/internal/actions"
 	"github.com/khanhtd36/lazdo/internal/ado"
+	"github.com/khanhtd36/lazdo/internal/update"
 )
 
 // maxParallelBuilds caps concurrent per-PR build policy requests.
@@ -54,6 +55,7 @@ type Model struct {
 	modal  modal        // a dialog over any screen, such as checkout
 
 	lastCheckout map[string]string // repo key → path, this session only
+	updates      []update.Release  // releases newer than this build, newest first
 
 	filter       string // dashboard / filter
 	filterTyping bool
@@ -90,7 +92,7 @@ type (
 	statusMsg string
 )
 
-func (m Model) Init() tea.Cmd { return m.fetchList() }
+func (m Model) Init() tea.Cmd { return tea.Batch(m.fetchList(), checkUpdates()) }
 
 func (m Model) fetchList() tea.Cmd {
 	client, me := m.client, m.me
@@ -195,6 +197,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.refresh()
 		}
 		return m, m.detail.update(msg)
+	case updatesMsg:
+		m.updates = msg.releases
+	case updateDoneMsg:
+		if msg.err == nil {
+			m.updates = nil
+		}
+		return m.Update(resultMsg(msg.err, msg.text))
 	case listMsg:
 		return m.onList(msg)
 	case statsMsg:
@@ -252,6 +261,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if p, ok := m.pageKey(msg.String()); ok {
 				return m.switchPage(p)
 			}
+			if msg.String() == "U" {
+				return m.openUpdate()
+			}
 		}
 		if m.page == pageProjects {
 			return m.onProjectsKey(msg)
@@ -283,7 +295,7 @@ func (m Model) inTextInput() bool {
 		return false
 	case m.detail != nil && m.detail.modal != nil:
 		switch m.detail.modal.(type) {
-		case *editorModal, *completeDialog:
+		case *editorModal, *completeDialog, *prEditor:
 			return true
 		}
 		return false
