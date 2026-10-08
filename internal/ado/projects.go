@@ -182,6 +182,17 @@ func (c *Client) FileContent(ctx context.Context, r Repo, branch, path string) (
 	return c.getRaw(ctx, r.path()+"/items", q, "application/octet-stream")
 }
 
+// FileAt reads a file as it is at a commit.
+func (c *Client) FileAt(ctx context.Context, r Repo, commit, path string) ([]byte, error) {
+	q := url.Values{
+		"path":                          {path},
+		"versionDescriptor.version":     {commit},
+		"versionDescriptor.versionType": {"commit"},
+		"api-version":                   {apiVersion},
+	}
+	return c.getRaw(ctx, r.path()+"/items", q, "application/octet-stream")
+}
+
 func (c *Client) FileURL(r Repo, branch, path string) string {
 	return r.WebURL + "?path=" + url.QueryEscape(path) + "&version=GB" + url.QueryEscape(branch)
 }

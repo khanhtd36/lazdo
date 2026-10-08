@@ -45,6 +45,13 @@ func (c *Client) FileDiff(ctx context.Context, pr PullRequest, baseCommit, targe
 const maxBlobBytes = 8 << 20
 
 // Blob downloads one file version by its git object ID.
+// IsMissingObject reports Azure DevOps' "the object does not exist"
+// (TF401035): asked for an ID that isn't in the repo, such as a
+// submodule's commit, which lives in the submodule's own repo.
+func IsMissingObject(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "TF401035")
+}
+
 func (c *Client) Blob(ctx context.Context, pr PullRequest, objectID string) ([]byte, error) {
 	q := url.Values{"api-version": {apiVersion}, "$format": {"octetstream"}}
 	return c.getRaw(ctx, pr.repoPath()+"/blobs/"+objectID, q, "application/octet-stream")

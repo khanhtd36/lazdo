@@ -41,9 +41,19 @@ func (c *Client) Commits(ctx context.Context, r Repo, branch string, skip, top i
 // CommitsBetween lists the commits newer has that older lacks: a tag's
 // release changes. (The batch API reads itemVersion as the older side.)
 func (c *Client) CommitsBetween(ctx context.Context, r Repo, older, newer string) ([]RepoCommit, error) {
+	return c.commitsBetween(ctx, r, older, newer, "tag")
+}
+
+// CommitRange lists the commits newer has that older lacks, by commit ID:
+// what moving a submodule from older to newer brings in.
+func (c *Client) CommitRange(ctx context.Context, r Repo, older, newer string) ([]RepoCommit, error) {
+	return c.commitsBetween(ctx, r, older, newer, "commit")
+}
+
+func (c *Client) commitsBetween(ctx context.Context, r Repo, older, newer, versionType string) ([]RepoCommit, error) {
 	body := map[string]any{
-		"itemVersion":    map[string]string{"version": older, "versionType": "tag"},
-		"compareVersion": map[string]string{"version": newer, "versionType": "tag"},
+		"itemVersion":    map[string]string{"version": older, "versionType": versionType},
+		"compareVersion": map[string]string{"version": newer, "versionType": versionType},
 	}
 	var resp struct {
 		Value []RepoCommit `json:"value"`

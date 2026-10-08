@@ -49,6 +49,7 @@ const (
 type fileDiff struct {
 	err              error
 	binary, tooLarge bool
+	submodule        *submoduleChange // set instead of lines for a submodule
 	leftRaw          []string
 	rightRaw         []string
 	leftHL, rightHL  [][]seg
@@ -292,6 +293,10 @@ func loadFileDiff(ctx context.Context, client *ado.Client, pr ado.PullRequest, c
 	}
 	wg.Go(func() { blocks, errBlock = client.FileDiff(ctx, pr, base, target, path, originalPath) })
 	wg.Wait()
+	if ado.IsMissingObject(errL) || ado.IsMissingObject(errR) {
+		// The IDs aren't in this repo: a submodule pointer, not a file.
+		return &fileDiff{submodule: loadSubmodule(ctx, client, pr, ch, base, target)}
+	}
 	fd := &fileDiff{err: firstErr(errL, errR, errBlock)}
 	if fd.err != nil {
 		return fd

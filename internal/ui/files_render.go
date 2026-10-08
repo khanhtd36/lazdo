@@ -273,6 +273,12 @@ func (d *detailModel) renderDiffPane(h int) []string {
 		msg = "no file selected"
 	case fd == nil:
 		msg = "loading diff…"
+	case fd.submodule != nil:
+		copy(out[1:], submoduleLines(fd.submodule, ch.Item.Path, h-1, dw-2))
+		for i := 1; i < h; i++ {
+			out[i] = "  " + out[i]
+		}
+		return out
 	case fd.err != nil:
 		msg = styleRed.Render("error: " + fd.err.Error())
 	case fd.binary:
