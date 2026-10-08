@@ -87,9 +87,25 @@ func (d *detailModel) completeMenu() modal {
 // blockers are the blocking policies that keep the PR from completing.
 func (d *detailModel) blockers() []string {
 	var out []string
-	for _, p := range d.data.Policies {
+	for _, p := range d.distinctPolicies(d.data.Policies) {
 		if p.Configuration.IsBlocking && p.Configuration.Type.ID != policyTypeMergeStrategy && p.Status != "approved" {
 			out = append(out, d.policyText(p))
+		}
+	}
+	return out
+}
+
+// distinctPolicies drops a policy that reads and stands exactly like an
+// earlier one: the same rule set on the branch and on the repo, say, shows
+// as one line, not two identical ones.
+func (d *detailModel) distinctPolicies(ps []ado.Policy) []ado.Policy {
+	seen := map[string]bool{}
+	out := make([]ado.Policy, 0, len(ps))
+	for _, p := range ps {
+		key := fmt.Sprintf("%t|%s|%s", p.Configuration.IsBlocking, p.Status, d.policyText(p))
+		if !seen[key] {
+			seen[key] = true
+			out = append(out, p)
 		}
 	}
 	return out

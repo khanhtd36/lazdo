@@ -359,7 +359,7 @@ const (
 
 func (d *detailModel) renderChecks(width int) []string {
 	var required, optional []ado.Policy
-	for _, p := range d.data.Policies {
+	for _, p := range d.distinctPolicies(d.data.Policies) {
 		if p.Configuration.Type.ID == policyTypeMergeStrategy {
 			continue // satisfied by picking a merge type at completion
 		}

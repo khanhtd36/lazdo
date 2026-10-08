@@ -350,3 +350,24 @@ func TestCompleteFitsALongDescription(t *testing.T) {
 	c.custom = false
 	_ = c.options()
 }
+
+func TestDetailMergesIdenticalPolicies(t *testing.T) {
+	d := fakeDetail(t, 140)
+	minReviewers := func() ado.Policy {
+		var p ado.Policy
+		raw := `{"status":"queued","configuration":{"isBlocking":true,"isEnabled":true,
+			"type":{"id":"fa4e907d-c16b-4a4c-9dfa-4906e5d171dd"},"settings":{"minimumApproverCount":1}}}`
+		if err := json.Unmarshal([]byte(raw), &p); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	d.data.Policies = []ado.Policy{minReviewers(), minReviewers()} // branch and repo scope, as on !15077
+	if b := d.blockers(); len(b) != 1 {
+		t.Fatalf("identical blockers should show once: %q", b)
+	}
+	text := ansi.Strip(strings.Join(d.renderChecks(140), "\n"))
+	if strings.Count(text, "At least 1 reviewer must approve") != 1 || !strings.Contains(text, "1 required check pending") {
+		t.Fatalf("checks should list and count the rule once:\n%s", text)
+	}
+}
