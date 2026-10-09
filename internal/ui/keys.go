@@ -122,6 +122,10 @@ var (
 		{keys: "tab / h / l", desc: "sections ⇄ content", press: "tab", hint: "pane"},
 		{keys: "enter", desc: "a team's or group's members; a group's permissions (in Permissions)", press: "enter", hint: "open"},
 		{keys: "J / K", desc: "next / previous branch (Branch policies)", press: "J"},
+		{keys: "e", desc: "edit the branch policy", press: "e", hint: "edit"},
+		{keys: "n", desc: "new branch policy", press: "n", hint: "new"},
+		{keys: "space", desc: "turn the branch policy on or off", press: " "},
+		{keys: "d", desc: "delete the branch policy", press: "d"},
 		{keys: "/", desc: "filter the list", press: "/", hint: "filter"},
 		{keys: "r", desc: "reload the settings", press: "r", hint: "refresh"},
 	}

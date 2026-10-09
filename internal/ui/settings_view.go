@@ -113,6 +113,11 @@ func (s *settingsView) update(msg tea.Msg) tea.Cmd {
 			s.detail.loading, s.detail.err = false, msg.err
 			s.detail.list.setItems(memberItems(msg.members))
 		}
+	case settingsSavedMsg:
+		if msg.err != nil {
+			return statusCmd("error: " + msg.err.Error())
+		}
+		return tea.Batch(statusCmd(msg.text), s.load())
 	}
 	return nil
 }
@@ -203,6 +208,11 @@ func (s *settingsView) key(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 			s.onRight = true
 		}
 		return handled, nil
+	}
+	if s.section == secPolicies && !s.content.typing && s.data != nil {
+		if handled, cmd := s.policyKey(k); handled {
+			return true, cmd
+		}
 	}
 	handled, activate := s.content.key(msg, height)
 	if activate {

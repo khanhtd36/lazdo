@@ -253,7 +253,7 @@ func (m *projectModel) update(msg tea.Msg) tea.Cmd {
 			m.runsLoading, m.err = false, msg.err
 			m.runList.setItems(m.runItems(msg.runs))
 		}
-	case settingsLoadedMsg, settingsMembersMsg:
+	case settingsLoadedMsg, settingsMembersMsg, settingsSavedMsg:
 		return m.settings.update(msg)
 	case runLoadedMsg, logMsg, runTickMsg:
 		if m.run != nil {

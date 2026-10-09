@@ -236,3 +236,72 @@ func TestGroupSIDMatchesPermissions(t *testing.T) {
 		t.Fatalf("SID %q", g.SID())
 	}
 }
+
+// fakeSettings is a Settings tab loaded with one repo, one pipeline and one
+// minimum-reviewers policy on develop.
+func fakeSettings(t *testing.T) *settingsView {
+	t.Helper()
+	s := newSettingsView(ado.NewClient("org"), ado.ProjectInfo{ID: "p1", Name: "MITS11"}, nil)
+	var minRev ado.PolicyConfig
+	raw := `{"id":170,"isEnabled":true,"isBlocking":true,"type":{"id":"fa4e907d-c16b-4a4c-9dfa-4906e5d171dd","displayName":"Minimum number of reviewers"},
+		"settings":{"minimumApproverCount":1,"blockLastPusherVote":true,"scope":[{"refName":"refs/heads/develop","matchKind":"Exact","repositoryId":null}]}}`
+	if err := json.Unmarshal([]byte(raw), &minRev); err != nil {
+		t.Fatal(err)
+	}
+	s.update(settingsLoadedMsg{projectID: "p1", data: &ado.ProjectSettings{
+		Repos:        []ado.Repo{{ID: "r1", Name: "MITS11"}},
+		AllPipelines: []ado.Pipeline{{ID: 7, Name: "Build BE validation on PR"}},
+		Policies:     []ado.PolicyConfig{minRev},
+		Names:        map[string]string{},
+		Errs:         map[string]error{},
+	}})
+	return s
+}
+
+func TestPolicyFormEditsAndKeepsOtherSettings(t *testing.T) {
+	s := fakeSettings(t)
+	p := s.data.Policies[0]
+	f := s.policyForm(&p, p.Type.ID)
+	f.get("count").input.SetValue("2")
+	f.get("branch").input.SetValue("stable/*")
+	f.get("repo").choice = 1 // MITS11
+	if ch := f.changes(); len(ch) != 3 {
+		t.Fatalf("three changes expected, got %q", ch)
+	}
+	got, reviewers, refused := s.policyFromForm(f, p)
+	if refused != "" || reviewers != "" {
+		t.Fatalf("refused %q", refused)
+	}
+	if got.Settings["minimumApproverCount"] != 2 || got.Settings["blockLastPusherVote"] != true {
+		t.Fatalf("count should change and settings the form doesn't show stay: %v", got.Settings)
+	}
+	scope := got.Settings["scope"].([]any)[0].(map[string]any)
+	if scope["refName"] != "refs/heads/stable" || scope["matchKind"] != "Prefix" || scope["repositoryId"] != "r1" {
+		t.Fatalf("scope: %v", scope)
+	}
+	if p.Settings["minimumApproverCount"] != float64(1) {
+		t.Fatal("the loaded policy must not change until saved")
+	}
+}
+
+func TestPolicyFormRefusesBadInput(t *testing.T) {
+	s := fakeSettings(t)
+	build := s.policyForm(nil, ado.PolicyTypeBuild)
+	build.get("branch").input.SetValue("develop")
+	if _, _, why := s.policyFromForm(build, ado.PolicyConfig{Type: struct {
+		ID          string `json:"id"`
+		DisplayName string `json:"displayName"`
+	}{ID: ado.PolicyTypeBuild}}); why != "pick a pipeline" {
+		t.Fatalf("a build policy without a pipeline should be refused, got %q", why)
+	}
+	merge := s.policyForm(nil, policyTypeMergeStrategy)
+	merge.get("branch").input.SetValue("develop")
+	for _, k := range []string{"allowNoFastForward", "allowSquash", "allowRebase", "allowRebaseMerge"} {
+		merge.get(k).on = false
+	}
+	p := ado.PolicyConfig{}
+	p.Type.ID = policyTypeMergeStrategy
+	if _, _, why := s.policyFromForm(merge, p); why == "" {
+		t.Fatal("no merge type at all should be refused")
+	}
+}

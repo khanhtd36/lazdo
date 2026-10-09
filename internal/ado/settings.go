@@ -450,10 +450,13 @@ type ProjectSettings struct {
 	Policies    []PolicyConfig
 	Names       map[string]string // identity ID → name, for required reviewers
 	Pipelines   map[int]string    // build definition ID → name, for build policies
-	Queues      []AgentQueue
-	Connections []ServiceConnection
-	VarGroups   []VariableGroup
-	Errs        map[string]error // by section
+	// AllPipelines are the project's pipelines, to pick from when editing
+	// a build policy.
+	AllPipelines []Pipeline
+	Queues       []AgentQueue
+	Connections  []ServiceConnection
+	VarGroups    []VariableGroup
+	Errs         map[string]error // by section
 }
 
 func (c *Client) ProjectSettings(ctx context.Context, p ProjectInfo, repos []Repo) *ProjectSettings {
@@ -482,6 +485,7 @@ func (c *Client) ProjectSettings(ctx context.Context, p ProjectInfo, repos []Rep
 	run("permissions", func() (err error) { s.Permissions, err = c.ProjectPermissions(ctx, p.ID); return err })
 	run("policies", func() (err error) { return c.loadPolicies(ctx, p.ID, s) })
 	run("queues", func() (err error) { s.Queues, err = c.AgentQueues(ctx, p.ID); return err })
+	run("pipelines", func() (err error) { s.AllPipelines, err = c.Pipelines(ctx, p.ID); return err })
 	run("connections", func() (err error) { s.Connections, err = c.ServiceConnections(ctx, p.ID); return err })
 	run("variable groups", func() (err error) { s.VarGroups, err = c.VariableGroups(ctx, p.ID); return err })
 	wg.Wait()

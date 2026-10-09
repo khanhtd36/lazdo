@@ -159,7 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg, runLoadedMsg, logMsg, runTickMsg,
 		folderMsg, indexMsg, contentMsg, projectPRsMsg,
 		commitsMsg, releaseMsg, tagsMsg, tagInfoMsg, refsChangedMsg,
-		settingsLoadedMsg, settingsMembersMsg:
+		settingsLoadedMsg, settingsMembersMsg, settingsSavedMsg:
 		if m.project != nil {
 			return m, m.project.update(msg)
 		}
@@ -290,7 +290,7 @@ func (m Model) inTextInput() bool {
 		return m.help.typing
 	case m.modal != nil:
 		switch m.modal.(type) {
-		case *checkoutModal, *tagDialog:
+		case *checkoutModal, *tagDialog, *formModal:
 			return true
 		}
 		return false
