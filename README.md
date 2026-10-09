@@ -166,8 +166,10 @@ Inside a project:
   agent pools, service connections, variable groups). Branch policies are
   grouped by branch, each written as the rule it enforces; `enter` on a
   team or group lists its members, and in Permissions shows the group's
-  project-level permissions. Secret variables stay hidden. Read-only for
-  now; editing comes section by section.
+  project-level permissions. Secret variables stay hidden. Branch policies
+  are editable: `e` edits, `n` creates one, `space` turns it on or off,
+  `d` deletes; the form lists what will change before `ctrl+s` saves.
+  Other sections are read-only for now.
 
 **Checkout** (`c`, wherever a branch is shown) asks for a folder: the working
 directory if it is a clone of the repo, the last folder you used, or a new
