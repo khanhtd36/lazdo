@@ -331,13 +331,16 @@ func (d *detailModel) treeWidth() int {
 	if d.files.hideTree {
 		return 0
 	}
-	return min(40, max(20, d.width*30/100))
+	return min(40, max(20, (d.width-9)*30/100))
 }
 
 func (d *detailModel) diffWidth() int {
-	w := d.width - 1
+	if d.treeWidth() == 0 {
+		return max(20, d.width-5)
+	}
+	w := d.width - 9
 	if tw := d.treeWidth(); tw > 0 {
-		w -= tw + 1
+		w -= tw
 	}
 	return max(20, w)
 }

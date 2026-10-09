@@ -89,7 +89,9 @@ func (d *detailModel) copyCommit(id string) tea.Cmd {
 }
 
 func (d *detailModel) renderList() string {
-	return strings.Join(d.lists[d.tab].view(d.width-1, d.bodyHeight()), "\n")
+	h := d.bodyHeight()
+	lines := d.lists[d.tab].view(max(1, d.width-5), max(1, h-2))
+	return strings.Join(framePane(lines, d.width-1, h, true), "\n")
 }
 
 // --- Files ---
