@@ -242,7 +242,7 @@ func TestGroupSIDMatchesPermissions(t *testing.T) {
 // minimum-reviewers policy on develop.
 func fakeSettings(t *testing.T) *settingsView {
 	t.Helper()
-	s := newSettingsView(ado.NewClient("org"), ado.ProjectInfo{ID: "p1", Name: "MITS11"}, nil)
+	s := newSettingsView(ado.NewClient("org"), ado.ProjectInfo{ID: "p1", Name: "MITS11"})
 	var minRev ado.PolicyConfig
 	raw := `{"id":170,"isEnabled":true,"isBlocking":true,"type":{"id":"fa4e907d-c16b-4a4c-9dfa-4906e5d171dd","displayName":"Minimum number of reviewers"},
 		"settings":{"minimumApproverCount":1,"blockLastPusherVote":true,"scope":[{"refName":"refs/heads/develop","matchKind":"Exact","repositoryId":null}]}}`

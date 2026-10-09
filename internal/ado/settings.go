@@ -459,13 +459,8 @@ type ProjectSettings struct {
 	Errs         map[string]error // by section
 }
 
-func (c *Client) ProjectSettings(ctx context.Context, p ProjectInfo, repos []Repo) *ProjectSettings {
+func (c *Client) ProjectSettings(ctx context.Context, p ProjectInfo) *ProjectSettings {
 	s := &ProjectSettings{Errs: map[string]error{}}
-	for _, r := range repos {
-		if r.Project.ID == p.ID {
-			s.Repos = append(s.Repos, r)
-		}
-	}
 	var (
 		wg sync.WaitGroup
 		mu sync.Mutex
@@ -480,6 +475,7 @@ func (c *Client) ProjectSettings(ctx context.Context, p ProjectInfo, repos []Rep
 		})
 	}
 	run("overview", func() (err error) { s.Overview, err = c.Overview(ctx, p.ID); return err })
+	run("repos", func() (err error) { s.Repos, err = c.ProjectRepos(ctx, p.ID); return err })
 	run("teams", func() (err error) { s.Teams, err = c.Teams(ctx, p.ID); return err })
 	run("groups", func() (err error) { s.Groups, err = c.Groups(ctx, p.ID); return err })
 	run("permissions", func() (err error) { s.Permissions, err = c.ProjectPermissions(ctx, p.ID); return err })

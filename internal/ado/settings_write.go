@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
+	"strings"
 )
 
 // Repository and variable group writes for the Settings tab.
@@ -24,6 +26,17 @@ func (c *Client) UpdateRepo(ctx context.Context, r Repo, name, defaultBranch str
 		body["defaultBranch"] = "refs/heads/" + defaultBranch
 	}
 	return c.do(ctx, http.MethodPatch, c.repoPath(r.Project.ID)+"/"+r.ID, v71(), body, nil)
+}
+
+// ProjectRepos lists a project's repos straight from the project: unlike
+// the organization-wide list, it shows a repo the moment it is created.
+func (c *Client) ProjectRepos(ctx context.Context, projectID string) ([]Repo, error) {
+	var resp struct {
+		Value []Repo `json:"value"`
+	}
+	err := c.get(ctx, c.repoPath(projectID), v71(), &resp)
+	sort.Slice(resp.Value, func(i, j int) bool { return strings.ToLower(resp.Value[i].Name) < strings.ToLower(resp.Value[j].Name) })
+	return resp.Value, err
 }
 
 func (c *Client) CreateRepo(ctx context.Context, projectID, name string) error {
@@ -55,10 +68,12 @@ func (c *Client) EditVariableGroup(ctx context.Context, projectID string, id int
 	return c.do(ctx, http.MethodPut, path, v71(), g, nil)
 }
 
-func (c *Client) CreateVariableGroup(ctx context.Context, p ProjectInfo, name, description string) error {
+// CreateVariableGroup makes a group with its first variable: Azure DevOps
+// refuses an empty one.
+func (c *Client) CreateVariableGroup(ctx context.Context, p ProjectInfo, name, description string, first Variable) error {
 	body := map[string]any{
 		"name": name, "description": description, "type": "Vsts",
-		"variables": map[string]any{},
+		"variables": map[string]any{first.Name: map[string]any{"value": first.Value, "isSecret": first.Secret}},
 		"variableGroupProjectReferences": []any{map[string]any{
 			"name": name, "description": description,
 			"projectReference": map[string]string{"id": p.ID, "name": p.Name},

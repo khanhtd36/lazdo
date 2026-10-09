@@ -126,7 +126,7 @@ func newProject(client *ado.Client, p ado.ProjectInfo, prs []ado.PullRequest, re
 		return strings.ToLower(repos[i].Name) < strings.ToLower(repos[j].Name)
 	})
 	m := &projectModel{client: client, project: p, prs: prs, repos: repos, lastPush: map[string]time.Time{}}
-	m.settings = newSettingsView(client, p, repos)
+	m.settings = newSettingsView(client, p)
 	m.lists[projTabPRs].setItems(m.prItems())
 	m.lists[projTabRepos].setItems(m.repoItems())
 	return m

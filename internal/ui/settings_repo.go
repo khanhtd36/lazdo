@@ -178,6 +178,8 @@ func (s *settingsView) varKey(k string) (bool, tea.Cmd) {
 	case "d":
 		client, project := s.client, s.project.ID
 		switch {
+		case ok && v != nil && len(group.Variables) == 1:
+			return true, statusCmd("a variable group keeps at least one variable: delete the group (d on its name) instead")
 		case ok && v != nil:
 			name := v.Name
 			return true, showModal(newConfirm("Delete variable "+name+" from "+group.Name+"?", s.write("deleted "+name, func(ctx context.Context) error {
@@ -207,6 +209,12 @@ func (s *settingsView) varGroupForm(g *ado.VariableGroup) *formModal {
 		title = "New variable group"
 	}
 	fields := []*formField{formText("name", "Name", g.Name, ""), formText("description", "Description", g.Description, "")}
+	if creating { // Azure DevOps refuses a group without a variable
+		fields = append(fields,
+			formText("varName", "First variable", "", "a group needs at least one"),
+			formText("varValue", "Its value", "", ""),
+			formBool("varSecret", "Secret", false))
+	}
 	client, project, id := s.client, s.project, g.ID
 	return newForm(title, fields, func(f *formModal) (tea.Cmd, string) {
 		name, desc := f.get("name").value(), f.get("description").value()
@@ -214,8 +222,12 @@ func (s *settingsView) varGroupForm(g *ado.VariableGroup) *formModal {
 			return nil, "a variable group needs a name"
 		}
 		if creating {
+			first := ado.Variable{Name: f.get("varName").value(), Value: f.get("varValue").input.Value(), Secret: f.get("varSecret").on}
+			if first.Name == "" {
+				return nil, "a variable group needs its first variable"
+			}
 			return s.write("created variable group "+name, func(ctx context.Context) error {
-				return client.CreateVariableGroup(ctx, project, name, desc)
+				return client.CreateVariableGroup(ctx, project, name, desc, first)
 			}), ""
 		}
 		return s.write("saved variable group "+name, func(ctx context.Context) error {

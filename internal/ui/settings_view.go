@@ -40,7 +40,7 @@ func (s settingsSection) title() string {
 
 // errKey is the section's key in ProjectSettings.Errs.
 func (s settingsSection) errKey() string {
-	return [...]string{"overview", "teams", "groups", "permissions", "", "policies", "queues", "connections", "variable groups"}[s]
+	return [...]string{"overview", "teams", "groups", "permissions", "repos", "policies", "queues", "connections", "variable groups"}[s]
 }
 
 const settingsSidebar = 27 // fits "Service connections (12)"
@@ -48,7 +48,6 @@ const settingsSidebar = 27 // fits "Service connections (12)"
 type settingsView struct {
 	client  *ado.Client
 	project ado.ProjectInfo
-	repos   []ado.Repo
 
 	data    *ado.ProjectSettings
 	loading bool
@@ -82,8 +81,8 @@ type (
 	}
 )
 
-func newSettingsView(client *ado.Client, p ado.ProjectInfo, repos []ado.Repo) *settingsView {
-	s := &settingsView{client: client, project: p, repos: repos}
+func newSettingsView(client *ado.Client, p ado.ProjectInfo) *settingsView {
+	s := &settingsView{client: client, project: p}
 	s.rebuild()
 	return s
 }
@@ -93,11 +92,11 @@ func (s *settingsView) load() tea.Cmd {
 		return nil
 	}
 	s.loading = true
-	client, p, repos := s.client, s.project, s.repos
+	client, p := s.client, s.project
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		return settingsLoadedMsg{projectID: p.ID, data: client.ProjectSettings(ctx, p, repos)}
+		return settingsLoadedMsg{projectID: p.ID, data: client.ProjectSettings(ctx, p)}
 	}
 }
 
