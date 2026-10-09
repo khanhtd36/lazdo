@@ -384,13 +384,17 @@ func logLine(s string) string {
 }
 
 func (v *runView) view(width, height int) []string {
-	treeW := min(48, max(24, width*35/100))
-	logW := width - treeW - 1
-	tree := v.tree.view(treeW, height)
-	logLines := v.logView(logW, height)
+	innerWidth := max(1, width-8)
+	innerHeight := max(1, height-2)
+	treeW := min(48, max(24, innerWidth*35/100))
+	logW := innerWidth - treeW
+	tree := v.tree.view(treeW, innerHeight)
+	logLines := v.logView(logW, innerHeight)
+	treePane := framePane(tree, treeW+4, height, !v.logPane)
+	logPane := framePane(logLines, logW+4, height, v.logPane)
 	out := make([]string, height)
 	for i := range height {
-		out[i] = fit(tree[i], treeW) + styleDim.Render("│") + logLines[i]
+		out[i] = treePane[i] + logPane[i]
 	}
 	return out
 }

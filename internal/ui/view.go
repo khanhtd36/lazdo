@@ -13,15 +13,17 @@ import (
 )
 
 var (
-	styleTitle  = lipgloss.NewStyle().Bold(true)
-	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	styleCursor = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
-	styleDim    = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	styleGreen  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	styleYellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	styleRed    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	styleCyan   = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
-	styleDraft  = lipgloss.NewStyle().Foreground(lipgloss.Color("244")) // grayed: a draft isn't asking for review yet
+	styleTitle        = lipgloss.NewStyle().Bold(true)
+	styleHeader       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	styleCursor       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
+	styleDim          = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	styleGreen        = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	styleYellow       = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	styleRed          = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	styleCyan         = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	styleDraft        = lipgloss.NewStyle().Foreground(lipgloss.Color("244")) // grayed: a draft isn't asking for review yet
+	stylePanelFocused = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("14")).Padding(0, 1)
+	stylePanelBlurred = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240")).Padding(0, 1)
 )
 
 // Fixed widths of the right-hand columns; the title takes what's left.
@@ -119,26 +121,43 @@ func (m Model) View() string {
 	var b strings.Builder
 	b.WriteString(m.titleLine() + "\n")
 	if m.page == pageProjects {
-		for _, line := range padLines(m.projects.view(m.width-1, m.listHeight()), m.listHeight()) {
-			b.WriteString(truncate(line, m.width-1) + "\n")
+		listHeight := m.dashboardListHeight()
+		innerWidth := max(1, m.width-5)
+		lines := m.projects.view(innerWidth, listHeight)
+		lines = padLines(lines, listHeight)
+		panel := stylePanelFocused
+		if m.projects.list.typing {
+			panel = stylePanelBlurred
 		}
+		for i := range lines {
+			lines[i] = padRight(truncate(lines[i], innerWidth), innerWidth)
+		}
+		b.WriteString(panel.Render(strings.Join(lines, "\n")) + "\n")
 		b.WriteString(m.statusLine() + "\n")
 		b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width-1)))
 		return b.String()
 	}
 
 	rows := m.rows()
-	end := min(len(rows), m.offset+m.listHeight())
+	listHeight := m.dashboardListHeight()
+	innerWidth := max(1, m.width-5)
+	end := min(len(rows), m.offset+listHeight)
+	var panelLines []string
 	for i := m.offset; i < end; i++ {
 		prefix := "  "
 		if i == m.cursor {
 			prefix = styleCursor.Render("▌ ")
 		}
-		b.WriteString(truncate(prefix+m.renderRow(rows[i]), m.width-1) + "\n")
+		panelLines = append(panelLines, padRight(truncate(prefix+m.renderRow(rows[i]), innerWidth), innerWidth))
 	}
-	for i := end - m.offset; i < m.listHeight(); i++ {
-		b.WriteString("\n")
+	for i := end - m.offset; i < listHeight; i++ {
+		panelLines = append(panelLines, strings.Repeat(" ", innerWidth))
 	}
+	panel := stylePanelFocused
+	if m.filterTyping {
+		panel = stylePanelBlurred
+	}
+	b.WriteString(panel.Render(strings.Join(panelLines, "\n")) + "\n")
 	b.WriteString(m.statusLine() + "\n")
 	b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width-1)))
 	return b.String()

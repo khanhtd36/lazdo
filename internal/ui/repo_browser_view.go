@@ -79,24 +79,42 @@ func (b *repoBrowser) view(width, height int) []string {
 		return b.tagsView(width, height)
 	case repoTabFiles, repoTabCount:
 	}
-	bw, tw, cw := b.columns(width)
+	panes := 2
+	if !b.foldBranches(width) {
+		panes = 3
+	}
+	layoutWidth := width - 3*panes - 1
+	bw, tw, cw := b.columns(layoutWidth)
+	innerHeight := max(1, height-2)
 	var branchCol []string
 	if bw > 0 {
-		branchCol = b.paneList(&b.branches, bw, height, paneBranches, "branches", !b.branchesLoaded)
+		branchCol = framePane(b.paneList(&b.branches, bw, innerHeight, paneBranches, "branches", !b.branchesLoaded), bw+4, height, b.pane == paneBranches)
 	}
-	treeCol := b.paneList(&b.tree, tw, height, paneFiles, b.branch, len(b.tree.items) == 0)
-	contentCol := b.contentView(cw, height)
+	treeCol := framePane(b.paneList(&b.tree, tw, innerHeight, paneFiles, b.branch, len(b.tree.items) == 0), tw+4, height, b.pane == paneFiles)
+	contentCol := framePane(b.contentView(cw, innerHeight), cw+4, height, b.pane == paneContent)
 
 	out := make([]string, height)
-	sep := styleDim.Render("│")
 	for i := range height {
 		line := ""
 		if bw > 0 {
-			line = fit(branchCol[i], bw) + sep
+			line = branchCol[i]
 		}
-		out[i] = line + fit(treeCol[i], tw) + sep + contentCol[i]
+		out[i] = line + treeCol[i] + contentCol[i]
 	}
 	return out
+}
+
+func framePane(lines []string, width, height int, focused bool) []string {
+	style := stylePanelBlurred
+	if focused {
+		style = stylePanelFocused
+	}
+	contentWidth := max(1, width-4)
+	for i := range lines {
+		lines[i] = padRight(truncate(lines[i], contentWidth), contentWidth)
+	}
+	lines = padLines(lines, max(1, height-2))
+	return strings.Split(style.Render(strings.Join(lines, "\n")), "\n")
 }
 
 // tabsLine is the repo's Files / Commits / Tags switcher.
@@ -132,9 +150,9 @@ func (b *repoBrowser) commitsView(width, height int) []string {
 	if !b.foldBranches(width) {
 		bw = browserBranchesWidth
 	}
-	cw := width - bw
+	cw := width - 4
 	if bw > 0 {
-		cw--
+		cw -= bw + 4
 	}
 	head := "commits on " + b.branch
 	switch {
@@ -144,14 +162,15 @@ func (b *repoBrowser) commitsView(width, height int) []string {
 		head = h.release.tag.Name + " · no earlier version tag"
 	}
 	loading := h.commitList.items == nil && (h.commitsLoading || h.release != nil)
-	list := b.paneList(&h.commitList, cw, height, paneFiles, head, loading)
+	innerHeight := max(1, height-2)
+	list := framePane(b.paneList(&h.commitList, cw, innerHeight, paneFiles, head, loading), cw+4, height, b.pane == paneFiles)
 	if bw == 0 {
 		return list
 	}
-	branches := b.paneList(&b.branches, bw, height, paneBranches, "branches", !b.branchesLoaded)
+	branches := framePane(b.paneList(&b.branches, bw, innerHeight, paneBranches, "branches", !b.branchesLoaded), bw+4, height, b.pane == paneBranches)
 	out := make([]string, height)
 	for i := range height {
-		out[i] = fit(branches[i], bw) + styleDim.Render("│") + list[i]
+		out[i] = branches[i] + list[i]
 	}
 	return out
 }
@@ -160,7 +179,8 @@ func (b *repoBrowser) commitsView(width, height int) []string {
 func (b *repoBrowser) tagsView(width, height int) []string {
 	h := &b.hist
 	head := fmt.Sprintf("tags (%d) · newest version first", len(h.tags))
-	list := b.paneList(&h.tagList, width, height-2, paneFiles, head, !h.tagsLoaded)
+	innerHeight := max(1, height-2)
+	list := b.paneList(&h.tagList, width-2, innerHeight-2, paneFiles, head, !h.tagsLoaded)
 	detail := ""
 	if t, ok := b.selectedTag(); ok {
 		switch info, seen := h.tagInfo[t.Name]; {
@@ -172,7 +192,7 @@ func (b *repoBrowser) tagsView(width, height int) []string {
 			detail = info.Tagger + " · " + relTime(time.Since(info.Date), info.Date) + " · " + strings.ReplaceAll(info.Message, "\n", " ")
 		}
 	}
-	return append(list, styleDim.Render(strings.Repeat("─", max(0, width))), truncate(styleDim.Render(detail), width))
+	return framePane(append(list, styleDim.Render(strings.Repeat("─", max(0, width-2))), truncate(styleDim.Render(detail), width-2)), width, height, b.pane == paneFiles)
 }
 
 // paneList renders a list with a one-line heading; the heading is
@@ -297,13 +317,20 @@ func (b *repoBrowser) searchLine() (string, bool) {
 }
 
 func (b *repoBrowser) onMouse(msg tea.MouseMsg, by, width, height int) tea.Cmd {
-	bw, tw, _ := b.columns(width)
+	panes := 2
+	if !b.foldBranches(width) {
+		panes = 3
+	}
+	layoutWidth := width - 3*panes - 1
+	bw, tw, _ := b.columns(layoutWidth)
+	bw += 4
+	tw += 4
 	x := msg.X
 	pane := paneContent
 	switch {
 	case bw > 0 && x < bw:
 		pane = paneBranches
-	case x < bw+tw+1 || (bw == 0 && x < tw):
+	case x < bw+tw || (bw == 0 && x < tw):
 		pane = paneFiles
 	}
 	if d := wheelDelta(msg); d != 0 {

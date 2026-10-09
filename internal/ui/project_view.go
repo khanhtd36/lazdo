@@ -16,9 +16,16 @@ func (m *projectModel) view() string {
 	b.WriteString(truncate(m.titleLine(), m.width-1) + "\n")
 	b.WriteString(truncate(m.tabsLine(), m.width-1) + "\n")
 	b.WriteString(styleDim.Render(strings.Repeat("─", max(0, m.width-1))) + "\n")
-	for _, line := range m.body() {
-		b.WriteString(truncate(line, m.width-1) + "\n")
+	innerWidth := max(1, m.width-5)
+	lines := m.body()
+	for i := range lines {
+		lines[i] = padRight(truncate(lines[i], innerWidth), innerWidth)
 	}
+	panel := stylePanelFocused
+	if m.typing() {
+		panel = stylePanelBlurred
+	}
+	b.WriteString(panel.Render(strings.Join(lines, "\n")) + "\n")
 	status := m.status
 	if m.level == levelRun {
 		if s, ok := m.run.find.status(); ok {
@@ -179,15 +186,15 @@ func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 		}
 		return nil
 	}
-	by := msg.Y - projectBodyTop
+	by := msg.Y - projectBodyTop - 1 // below the panel's top border
 	if by < 0 || by >= m.bodyHeight() {
 		return nil
 	}
 	switch m.level {
 	case levelRun:
-		return m.run.onMouse(msg, by, m.width-1, m.bodyHeight())
+		return m.run.onMouse(msg, by, m.width-5, m.bodyHeight())
 	case levelRepo:
-		return m.browser.onMouse(msg, by, m.width-1, m.bodyHeight())
+		return m.browser.onMouse(msg, by, m.width-5, m.bodyHeight())
 	case levelTabs, levelRuns:
 	}
 	l := m.currentList()
@@ -202,8 +209,13 @@ func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 }
 
 func (v *runView) onMouse(msg tea.MouseMsg, by, width, height int) tea.Cmd {
-	treeW := min(48, max(24, width*35/100))
-	inTree := msg.X < treeW
+	innerWidth := max(1, width-8)
+	treeW := min(48, max(24, innerWidth*35/100))
+	inTree := msg.X < treeW+4
+	by-- // below the run pane's top border
+	if by < 0 || by >= max(1, height-2) {
+		return nil
+	}
 	if d := wheelDelta(msg); d != 0 {
 		if inTree {
 			v.tree.wheel(d)

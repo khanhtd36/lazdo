@@ -65,11 +65,11 @@ func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.clampCursor()
 		return m, nil
 	}
-	if !isClick(msg) || msg.Y < 1 || msg.Y > m.listHeight() {
+	if !isClick(msg) || msg.Y < 2 || msg.Y > m.dashboardListHeight()+1 {
 		return m, nil
 	}
 	rows := m.rows()
-	idx := m.offset + msg.Y - 1
+	idx := m.offset + msg.Y - 2
 	if idx >= len(rows) {
 		return m, nil
 	}
@@ -94,8 +94,8 @@ func (m Model) projectsMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		l.wheel(d)
 		return m, nil
 	}
-	y := msg.Y - 1 // below the title line
-	if !isClick(msg) || y < 0 || y >= m.listHeight() || !l.click(y) {
+	y := msg.Y - 2 // below the panel's top border
+	if !isClick(msg) || y < 0 || y >= m.dashboardListHeight() || !l.click(y) {
 		return m, nil
 	}
 	return m.onProjectsKey(tea.KeyMsg{Type: tea.KeyEnter})
@@ -119,7 +119,7 @@ func (d *detailModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 			return nil
 		}
 	}
-	by := msg.Y - detailBodyTop
+	by := msg.Y - detailBodyTop - 1 // below the detail body's top border
 	if by < 0 || by >= d.bodyHeight() || d.data == nil {
 		return nil
 	}

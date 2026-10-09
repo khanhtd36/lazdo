@@ -40,7 +40,7 @@ func TestDashboardClickSelectsThenOpens(t *testing.T) {
 	x, y := findRow(t, m.View(), "fix: click me")
 	next, _ := m.Update(click(x, y))
 	m = next.(Model)
-	if m.detail != nil || m.cursor != y-1 {
+	if m.detail != nil || m.cursor != 1 {
 		t.Fatalf("first click: detail open=%v cursor=%d", m.detail != nil, m.cursor)
 	}
 	next, _ = m.Update(click(x, y))

@@ -349,7 +349,7 @@ func (m Model) onProjectsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.status = ""
-	cmd, open := m.projects.key(msg, m.listHeight(), m.client)
+	cmd, open := m.projects.key(msg, m.dashboardListHeight(), m.client)
 	if open != nil {
 		open.width, open.height = m.width, m.height
 		m.project = open
@@ -438,7 +438,7 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onFilterKey(msg)
 	}
 	rows := m.rows()
-	half := max(1, m.listHeight()/2)
+	half := max(1, m.dashboardListHeight()/2)
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -595,7 +595,7 @@ func (m Model) nextHeader(rows []row, dir int) int {
 func (m *Model) clampCursor() {
 	n := len(m.rows())
 	m.cursor = max(0, min(m.cursor, n-1))
-	visible := m.listHeight()
+	visible := m.dashboardListHeight()
 	if m.cursor < m.offset {
 		m.offset = m.cursor
 	}
@@ -607,3 +607,6 @@ func (m *Model) clampCursor() {
 
 // listHeight is the number of rows left after the title and footer lines.
 func (m Model) listHeight() int { return m.height - 3 }
+
+// dashboardListHeight leaves room for the panel's top and bottom borders.
+func (m Model) dashboardListHeight() int { return max(1, m.height-5) }

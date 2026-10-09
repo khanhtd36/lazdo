@@ -128,8 +128,9 @@ func newProject(client *ado.Client, p ado.ProjectInfo, prs []ado.PullRequest, re
 
 func (m *projectModel) init() tea.Cmd { return m.loadPushes() }
 
-// bodyHeight leaves room for the title, tabs, rule, status and help lines.
-func (m *projectModel) bodyHeight() int { return max(1, m.height-5) }
+// bodyHeight leaves room for the title, tabs, rule, panel border, status and
+// help lines.
+func (m *projectModel) bodyHeight() int { return max(1, m.height-7) }
 
 // --- Loading ---
 
@@ -267,7 +268,7 @@ func (m *projectModel) key(msg tea.KeyMsg) tea.Cmd {
 	}
 	switch m.level {
 	case levelRepo:
-		if handled, cmd := m.browser.key(msg, m.width-1, m.bodyHeight()); handled {
+		if handled, cmd := m.browser.key(msg, m.width-5, m.bodyHeight()); handled {
 			return cmd
 		}
 		if msg.String() == "esc" {
@@ -277,7 +278,7 @@ func (m *projectModel) key(msg tea.KeyMsg) tea.Cmd {
 	case levelRuns:
 		return m.runsKey(msg)
 	case levelRun:
-		if handled, cmd := m.run.key(msg, m.bodyHeight()); handled {
+		if handled, cmd := m.run.key(msg, max(1, m.bodyHeight()-2)); handled {
 			return cmd
 		}
 		switch msg.String() {
