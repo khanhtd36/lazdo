@@ -209,9 +209,14 @@ func (s *settingsView) key(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 		}
 		return handled, nil
 	}
-	if s.section == secPolicies && !s.content.typing && s.data != nil {
-		if handled, cmd := s.policyKey(k); handled {
-			return true, cmd
+	if !s.content.typing && s.data != nil {
+		edit := map[settingsSection]func(string) (bool, tea.Cmd){
+			secPolicies: s.policyKey, secRepos: s.repoKey, secVarGroups: s.varKey,
+		}[s.section]
+		if edit != nil {
+			if handled, cmd := edit(k); handled {
+				return true, cmd
+			}
 		}
 	}
 	handled, activate := s.content.key(msg, height)
@@ -377,16 +382,7 @@ func (s *settingsView) contentItems() []pickItem {
 			items = append(items, settingsRow(c.Name+styleDim.Render("  "+c.Type+"  "+c.URL+"  ")+state, c))
 		}
 	case secVarGroups:
-		for _, g := range d.VarGroups {
-			items = append(items, settingsHeader(g.Name+"  "+g.Description))
-			for _, v := range g.Variables {
-				value := v.Value
-				if v.Secret {
-					value = styleDim.Render("•••••• (secret)")
-				}
-				items = append(items, settingsRow("  "+v.Name+styleDim.Render(" = ")+value, v))
-			}
-		}
+		items = varGroupItems(d.VarGroups)
 	case secCount:
 	}
 	return items

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/khanhtd36/lazdo/internal/ado"
@@ -303,5 +304,47 @@ func TestPolicyFormRefusesBadInput(t *testing.T) {
 	p.Type.ID = policyTypeMergeStrategy
 	if _, _, why := s.policyFromForm(merge, p); why == "" {
 		t.Fatal("no merge type at all should be refused")
+	}
+}
+
+func TestVariableFormRules(t *testing.T) {
+	s := fakeSettings(t)
+	g := ado.VariableGroup{ID: 3, Name: "ArbinCloud", Variables: []ado.Variable{{Name: "GITHUB_ACTOR", Value: "x"}, {Name: "GITHUB_TOKEN", Secret: true}}}
+	s.data.VarGroups = []ado.VariableGroup{g}
+	submit := func(f *formModal) string {
+		_, why := f.save(f)
+		return why
+	}
+	add := s.variableForm(g, nil)
+	add.get("name").input.SetValue("github_actor")
+	if why := submit(add); !strings.Contains(why, "already has") {
+		t.Fatalf("a taken name should be refused, got %q", why)
+	}
+	add.get("name").input.SetValue("NEW_SECRET")
+	add.get("secret").on = true
+	if why := submit(add); why != "a new secret needs a value" {
+		t.Fatalf("got %q", why)
+	}
+	keep := s.variableForm(g, &g.Variables[1])
+	if keep.get("value").input.Value() != "" {
+		t.Fatal("a secret's value must never be filled in")
+	}
+	keep.get("name").input.SetValue("GITHUB_PAT") // rename, keep the stored secret
+	if why := submit(keep); why != "" {
+		t.Fatalf("renaming a secret without retyping it should be allowed, got %q", why)
+	}
+}
+
+func TestDeleteRepoNeedsItsName(t *testing.T) {
+	c := newNameConfirm("Delete?", "MITS11", func() tea.Msg { return nil })
+	for _, r := range "MITS1" {
+		c.update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	if m, _ := c.update(tea.KeyMsg{Type: tea.KeyEnter}); m == nil {
+		t.Fatal("a wrong name must not confirm")
+	}
+	c.update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	if m, cmd := c.update(tea.KeyMsg{Type: tea.KeyEnter}); m != nil || cmd == nil {
+		t.Fatal("the exact name should confirm")
 	}
 }

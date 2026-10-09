@@ -290,7 +290,7 @@ func (m Model) inTextInput() bool {
 		return m.help.typing
 	case m.modal != nil:
 		switch m.modal.(type) {
-		case *checkoutModal, *tagDialog, *formModal:
+		case *checkoutModal, *tagDialog, *formModal, *nameConfirm:
 			return true
 		}
 		return false
