@@ -96,11 +96,21 @@ func (c *Client) post(ctx context.Context, path string, query url.Values, in, ou
 }
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, in, out any) error {
+	return c.doAt(ctx, "dev.azure.com", method, path, query, in, out)
+}
+
+// vssps calls the identity host, where security groups and their members
+// live; the rest of the API is on dev.azure.com.
+func (c *Client) vssps(ctx context.Context, method, path string, query url.Values, in, out any) error {
+	return c.doAt(ctx, "vssps.dev.azure.com", method, path, query, in, out)
+}
+
+func (c *Client) doAt(ctx context.Context, host, method, path string, query url.Values, in, out any) error {
 	token, err := c.accessToken(ctx)
 	if err != nil {
 		return err
 	}
-	u := "https://dev.azure.com/" + url.PathEscape(c.Org) + path
+	u := "https://" + host + "/" + url.PathEscape(c.Org) + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}

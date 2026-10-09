@@ -20,6 +20,7 @@ const (
 	projTabRepos projectTab = iota
 	projTabPRs
 	projTabPipelines
+	projTabSettings
 	projTabCount
 )
 
@@ -31,6 +32,8 @@ func (t projectTab) title() string {
 		return "Repos"
 	case projTabPipelines:
 		return "Pipelines"
+	case projTabSettings:
+		return "Settings"
 	default:
 		return "?"
 	}
@@ -74,6 +77,8 @@ type projectModel struct {
 	runsLoading bool
 
 	run *runView
+
+	settings *settingsView
 
 	err           error
 	status        string
@@ -121,6 +126,7 @@ func newProject(client *ado.Client, p ado.ProjectInfo, prs []ado.PullRequest, re
 		return strings.ToLower(repos[i].Name) < strings.ToLower(repos[j].Name)
 	})
 	m := &projectModel{client: client, project: p, prs: prs, repos: repos, lastPush: map[string]time.Time{}}
+	m.settings = newSettingsView(client, p, repos)
 	m.lists[projTabPRs].setItems(m.prItems())
 	m.lists[projTabRepos].setItems(m.repoItems())
 	return m
@@ -247,6 +253,8 @@ func (m *projectModel) update(msg tea.Msg) tea.Cmd {
 			m.runsLoading, m.err = false, msg.err
 			m.runList.setItems(m.runItems(msg.runs))
 		}
+	case settingsLoadedMsg, settingsMembersMsg:
+		return m.settings.update(msg)
 	case runLoadedMsg, logMsg, runTickMsg:
 		if m.run != nil {
 			return m.run.update(msg)
@@ -298,7 +306,7 @@ func (m *projectModel) key(msg tea.KeyMsg) tea.Cmd {
 
 func isProjectTabKey(k string) bool {
 	switch k {
-	case "1", "2", "3", "[", "]":
+	case "1", "2", "3", "4", "[", "]":
 		return true
 	}
 	return false
@@ -310,11 +318,20 @@ func (m *projectModel) closeRequested(msg tea.KeyMsg) bool {
 	if msg.String() != "esc" || m.level != levelTabs {
 		return false
 	}
+	if m.tab == projTabSettings {
+		s := m.settings // esc steps out of a detail, the content, a filter first
+		return s.detail == nil && !s.onRight && s.sections.filter == "" && !s.typing()
+	}
 	l := &m.lists[m.tab]
 	return l.filter == "" && !l.typing
 }
 
 func (m *projectModel) tabsKey(msg tea.KeyMsg) tea.Cmd {
+	if m.tab == projTabSettings {
+		if handled, cmd := m.settings.key(msg, m.bodyHeight()); handled {
+			return cmd
+		}
+	}
 	l := &m.lists[m.tab]
 	handled, activate := l.key(msg, m.bodyHeight())
 	if activate {
@@ -325,7 +342,7 @@ func (m *projectModel) tabsKey(msg tea.KeyMsg) tea.Cmd {
 	}
 	it, ok := l.selected()
 	switch msg.String() {
-	case "1", "2", "3":
+	case "1", "2", "3", "4":
 		m.tab = projectTab(msg.String()[0] - '1')
 		return m.onTabChange()
 	case "]":
@@ -342,7 +359,7 @@ func (m *projectModel) tabsKey(msg tea.KeyMsg) tea.Cmd {
 			return m.loadPipelines()
 		case projTabPRs:
 			return m.loadPRs()
-		case projTabCount:
+		case projTabSettings, projTabCount: // Settings reloads itself on r
 		}
 	case "o":
 		if !ok {
@@ -375,8 +392,11 @@ func (m *projectModel) tabsKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *projectModel) onTabChange() tea.Cmd {
-	if m.tab == projTabPipelines && !m.pipelinesLoaded {
+	switch {
+	case m.tab == projTabPipelines && !m.pipelinesLoaded:
 		return m.loadPipelines()
+	case m.tab == projTabSettings && m.settings.data == nil:
+		return m.settings.load()
 	}
 	return nil
 }

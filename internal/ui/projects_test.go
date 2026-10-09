@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -199,5 +200,39 @@ func TestRunTreeJumpsBetweenJobs(t *testing.T) {
 		if name() != want {
 			t.Fatalf("K should go to %q, got %q", want, name())
 		}
+	}
+}
+
+func TestPolicySentences(t *testing.T) {
+	cfg := func(raw string) ado.PolicyConfig {
+		var p ado.PolicyConfig
+		if err := json.Unmarshal([]byte(raw), &p); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	cases := map[string]string{
+		`{"isEnabled":true,"isBlocking":true,"type":{"id":"fa4e907d-c16b-4a4c-9dfa-4906e5d171dd"},"settings":{"minimumApproverCount":2,"resetOnSourcePush":true}}`: "✓ At least 2 reviewers must approve, reset on new pushes · blocking",
+		`{"isEnabled":true,"isBlocking":true,"type":{"id":"0609b952-1397-4640-95ec-e00a01b2c241"},"settings":{"buildDefinitionId":7,"validDuration":720}}`:         "✓ Build BE validation on PR must pass, expires after 12h · blocking",
+		`{"isEnabled":false,"isBlocking":false,"type":{"id":"fd2167ab-b0be-447a-8ec8-39368250530e"},"settings":{"requiredReviewerIds":["ABC"]}}`:                   "○ Required reviewers: Hung Nguyen · optional · off",
+		`{"isEnabled":true,"isBlocking":true,"type":{"id":"fa4e907d-c16b-4a4c-9dfa-4916e5d171ab"},"settings":{"allowSquash":true,"allowRebase":true}}`:             "✓ Merge types: rebase, squash · blocking",
+	}
+	names, pipelines := map[string]string{"abc": "Hung Nguyen"}, map[int]string{7: "Build BE validation on PR"}
+	for raw, want := range cases {
+		if got := ansi.Strip(policySentence(cfg(raw), names, pipelines)); got != want {
+			t.Errorf("got  %q\nwant %q", got, want)
+		}
+	}
+	scoped := cfg(`{"settings":{"scope":[{"refName":"refs/heads/stable","matchKind":"Prefix","repositoryId":"r1"}]}}`)
+	if b, r := scoped.Scope(); b != "stable/*" || r != "r1" {
+		t.Errorf("prefix scope: %q %q", b, r)
+	}
+}
+
+func TestGroupSIDMatchesPermissions(t *testing.T) {
+	// A graph group descriptor is "vssgp." and the group's SID in base64.
+	g := ado.Group{Descriptor: "vssgp.Uy0xLTktMTU1MTM3NDI0NS0xMjA0NDAwOTY5"}
+	if g.SID() != "S-1-9-1551374245-1204400969" {
+		t.Fatalf("SID %q", g.SID())
 	}
 }

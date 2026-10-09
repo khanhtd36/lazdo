@@ -158,7 +158,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.projects.onLoaded(msg)
 	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg, runLoadedMsg, logMsg, runTickMsg,
 		folderMsg, indexMsg, contentMsg, projectPRsMsg,
-		commitsMsg, releaseMsg, tagsMsg, tagInfoMsg, refsChangedMsg:
+		commitsMsg, releaseMsg, tagsMsg, tagInfoMsg, refsChangedMsg,
+		settingsLoadedMsg, settingsMembersMsg:
 		if m.project != nil {
 			return m, m.project.update(msg)
 		}

@@ -75,6 +75,9 @@ type pickList struct {
 	typing bool
 	cursor int // index into visible()
 	offset int
+	// unfocused draws the cursor faintly: the list is beside the one keys
+	// go to.
+	unfocused bool
 }
 
 func (l *pickList) setItems(items []pickItem) {
@@ -272,6 +275,9 @@ func (l *pickList) view(width, height int) []string {
 		prefix := "  "
 		if i == l.cursor && !it.header {
 			prefix = styleCursor.Render("▌ ")
+			if l.unfocused {
+				prefix = styleDim.Render("▏ ")
+			}
 		}
 		out = append(out, truncate(prefix+it.render(width-2), width))
 	}

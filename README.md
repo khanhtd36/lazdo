@@ -161,6 +161,14 @@ Inside a project:
   appears once the step ends (Azure DevOps only streams live logs to the
   browser).
 
+- **Settings**: the project's settings, section by section (Overview,
+  teams, security groups, permissions, repositories, branch policies,
+  agent pools, service connections, variable groups). Branch policies are
+  grouped by branch, each written as the rule it enforces; `enter` on a
+  team or group lists its members, and in Permissions shows the group's
+  project-level permissions. Secret variables stay hidden. Read-only for
+  now; editing comes section by section.
+
 **Checkout** (`c`, wherever a branch is shown) asks for a folder: the working
 directory if it is a clone of the repo, the last folder you used, or a new
 `./<repo>` folder. An existing clone is fetched and switched, a missing or

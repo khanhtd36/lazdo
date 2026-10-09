@@ -118,8 +118,15 @@ var (
 		{keys: "/", desc: "filter conflicts", press: "/", hint: "filter"},
 		{keys: "y", desc: "copy the path", press: "y", hint: "copy"},
 	}
+	settingsKeys = []binding{
+		{keys: "tab / h / l", desc: "sections ⇄ content", press: "tab", hint: "pane"},
+		{keys: "enter", desc: "a team's or group's members; a group's permissions (in Permissions)", press: "enter", hint: "open"},
+		{keys: "J / K", desc: "next / previous branch (Branch policies)", press: "J"},
+		{keys: "/", desc: "filter the list", press: "/", hint: "filter"},
+		{keys: "r", desc: "reload the settings", press: "r", hint: "refresh"},
+	}
 	projectKeys = []binding{
-		{keys: "1-3", desc: "Repos, Pull requests, Pipelines tab", hint: "tabs"},
+		{keys: "1-4", desc: "Repos, Pull requests, Pipelines, Settings tab", hint: "tabs"},
 		{keys: "[ / ]", desc: "previous / next tab", press: "]"},
 		{keys: "enter", desc: "open: repo browser, pull request, pipeline runs", press: "enter", hint: "open"},
 		{keys: "/", desc: "filter the list", press: "/", hint: "filter"},
@@ -261,6 +268,9 @@ func (m *projectModel) helpGroups() []bindingGroup {
 	case levelRun:
 		return withCommon(bindingGroup{"Run", runKeys}, bindingGroup{"Project", projectKeys[:2]})
 	case levelTabs:
+	}
+	if m.tab == projTabSettings {
+		return withCommon(bindingGroup{"Settings", settingsKeys}, bindingGroup{"Project", projectKeys[:2]})
 	}
 	return withCommon(bindingGroup{"Project", projectKeys})
 }

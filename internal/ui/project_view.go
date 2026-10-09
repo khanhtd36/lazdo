@@ -73,7 +73,7 @@ func (m *projectModel) tabLabels() []string {
 	labels := make([]string, 0, projTabCount)
 	for t := range projTabCount {
 		label := fmt.Sprintf("%d %s", t+1, t.title())
-		if t != projTabPipelines || m.pipelinesLoaded {
+		if t != projTabSettings && (t != projTabPipelines || m.pipelinesLoaded) {
 			label += fmt.Sprintf(" (%d)", counts[t])
 		}
 		labels = append(labels, label)
@@ -128,6 +128,9 @@ func (m *projectModel) body() []string {
 	if m.tab == projTabPipelines && !m.pipelinesLoaded {
 		return padLines([]string{styleDim.Render("  loading pipelines…")}, h)
 	}
+	if m.tab == projTabSettings {
+		return m.settings.view(w, h)
+	}
 	return m.lists[m.tab].view(w, h)
 }
 
@@ -159,7 +162,11 @@ func (m *projectModel) typing() bool {
 		return m.browser.typing()
 	case levelRun:
 		return m.run.tree.typing || m.run.find.typing
-	case levelTabs, levelRuns:
+	case levelTabs:
+		if m.tab == projTabSettings {
+			return m.settings.typing()
+		}
+	case levelRuns:
 	}
 	return m.currentList().typing
 }
