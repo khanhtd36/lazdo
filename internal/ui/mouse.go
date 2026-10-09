@@ -61,31 +61,53 @@ func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m.projectsMouse(msg)
 	}
 	if d := wheelDelta(msg); d != 0 {
-		m.cursor += d
-		m.clampCursor()
+		m.paneCursors[m.dashboardPane] += d
+		m.clampDashboard()
 		return m, nil
 	}
-	if !isClick(msg) || msg.Y < 2 || msg.Y > m.dashboardListHeight()+1 {
+	if !isClick(msg) {
 		return m, nil
 	}
-	rows := m.rows()
-	idx := m.offset + msg.Y - 2
-	if idx >= len(rows) {
+	section, ok := m.dashboardPaneAt(msg.X, msg.Y)
+	if !ok {
 		return m, nil
 	}
-	r := rows[idx]
-	switch {
-	case r.pr == nil:
-		m.cursor = idx
-		kind := m.sections[r.section].Kind
-		m.collapsed[kind] = !m.collapsed[kind]
-	case idx == m.cursor:
-		return m.openDetail(r.pr)
-	default:
-		m.cursor = idx
+	previousPane := m.dashboardPane
+	m.dashboardPane = section
+	index := m.paneOffsets[section] + msg.Y - m.dashboardPaneTop(section) - 2
+	items := m.dashboardItems(section)
+	if index < 0 || index >= len(items) {
+		return m, nil
 	}
-	m.clampCursor()
+	if section == previousPane && index == m.paneCursors[section] {
+		return m.openDetail(items[index])
+	}
+	m.paneCursors[section] = index
+	m.clampDashboard()
 	return m, nil
+}
+
+func (m Model) dashboardPaneTop(section int) int {
+	if section < 2 {
+		return 1
+	}
+	return 1 + max(3, (m.height-3)/2)
+}
+
+func (m Model) dashboardPaneAt(x, y int) (int, bool) {
+	panelWidth := max(20, (m.width-3)/2)
+	if y < 1 || y >= 1+2*max(3, (m.height-3)/2) {
+		return 0, false
+	}
+	column := 0
+	if x >= panelWidth {
+		column = 1
+	}
+	row := 0
+	if y >= m.dashboardPaneTop(2) {
+		row = 1
+	}
+	return row*2 + column, true
 }
 
 func (m Model) projectsMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
@@ -94,8 +116,8 @@ func (m Model) projectsMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		l.wheel(d)
 		return m, nil
 	}
-	y := msg.Y - 2 // below the panel's top border
-	if !isClick(msg) || y < 0 || y >= m.dashboardListHeight() || !l.click(y) {
+	y := msg.Y - 1 // below the title line
+	if !isClick(msg) || y < 0 || y >= m.listHeight() || !l.click(y) {
 		return m, nil
 	}
 	return m.onProjectsKey(tea.KeyMsg{Type: tea.KeyEnter})
@@ -119,7 +141,7 @@ func (d *detailModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 			return nil
 		}
 	}
-	by := msg.Y - detailBodyTop - 1 // below the detail body's top border
+	by := msg.Y - detailBodyTop
 	if by < 0 || by >= d.bodyHeight() || d.data == nil {
 		return nil
 	}

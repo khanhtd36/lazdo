@@ -30,9 +30,6 @@ func (d *detailModel) view() string {
 		body = lipgloss.Place(d.width-1, d.bodyHeight(), lipgloss.Center, lipgloss.Center, d.modal.view(d.width))
 	}
 	lines := strings.Split(body, "\n")
-	if d.modal == nil {
-		lines = framePane(lines, d.width-1, d.bodyHeight(), true)
-	}
 	for i := range d.bodyHeight() {
 		line := ""
 		if i < len(lines) {

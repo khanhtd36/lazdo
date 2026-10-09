@@ -138,6 +138,28 @@ func TestHalfPageMovesEveryList(t *testing.T) {
 	}
 }
 
+func TestDashboardTabsMovePanesAndArrowsMoveItems(t *testing.T) {
+	m := views(t)["dashboard"]
+	if m.dashboardPane != 0 {
+		t.Fatalf("initial dashboard pane = %d, want 0", m.dashboardPane)
+	}
+	next, _ := m.Update(keyMsg("tab"))
+	m = next.(Model)
+	if m.dashboardPane != 1 {
+		t.Fatalf("tab moved to pane %d, want 1", m.dashboardPane)
+	}
+	next, _ = m.Update(keyMsg("shift+tab"))
+	m = next.(Model)
+	if m.dashboardPane != 0 {
+		t.Fatalf("shift+tab moved to pane %d, want 0", m.dashboardPane)
+	}
+	next, _ = m.Update(keyMsg("down"))
+	m = next.(Model)
+	if m.paneCursors[0] != 1 {
+		t.Fatalf("down moved item cursor to %d, want 1", m.paneCursors[0])
+	}
+}
+
 func TestFootersComeFromTheKeyTable(t *testing.T) {
 	for name, m := range views(t) {
 		if m.modal != nil {

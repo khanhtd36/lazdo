@@ -43,6 +43,9 @@ type Model struct {
 	fetchedAt time.Time
 
 	cursor, offset int
+	dashboardPane  int
+	paneCursors    [4]int
+	paneOffsets    [4]int
 	width, height  int
 	sem            chan struct{}
 
@@ -148,6 +151,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.clampCursor()
+		m.clampDashboard()
 		if m.detail != nil {
 			m.detail.resize(msg.Width, msg.Height)
 		}
@@ -349,7 +353,7 @@ func (m Model) onProjectsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.status = ""
-	cmd, open := m.projects.key(msg, m.dashboardListHeight(), m.client)
+	cmd, open := m.projects.key(msg, m.listHeight(), m.client)
 	if open != nil {
 		open.width, open.height = m.width, m.height
 		m.project = open
@@ -429,6 +433,7 @@ func (m Model) onList(msg listMsg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.fetchBuild(pr))
 	}
 	m.clampCursor()
+	m.clampDashboard()
 	return m, tea.Batch(cmds...)
 }
 
@@ -437,27 +442,29 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.filterTyping {
 		return m.onFilterKey(msg)
 	}
-	rows := m.rows()
-	half := max(1, m.dashboardListHeight()/2)
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
+	case "tab":
+		if len(m.sections) > 0 {
+			m.dashboardPane = (m.dashboardPane + 1) % len(m.sections)
+		}
+	case "shift+tab":
+		if len(m.sections) > 0 {
+			m.dashboardPane = (m.dashboardPane + len(m.sections) - 1) % len(m.sections)
+		}
 	case "j", "down":
-		m.cursor++
+		m.paneCursors[m.dashboardPane]++
 	case "k", "up":
-		m.cursor--
+		m.paneCursors[m.dashboardPane]--
 	case "ctrl+d", "pgdown":
-		m.cursor += half
+		m.paneCursors[m.dashboardPane] += max(1, m.paneHeight()/2)
 	case "ctrl+u", "pgup":
-		m.cursor -= half
+		m.paneCursors[m.dashboardPane] -= max(1, m.paneHeight()/2)
 	case "g", "home":
-		m.cursor = 0
+		m.paneCursors[m.dashboardPane] = 0
 	case "G", "end":
-		m.cursor = len(rows) - 1
-	case "J":
-		m.cursor = m.nextHeader(rows, 1)
-	case "K":
-		m.cursor = m.nextHeader(rows, -1)
+		m.paneCursors[m.dashboardPane] = len(m.dashboardItems(m.dashboardPane)) - 1
 	case "/":
 		m.filterTyping = true
 	case "esc":
@@ -468,26 +475,23 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.fetchList()
 		}
 	case "enter", " ":
-		if r, ok := m.selected(rows); ok && r.pr == nil {
-			kind := m.sections[r.section].Kind
-			m.collapsed[kind] = !m.collapsed[kind]
-		} else if ok {
-			return m.openDetail(r.pr)
+		if pr, ok := m.selectedDashboardPR(); ok {
+			return m.openDetail(pr)
 		}
 	case "o":
-		if r, ok := m.selected(rows); ok && r.pr != nil {
-			return m, m.openSelected(r.pr)
+		if pr, ok := m.selectedDashboardPR(); ok {
+			return m, m.openSelected(pr)
 		}
 	case "y":
-		if r, ok := m.selected(rows); ok && r.pr != nil {
-			return m, copyPR(m.client.Org, *r.pr)
+		if pr, ok := m.selectedDashboardPR(); ok {
+			return m, copyPR(m.client.Org, *pr)
 		}
 	case "c":
-		if r, ok := m.selected(rows); ok && r.pr != nil {
-			return m, prCheckout(m.client.Org, *r.pr)
+		if pr, ok := m.selectedDashboardPR(); ok {
+			return m, prCheckout(m.client.Org, *pr)
 		}
 	}
-	m.clampCursor()
+	m.clampDashboard()
 	return m, nil
 }
 
@@ -501,17 +505,17 @@ func (m Model) onFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filter, m.filterTyping = "", false
 	case "enter":
 		m.filterTyping = false
-		if r, ok := m.selected(m.rows()); ok && r.pr != nil {
-			return m.openDetail(r.pr)
+		if pr, ok := m.selectedDashboardPR(); ok {
+			return m.openDetail(pr)
 		}
 	case "backspace":
 		if r := []rune(m.filter); len(r) > 0 {
 			m.filter = string(r[:len(r)-1])
 		}
 	case "up", "ctrl+k", "ctrl+p":
-		m.cursor--
+		m.paneCursors[m.dashboardPane]--
 	case "down", "ctrl+j", "ctrl+n":
-		m.cursor++
+		m.paneCursors[m.dashboardPane]++
 	default:
 		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
 			s := string(msg.Runes)
@@ -519,11 +523,57 @@ func (m Model) onFilterKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				s = " "
 			}
 			m.filter += s
-			m.cursor = 1 // the first match, below its section header
+			m.paneCursors[m.dashboardPane] = 0
 		}
 	}
-	m.clampCursor()
+	m.clampDashboard()
 	return m, nil
+}
+
+func (m Model) dashboardItems(section int) []*ado.PullRequest {
+	if section < 0 || section >= len(m.sections) {
+		return nil
+	}
+	matched := m.filterMatches()
+	items := make([]*ado.PullRequest, 0, len(m.sections[section].PRs))
+	for i := range m.sections[section].PRs {
+		pr := &m.sections[section].PRs[i]
+		if matched == nil || matched[pr.ID] {
+			items = append(items, pr)
+		}
+	}
+	return items
+}
+
+func (m Model) selectedDashboardPR() (*ado.PullRequest, bool) {
+	items := m.dashboardItems(m.dashboardPane)
+	i := m.paneCursors[m.dashboardPane]
+	if i < 0 || i >= len(items) {
+		return nil, false
+	}
+	return items[i], true
+}
+
+func (m Model) paneHeight() int { return max(1, (m.height-3)/2-2) }
+
+func (m *Model) clampDashboard() {
+	if len(m.sections) == 0 {
+		return
+	}
+	m.dashboardPane = max(0, min(m.dashboardPane, len(m.sections)-1))
+	for i := range m.sections {
+		items := m.dashboardItems(i)
+		m.paneCursors[i] = max(0, min(m.paneCursors[i], len(items)-1))
+		visible := m.paneHeight()
+		if m.paneCursors[i] < m.paneOffsets[i] {
+			m.paneOffsets[i] = m.paneCursors[i]
+		}
+		if m.paneCursors[i] >= m.paneOffsets[i]+visible {
+			m.paneOffsets[i] = m.paneCursors[i] - visible + 1
+		}
+		m.paneOffsets[i] = max(0, min(m.paneOffsets[i], max(0, len(items)-visible)))
+	}
+	m.cursor = m.paneCursors[m.dashboardPane]
 }
 
 func (m Model) openSelected(pr *ado.PullRequest) tea.Cmd {
@@ -595,7 +645,7 @@ func (m Model) nextHeader(rows []row, dir int) int {
 func (m *Model) clampCursor() {
 	n := len(m.rows())
 	m.cursor = max(0, min(m.cursor, n-1))
-	visible := m.dashboardListHeight()
+	visible := m.listHeight()
 	if m.cursor < m.offset {
 		m.offset = m.cursor
 	}
@@ -607,6 +657,3 @@ func (m *Model) clampCursor() {
 
 // listHeight is the number of rows left after the title and footer lines.
 func (m Model) listHeight() int { return m.height - 3 }
-
-// dashboardListHeight leaves room for the panel's top and bottom borders.
-func (m Model) dashboardListHeight() int { return max(1, m.height-5) }
