@@ -259,14 +259,13 @@ func (d *detailModel) overviewMouse(msg tea.MouseMsg, by int) tea.Cmd {
 func (d *detailModel) filesMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	f := &d.files
 	tw := d.treeWidth()
-	if tw > 0 && msg.X < tw+4 {
-		return d.treeMouse(msg, by-1)
+	if tw > 0 && msg.X < tw {
+		return d.treeMouse(msg, by)
 	}
 	dx := msg.X
 	if tw > 0 {
-		dx -= tw + 4
+		dx -= tw + 1
 	}
-	by-- // below the diff pane's top border
 	lines := d.diffLines()
 	if delta := wheelDelta(msg); delta != 0 {
 		f.cursor = max(0, min(f.cursor+delta, len(lines)-1))

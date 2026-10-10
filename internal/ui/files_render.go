@@ -220,18 +220,15 @@ func (d *detailModel) threadRows(ch *ado.Change, i int) []string {
 
 func (d *detailModel) renderFiles() string {
 	h := d.bodyHeight()
-	innerHeight := max(1, h-2)
-	diff := d.renderDiffPane(innerHeight)
+	diff := d.renderDiffPane(h)
 	tw := d.treeWidth()
 	if tw == 0 {
-		return strings.Join(framePane(diff, d.diffWidth()+4, h, d.files.pane == paneDiff), "\n")
+		return strings.Join(diff, "\n")
 	}
-	tree := d.renderTree(innerHeight, tw)
-	tree = framePane(tree, tw+4, h, d.files.pane == paneTree)
-	diff = framePane(diff, d.diffWidth()+4, h, d.files.pane == paneDiff)
+	tree := d.renderTree(h, tw)
 	out := make([]string, h)
 	for i := range h {
-		out[i] = tree[i] + diff[i]
+		out[i] = fit(tree[i], tw) + styleDim.Render("│") + diff[i]
 	}
 	return strings.Join(out, "\n")
 }
