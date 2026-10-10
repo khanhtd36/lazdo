@@ -218,19 +218,20 @@ func (d *detailModel) threadRows(ch *ado.Change, i int) []string {
 
 // --- Whole tab ---
 
+// renderFiles frames the file tree and the diff. The diff's heading row
+// becomes its frame's title, so its rows keep their places; the tree's
+// rows start below its frame's top edge.
 func (d *detailModel) renderFiles() string {
 	h := d.bodyHeight()
-	diff := d.renderDiffPane(h)
+	onTree := d.files.pane == paneTree && d.treeWidth() > 0
+	diff := framed(d.renderDiffPane(h-1), d.diffWidth()+2, !onTree)
 	tw := d.treeWidth()
 	if tw == 0 {
-		return strings.Join(diff, "\n")
+		return strings.Join(framePanes(h, diff), "\n")
 	}
-	tree := d.renderTree(h, tw)
-	out := make([]string, h)
-	for i := range h {
-		out[i] = fit(tree[i], tw) + styleDim.Render("│") + diff[i]
-	}
-	return strings.Join(out, "\n")
+	d.files.tree.unfocused = !onTree
+	tree := pane{title: "Files", width: tw, lines: d.renderTree(h-2, tw-2), focused: onTree}
+	return strings.Join(framePanes(h, tree, diff), "\n")
 }
 
 func (d *detailModel) renderTree(h, width int) []string {
@@ -263,7 +264,7 @@ func (d *detailModel) renderDiffPane(h int) []string {
 	if ch != nil {
 		header += "  " + ch.Item.Path
 	}
-	out[0] = truncate(header+styleDim.Render("  · "+mode+" (S) · u compare · z tree"), dw)
+	out[0] = truncate(header+"  · "+mode, dw) // the pane's title; S, u and z are in the help
 
 	msg := ""
 	switch {

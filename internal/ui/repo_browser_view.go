@@ -9,23 +9,31 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// columns returns the widths of the branch, tree and content panes; the
-// branch pane is 0 when folded.
+// columns returns the widths of the branch, tree and content panes, frames
+// included; the branch pane is 0 when folded.
 func (b *repoBrowser) columns(width int) (branches, tree, content int) {
 	if !b.foldBranches(width) {
-		branches = browserBranchesWidth
+		branches = browserBranchesWidth + 2
 	}
-	tree = min(browserTreeWidth, max(20, width/3))
-	content = width - tree - 1
-	if branches > 0 {
-		content -= branches + 1
-	}
-	return branches, tree, max(20, content)
+	tree = min(browserTreeWidth, max(20, width/3)) + 2
+	return branches, tree, max(22, width-tree-branches)
 }
 
+// contentWidth is the file content's width inside its frame.
 func (b *repoBrowser) contentWidth(width int) int {
 	_, _, c := b.columns(width)
-	return c
+	return c - 2
+}
+
+// framed turns a pane's rendering, whose first line is its heading, into a
+// framed pane titled by that heading: the frame's top edge takes the
+// heading's row, so the rows below keep their places.
+func framed(lines []string, width int, focused bool) pane {
+	title, rest := "", lines
+	if len(lines) > 0 {
+		title, rest = ansi.Strip(lines[0]), lines[1:]
+	}
+	return pane{title: strings.TrimSpace(title), width: width, lines: rest, focused: focused}
 }
 
 func (b *repoBrowser) currentContent() *fileContent {
@@ -79,24 +87,16 @@ func (b *repoBrowser) view(width, height int) []string {
 		return b.tagsView(width, height)
 	case repoTabFiles, repoTabCount:
 	}
+	// height is a row short of the screen's: the frames' bottom edge.
 	bw, tw, cw := b.columns(width)
-	var branchCol []string
+	var panes []pane
 	if bw > 0 {
-		branchCol = b.paneList(&b.branches, bw, height, paneBranches, "branches", !b.branchesLoaded)
+		panes = append(panes, framed(b.paneList(&b.branches, bw-2, height, paneBranches, "Branches", !b.branchesLoaded), bw, b.pane == paneBranches))
 	}
-	treeCol := b.paneList(&b.tree, tw, height, paneFiles, b.branch, len(b.tree.items) == 0)
-	contentCol := b.contentView(cw, height)
-
-	out := make([]string, height)
-	sep := styleDim.Render("│")
-	for i := range height {
-		line := ""
-		if bw > 0 {
-			line = fit(branchCol[i], bw) + sep
-		}
-		out[i] = line + fit(treeCol[i], tw) + sep + contentCol[i]
-	}
-	return out
+	panes = append(panes,
+		framed(b.paneList(&b.tree, tw-2, height, paneFiles, b.branch, len(b.tree.items) == 0), tw, b.pane == paneFiles),
+		framed(b.contentView(cw-2, height), cw, b.pane == paneContent))
+	return framePanes(height+1, panes...)
 }
 
 // tabsLine is the repo's Files / Commits / Tags switcher.
@@ -130,12 +130,9 @@ func (b *repoBrowser) commitsView(width, height int) []string {
 	h := &b.hist
 	bw := 0
 	if !b.foldBranches(width) {
-		bw = browserBranchesWidth
+		bw = browserBranchesWidth + 2
 	}
 	cw := width - bw
-	if bw > 0 {
-		cw--
-	}
 	head := "commits on " + b.branch
 	switch {
 	case h.release != nil && h.release.hasPrev:
@@ -144,23 +141,20 @@ func (b *repoBrowser) commitsView(width, height int) []string {
 		head = h.release.tag.Name + " · no earlier version tag"
 	}
 	loading := h.commitList.items == nil && (h.commitsLoading || h.release != nil)
-	list := b.paneList(&h.commitList, cw, height, paneFiles, head, loading)
+	list := framed(b.paneList(&h.commitList, cw-2, height, paneFiles, head, loading), cw, b.pane == paneFiles)
 	if bw == 0 {
-		return list
+		return framePanes(height+1, list)
 	}
-	branches := b.paneList(&b.branches, bw, height, paneBranches, "branches", !b.branchesLoaded)
-	out := make([]string, height)
-	for i := range height {
-		out[i] = fit(branches[i], bw) + styleDim.Render("│") + list[i]
-	}
-	return out
+	branches := framed(b.paneList(&b.branches, bw-2, height, paneBranches, "Branches", !b.branchesLoaded), bw, b.pane == paneBranches)
+	return framePanes(height+1, branches, list)
 }
 
 // tagsView lists the tags with the selected annotated tag's message below.
 func (b *repoBrowser) tagsView(width, height int) []string {
 	h := &b.hist
-	head := fmt.Sprintf("tags (%d) · newest version first", len(h.tags))
-	list := b.paneList(&h.tagList, width, height-2, paneFiles, head, !h.tagsLoaded)
+	head := fmt.Sprintf("Tags (%d) · newest version first", len(h.tags))
+	inner := width - 2
+	list := b.paneList(&h.tagList, inner, height-2, paneFiles, head, !h.tagsLoaded)
 	detail := ""
 	if t, ok := b.selectedTag(); ok {
 		switch info, seen := h.tagInfo[t.Name]; {
@@ -172,7 +166,8 @@ func (b *repoBrowser) tagsView(width, height int) []string {
 			detail = info.Tagger + " · " + relTime(time.Since(info.Date), info.Date) + " · " + strings.ReplaceAll(info.Message, "\n", " ")
 		}
 	}
-	return append(list, styleDim.Render(strings.Repeat("─", max(0, width))), truncate(styleDim.Render(detail), width))
+	lines := append(list, styleDim.Render(strings.Repeat("─", max(0, inner))), truncate(styleDim.Render(detail), inner))
+	return framePanes(height+1, framed(lines, width, true))
 }
 
 // paneList renders a list with a one-line heading; the heading is
@@ -303,7 +298,7 @@ func (b *repoBrowser) onMouse(msg tea.MouseMsg, by, width, height int) tea.Cmd {
 	switch {
 	case bw > 0 && x < bw:
 		pane = paneBranches
-	case x < bw+tw+1 || (bw == 0 && x < tw):
+	case x < bw+tw:
 		pane = paneFiles
 	}
 	if d := wheelDelta(msg); d != 0 {

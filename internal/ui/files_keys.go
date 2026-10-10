@@ -56,7 +56,7 @@ func (d *detailModel) filesKey(msg tea.KeyMsg) tea.Cmd {
 
 func (d *detailModel) treeKey(msg tea.KeyMsg) tea.Cmd {
 	before := d.selectedChange()
-	handled, activate := d.files.tree.key(msg, d.bodyHeight())
+	handled, activate := d.files.tree.key(msg, d.bodyHeight()-2) // inside its frame
 	if activate || (!handled && isAnyOf(msg.String(), "l", "right", "tab", "shift+tab")) {
 		if d.selectedChange() != nil {
 			d.files.pane = paneDiff
@@ -485,7 +485,7 @@ func (d *detailModel) scrollDiffToCursor() {
 		f.top = f.cursor
 		return
 	}
-	height := d.bodyHeight() - 1 // one line for the diff header
+	height := d.bodyHeight() - 2 // inside the diff's frame
 	for f.top < f.cursor {
 		rows := 0
 		for i := f.top; i <= f.cursor; i++ {

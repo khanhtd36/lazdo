@@ -307,32 +307,32 @@ func (s *settingsView) open() tea.Cmd {
 }
 
 func (s *settingsView) view(width, height int) []string {
-	s.sections.unfocused = s.onRight || s.detail != nil
-	s.content.unfocused = !s.onRight
-	left := s.sections.view(settingsSidebar, height)
-	right := s.rightView(width-settingsSidebar-1, height)
-	out := make([]string, height)
-	for i := range height {
-		out[i] = fit(left[i], settingsSidebar) + styleDim.Render("│") + right[i]
+	onLeft := !s.onRight && s.detail == nil
+	s.sections.unfocused = !onLeft
+	s.content.unfocused = onLeft
+	leftW := settingsSidebar + 2
+	inner := paneInnerHeight(height)
+	rightTitle := s.section.title()
+	if s.detail != nil {
+		rightTitle = s.detail.title
 	}
-	return out
+	return framePanes(height,
+		pane{title: "Settings", width: leftW, lines: s.sections.view(leftW-2, inner), focused: onLeft},
+		pane{title: rightTitle, width: width - leftW, lines: s.rightView(width-leftW-2, inner), focused: !onLeft},
+	)
 }
 
 func (s *settingsView) rightView(width, height int) []string {
 	if s.detail != nil {
-		head := styleSection.Render(s.detail.title) + styleDim.Render("  esc back")
-		var body []string
 		switch {
 		case s.detail.err != nil:
-			body = []string{styleRed.Render("  error: " + s.detail.err.Error())}
+			return padLines([]string{styleRed.Render("  error: " + s.detail.err.Error())}, height)
 		case s.detail.loading:
-			body = []string{styleDim.Render("  loading…")}
+			return padLines([]string{styleDim.Render("  loading…")}, height)
 		case len(s.detail.list.items) == 0:
-			body = []string{styleDim.Render("  none")}
-		default:
-			body = s.detail.list.view(width, height-1)
+			return padLines([]string{styleDim.Render("  none")}, height)
 		}
-		return padLines(append([]string{truncate(head, width)}, body...), height)
+		return padLines(s.detail.list.view(width, height), height)
 	}
 	switch {
 	case s.data == nil && s.loading:

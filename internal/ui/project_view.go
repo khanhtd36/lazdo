@@ -115,7 +115,7 @@ func (m *projectModel) body() []string {
 		if m.browser.branch == "" {
 			return padLines([]string{styleDim.Render("  empty repo")}, h)
 		}
-		return m.browser.view(w, h)
+		return m.browser.view(w, m.browserHeight())
 	case levelRuns:
 		if m.runsLoading && m.runList.items == nil {
 			return padLines([]string{styleDim.Render("  loading runs…")}, h)
@@ -194,7 +194,7 @@ func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 	case levelRun:
 		return m.run.onMouse(msg, by, m.width-1, m.bodyHeight())
 	case levelRepo:
-		return m.browser.onMouse(msg, by, m.width-1, m.bodyHeight())
+		return m.browser.onMouse(msg, by, m.width-1, m.browserHeight())
 	case levelTabs, levelRuns:
 	}
 	l := m.currentList()
@@ -209,8 +209,9 @@ func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 }
 
 func (v *runView) onMouse(msg tea.MouseMsg, by, width, height int) tea.Cmd {
-	treeW := min(48, max(24, width*35/100))
-	inTree := msg.X < treeW
+	inTree := msg.X < runTreeWidth(width)
+	height = paneInnerHeight(height)
+	by-- // below the panes' top border
 	if d := wheelDelta(msg); d != 0 {
 		if inTree {
 			v.tree.wheel(d)
@@ -218,6 +219,9 @@ func (v *runView) onMouse(msg tea.MouseMsg, by, width, height int) tea.Cmd {
 		}
 		v.scrollLog(d, height)
 		return nil
+	}
+	if by < 0 || by >= height {
+		return nil // on a frame
 	}
 	// Press and drag over log lines selects them; y copies.
 	if !inTree && (isClick(msg) || isDrag(msg)) {

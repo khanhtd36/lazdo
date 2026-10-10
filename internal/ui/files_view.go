@@ -327,19 +327,17 @@ func splitLines(s string) []string {
 
 // --- Layout ---
 
+// treeWidth is the file tree pane's width, frame included; 0 when hidden.
 func (d *detailModel) treeWidth() int {
 	if d.files.hideTree {
 		return 0
 	}
-	return min(40, max(20, d.width*30/100))
+	return min(42, max(22, d.width*30/100))
 }
 
+// diffWidth is the diff's width inside its frame.
 func (d *detailModel) diffWidth() int {
-	w := d.width - 1
-	if tw := d.treeWidth(); tw > 0 {
-		w -= tw + 1
-	}
-	return max(20, w)
+	return max(20, d.width-1-d.treeWidth()-2)
 }
 
 func (d *detailModel) isSideBySide() bool {

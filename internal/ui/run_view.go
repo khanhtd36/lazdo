@@ -383,16 +383,23 @@ func logLine(s string) string {
 	return s
 }
 
+// runTreeWidth is the steps pane's width, frame included.
+func runTreeWidth(width int) int { return min(50, max(26, width*35/100)) }
+
 func (v *runView) view(width, height int) []string {
-	treeW := min(48, max(24, width*35/100))
-	logW := width - treeW - 1
-	tree := v.tree.view(treeW, height)
-	logLines := v.logView(logW, height)
-	out := make([]string, height)
-	for i := range height {
-		out[i] = fit(tree[i], treeW) + styleDim.Render("│") + logLines[i]
+	treeW := runTreeWidth(width)
+	inner := paneInnerHeight(height)
+	logTitle := "Log"
+	if it, ok := v.tree.selected(); ok {
+		if r, isRecord := it.value.(ado.TimelineRecord); isRecord {
+			logTitle = r.Name
+		}
 	}
-	return out
+	v.tree.unfocused = v.logPane
+	return framePanes(height,
+		pane{title: "Steps", width: treeW, lines: v.tree.view(treeW-2, inner), focused: !v.logPane},
+		pane{title: logTitle, width: width - treeW, lines: v.logView(width-treeW-2, inner), focused: v.logPane},
+	)
 }
 
 func (v *runView) logView(width, height int) []string {

@@ -240,10 +240,7 @@ func (d *detailModel) filesMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	if tw > 0 && msg.X < tw {
 		return d.treeMouse(msg, by)
 	}
-	dx := msg.X
-	if tw > 0 {
-		dx -= tw + 1
-	}
+	dx := msg.X - tw - 1 // past the tree and the diff frame's left edge
 	lines := d.diffLines()
 	if delta := wheelDelta(msg); delta != 0 {
 		f.cursor = max(0, min(f.cursor+delta, len(lines)-1))
@@ -297,9 +294,9 @@ func (d *detailModel) treeMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	before := d.selectedChange()
 	if delta := wheelDelta(msg); delta != 0 {
 		f.tree.wheel(delta)
-	} else if isClick(msg) {
+	} else if isClick(msg) && by > 0 && by < d.bodyHeight()-1 { // inside the frame
 		f.pane = paneTree
-		if f.tree.click(by) {
+		if f.tree.click(by - 1) {
 			f.pane = paneDiff
 		}
 	}

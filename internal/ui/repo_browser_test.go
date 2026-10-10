@@ -82,7 +82,7 @@ func TestRepoBrowserFitsAndFolds(t *testing.T) {
 				t.Errorf("width %d: line %d wide: %q", width, w, ansi.Strip(line))
 			}
 		}
-		folded := !strings.Contains(ansi.Strip(view[0]), "branches")
+		folded := !strings.Contains(ansi.Strip(view[0]), "Branches") // the pane's title, in its frame
 		if folded != (width < browserFoldWidth) {
 			t.Errorf("width %d: branches folded=%v", width, folded)
 		}

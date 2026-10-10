@@ -137,6 +137,11 @@ func (m *projectModel) init() tea.Cmd { return m.loadPushes() }
 // bodyHeight leaves room for the title, tabs, rule, status and help lines.
 func (m *projectModel) bodyHeight() int { return max(1, m.height-5) }
 
+// browserHeight is what the repo browser lays its panes out in: a row
+// short of the body, for the frames' bottom edge, so its heading row and
+// scrolling stay as they were.
+func (m *projectModel) browserHeight() int { return max(1, m.bodyHeight()-1) }
+
 // --- Loading ---
 
 func (m *projectModel) loadPushes() tea.Cmd {
@@ -275,7 +280,7 @@ func (m *projectModel) key(msg tea.KeyMsg) tea.Cmd {
 	}
 	switch m.level {
 	case levelRepo:
-		if handled, cmd := m.browser.key(msg, m.width-1, m.bodyHeight()); handled {
+		if handled, cmd := m.browser.key(msg, m.width-1, m.browserHeight()); handled {
 			return cmd
 		}
 		if msg.String() == "esc" {
