@@ -594,16 +594,29 @@ func (m Model) nextHeader(rows []row, dir int) int {
 }
 
 func (m *Model) clampCursor() {
-	n := len(m.rows())
-	m.cursor = max(0, min(m.cursor, n-1))
+	rows := m.rows()
+	m.cursor = max(0, min(m.cursor, len(rows)-1))
+	// m.offset counts screen lines, the panes' bottom edges included.
+	lines := dashLines(rows)
+	at := 0
+	for i, l := range lines {
+		if l.row == m.cursor && !l.bottom {
+			at = i
+			break
+		}
+	}
+	last := at // a Section's last row brings its bottom edge into view
+	if at+1 < len(lines) && lines[at+1].bottom {
+		last = at + 1
+	}
 	visible := m.listHeight()
-	if m.cursor < m.offset {
-		m.offset = m.cursor
+	if at < m.offset {
+		m.offset = at
 	}
-	if visible > 0 && m.cursor >= m.offset+visible {
-		m.offset = m.cursor - visible + 1
+	if visible > 0 && last >= m.offset+visible {
+		m.offset = last - visible + 1
 	}
-	m.offset = max(0, min(m.offset, n-1))
+	m.offset = max(0, min(m.offset, len(lines)-visible, at))
 }
 
 // listHeight is the number of rows left after the title and footer lines.

@@ -240,3 +240,38 @@ func TestQIsTypedInThePREditor(t *testing.T) {
 		t.Fatal("q must type into the title, not quit lazdo")
 	}
 }
+
+func TestDashboardPanesShareOneScroll(t *testing.T) {
+	m := New(ado.NewClient("org"), 0)
+	m.width, m.height, m.loading = 100, 10, false
+	m.me = ado.Identity{ID: "me"}
+	prs := make([]ado.PullRequest, 0, 12)
+	for i := range 12 {
+		prs = append(prs, ado.PullRequest{ID: 100 + i, Title: fmt.Sprintf("pr number %d", i), Reviewers: []ado.Reviewer{{Identity: ado.Identity{ID: "me"}}}})
+	}
+	m.sections = ado.Classify("me", prs, nil)
+	press := func(k string) {
+		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)})
+		m = next.(Model)
+	}
+	for range 12 { // down past the first Section into the next ones
+		press("j")
+	}
+	view := ansi.Strip(m.View())
+	if n := len(strings.Split(view, "\n")); n != m.height {
+		t.Fatalf("view is %d lines, want %d:\n%s", n, m.height, view)
+	}
+	if !strings.Contains(view, "pr number 11") || !strings.Contains(view, "╰") {
+		t.Fatalf("the last PR and its pane's bottom edge should be in view:\n%s", view)
+	}
+	press("j") // onto the next Section's header, the pane below
+	if !strings.Contains(ansi.Strip(m.View()), "╭▌") {
+		t.Fatalf("cursor should be on the next pane's header:\n%s", ansi.Strip(m.View()))
+	}
+	for range 13 {
+		press("k")
+	}
+	if view := ansi.Strip(m.View()); !strings.Contains(view, "Wait for approval") || m.offset != 0 {
+		t.Fatalf("back at the top, offset %d:\n%s", m.offset, view)
+	}
+}

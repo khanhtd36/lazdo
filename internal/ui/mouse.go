@@ -65,10 +65,12 @@ func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	rows := m.rows()
-	idx := m.offset + msg.Y - 1
-	if idx >= len(rows) {
+	lines := dashLines(rows)
+	at := m.offset + msg.Y - 1
+	if at >= len(lines) || lines[at].bottom {
 		return m, nil
 	}
+	idx := lines[at].row
 	r := rows[idx]
 	switch {
 	case r.pr == nil:

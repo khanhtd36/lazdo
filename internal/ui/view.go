@@ -132,9 +132,11 @@ func (m Model) View() string {
 	if m.cursor >= 0 && m.cursor < len(rows) {
 		focused = rows[m.cursor].section
 	}
-	end := min(len(rows), m.offset+m.listHeight())
+	lines := dashLines(rows)
+	end := min(len(lines), m.offset+m.listHeight())
 	for i := m.offset; i < end; i++ {
-		b.WriteString(truncate(m.dashboardLine(rows[i], i == m.cursor, rows[i].section == focused), m.width-1) + "\n")
+		l := lines[i]
+		b.WriteString(truncate(m.dashboardLine(l, rows[l.row], l.row == m.cursor && !l.bottom, l.section == focused), m.width-1) + "\n")
 	}
 	for i := end - m.offset; i < m.listHeight(); i++ {
 		b.WriteString("\n")
@@ -195,38 +197,57 @@ func (m Model) statusLine() string {
 	return ""
 }
 
-// dashboardLine draws a row of the Pull requests page. A Section's header
-// is a rule across the screen; the focused Section, the one the cursor is
-// in, has an accent rule and an accent bar beside its rows, like a focused pane,
-// at no cost in width: the bar takes the margin column.
-func (m Model) dashboardLine(r row, cursor, focused bool) string {
-	edge, rule := styleDim, styleDim
-	if focused {
-		edge, rule = styleAccent, styleCursor
+// dashLine is a screen line of the Pull requests page: a row, or the
+// bottom edge that closes its Section's pane.
+type dashLine struct {
+	row, section int
+	bottom       bool
+}
+
+// dashLines lays the rows out as stacked panes, one per Section, all under
+// one scroll: each Section's last row is followed by its pane's bottom edge.
+func dashLines(rows []row) []dashLine {
+	lines := make([]dashLine, 0, len(rows)+8)
+	for i, r := range rows {
+		lines = append(lines, dashLine{row: i, section: r.section})
+		if i+1 == len(rows) || rows[i+1].section != r.section {
+			lines = append(lines, dashLine{row: i, section: r.section, bottom: true})
+		}
 	}
-	if r.pr == nil {
+	return lines
+}
+
+// dashboardLine draws a line of the Pull requests page. Each Section is a
+// framed pane, its header the top edge; the focused Section, the one the
+// cursor is in, is framed in the accent color like any focused pane.
+func (m Model) dashboardLine(l dashLine, r row, cursor, focused bool) string {
+	edge, title := styleFrame, styleDim
+	if focused {
+		edge, title = styleAccent, styleCursor
+	}
+	inner := max(1, m.width-3)
+	switch {
+	case l.bottom:
+		return edge.Render("╰" + strings.Repeat("─", inner) + "╯")
+	case r.pr == nil:
 		s := m.sections[r.section]
 		arrow := "▾"
 		if m.collapsed[s.Kind] {
 			arrow = "▸"
 		}
-		lead := rule.Render("─")
+		lead := edge.Render("─")
 		if cursor {
 			lead = styleCursor.Render("▌")
 		}
-		title := rule.Render(fmt.Sprintf("─ %s %s (%d) ", arrow, s.Kind.Title(), len(s.PRs)))
-		fill := max(0, m.width-1-1-ansi.StringWidth(title))
-		return lead + title + rule.Render(strings.Repeat("─", fill))
-	}
-	bar := " "
-	if focused {
-		bar = edge.Render("┃")
+		name := title.Render(truncate(fmt.Sprintf(" %s %s (%d) ", arrow, s.Kind.Title(), len(s.PRs)), max(1, inner-2)))
+		fill := max(0, inner-1-ansi.StringWidth(name))
+		return edge.Render("╭") + lead + name + edge.Render(strings.Repeat("─", fill)+"╮")
 	}
 	mark := " "
 	if cursor {
 		mark = styleCursor.Render("▌")
 	}
-	return bar + mark + m.renderPR(r.pr)
+	return edge.Render("│") + padRight(truncate(mark+m.renderPR(r.pr), inner), inner) + edge.Render("│")
 }
 
 func (m Model) renderPR(pr *ado.PullRequest) string {
@@ -264,7 +285,8 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	}
 	right := strings.Join(shown, " ")
 
-	// 2 cursor + 2 indent + 1 gap before right + 1 spare so the line never wraps.
+	// 2 frame + 1 cursor + 1 indent + 1 gap before right + 1 spare so the
+	// line never wraps.
 	titleWidth := m.width - 6 - ansi.StringWidth(right) - ansi.StringWidth(badgeText)
 	if badgeText != "" {
 		titleWidth--
@@ -285,7 +307,7 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 		title += " " + badgeText
 		cellWidth += 1 + ansi.StringWidth(badgeText)
 	}
-	return "  " + padRight(title, cellWidth) + " " + right // indent under the section header
+	return " " + padRight(title, cellWidth) + " " + right
 }
 
 // hasNews is whether a PR has something to look at: pushes or comments since
