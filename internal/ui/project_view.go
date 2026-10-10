@@ -8,14 +8,22 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// projectBodyTop is the first body row: below the title, tabs and rule.
-const projectBodyTop = 3
+// bodyTop is the first body row: below the title, tabs and rule, or right
+// below the tabs over framed panes.
+func (m *projectModel) bodyTop() int {
+	if m.panes() {
+		return 2
+	}
+	return 3
+}
 
 func (m *projectModel) view() string {
 	var b strings.Builder
 	b.WriteString(truncate(m.titleLine(), m.width-1) + "\n")
 	b.WriteString(truncate(m.tabsLine(), m.width-1) + "\n")
-	b.WriteString(styleDim.Render(strings.Repeat("─", max(0, m.width-1))) + "\n")
+	if !m.panes() { // framed panes separate themselves from the tabs
+		b.WriteString(styleDim.Render(strings.Repeat("─", max(0, m.width-1))) + "\n")
+	}
 	for _, line := range m.body() {
 		b.WriteString(truncate(line, m.width-1) + "\n")
 	}
@@ -186,7 +194,7 @@ func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 		}
 		return nil
 	}
-	by := msg.Y - projectBodyTop
+	by := msg.Y - m.bodyTop()
 	if by < 0 || by >= m.bodyHeight() {
 		return nil
 	}

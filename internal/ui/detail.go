@@ -158,7 +158,25 @@ func (d *detailModel) reload() tea.Cmd {
 
 // bodyHeight is what's left below the header (title, subtitle, tabs, rule)
 // and above the footer (status, help).
-func (d *detailModel) bodyHeight() int { return max(1, d.height-6) }
+func (d *detailModel) bodyHeight() int {
+	if d.panes() {
+		return max(1, d.height-5)
+	}
+	return max(1, d.height-6)
+}
+
+// panes reports whether the body is framed panes (the Files tab), whose
+// frames separate it from the tabs, so no rule is drawn under them.
+func (d *detailModel) panes() bool { return d.tab == tabFiles }
+
+// bodyTop is the first screen row of the body: below the title, subtitle,
+// tabs and rule, or right below the tabs over framed panes.
+func (d *detailModel) bodyTop() int {
+	if d.panes() {
+		return 3
+	}
+	return 4
+}
 
 func (d *detailModel) resize(width, height int) {
 	d.width, d.height = width, height

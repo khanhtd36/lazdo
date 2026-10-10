@@ -15,10 +15,6 @@ import (
 
 const wheelStep = 3
 
-// detailBodyTop is the first screen row of the detail body, below the title,
-// subtitle, tabs and rule.
-const detailBodyTop = 4
-
 func isClick(msg tea.MouseMsg) bool {
 	return msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft
 }
@@ -119,7 +115,7 @@ func (d *detailModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 			return nil
 		}
 	}
-	by := msg.Y - detailBodyTop
+	by := msg.Y - d.bodyTop()
 	if by < 0 || by >= d.bodyHeight() || d.data == nil {
 		return nil
 	}
@@ -160,7 +156,7 @@ func (d *detailModel) modalMouse(msg tea.MouseMsg) tea.Cmd {
 	box := d.modal.view(d.width)
 	h, w := strings.Count(box, "\n")+1, ansi.StringWidth(firstLine(box))
 	// lipgloss.Place centers with the smaller half of the gap before the box.
-	top := detailBodyTop + max(0, (d.bodyHeight()-h)/2)
+	top := d.bodyTop() + max(0, (d.bodyHeight()-h)/2)
 	left := max(0, (d.width-1-w)/2)
 	inside := msg.Y >= top && msg.Y < top+h && msg.X >= left && msg.X < left+w
 
