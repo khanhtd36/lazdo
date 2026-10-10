@@ -3,12 +3,15 @@ package update
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewerThan(t *testing.T) {
@@ -83,5 +86,40 @@ func TestReplaceKeepsOldAside(t *testing.T) {
 	Cleanup(exe)
 	if _, err := os.Stat(exe + ".old"); !os.IsNotExist(err) {
 		t.Fatal("Cleanup should remove the old copy")
+	}
+}
+
+func TestRefreshCooldown(t *testing.T) {
+	dir := t.TempDir()
+	for _, v := range []string{"LocalAppData", "XDG_CACHE_HOME", "HOME"} { // os.UserCacheDir per OS
+		t.Setenv(v, dir)
+	}
+	file, ok := cacheFile()
+	if !ok {
+		t.Skip("no cache folder here")
+	}
+	write := func(age time.Duration) {
+		b, _ := json.Marshal(cached{time.Now().Add(-age), []Release{{Tag: "v0.3.0"}}})
+		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	offline, cancel := context.WithCancel(context.Background())
+	cancel() // any request to GitHub fails
+
+	write(time.Minute)
+	rs, err := Refresh(offline, "0.2.17")
+	if err != nil || len(rs) != 1 || rs[0].Tag != "v0.3.0" {
+		t.Fatalf("within the cooldown the cached answer stands: %v %v", rs, err)
+	}
+	write(RefreshCooldown + time.Minute)
+	if _, err := Refresh(offline, "0.2.17"); err == nil {
+		t.Fatal("past the cooldown Refresh should ask GitHub")
+	}
+	if rs, err := Check(offline, "0.2.17"); err != nil || len(rs) != 1 {
+		t.Fatalf("the daily check still uses a 3-minute-old answer: %v %v", rs, err)
 	}
 }

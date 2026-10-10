@@ -40,44 +40,64 @@ func Newer(ctx context.Context, current string) ([]Release, error) {
 	return newerThan(current, all), err
 }
 
-// Check is Newer at most once a day: the releases GitHub listed are kept in
-// the user cache folder, so most starts make no request at all.
-func Check(ctx context.Context, current string) ([]Release, error) {
-	if _, ok := parse(current); !ok {
-		return nil, nil // a development build isn't a release
-	}
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return Newer(ctx, current)
-	}
-	file := filepath.Join(dir, "lazdo", "releases.json")
-	var cached struct {
-		Checked  time.Time `json:"checked"`
-		Releases []Release `json:"releases"`
-	}
-	if b, err := os.ReadFile(file); err == nil && json.Unmarshal(b, &cached) == nil && time.Since(cached.Checked) < 24*time.Hour {
-		return newerThan(current, cached.Releases), nil
-	}
-	return Refresh(ctx, current)
+// cached is what the last answer from GitHub said, kept in the user cache
+// folder.
+type cached struct {
+	Checked  time.Time `json:"checked"`
+	Releases []Release `json:"releases"`
 }
 
-// Refresh is Newer asked of GitHub now, whatever the cache holds; the
-// answer replaces the cache, so the daily check starts over from it.
+// RefreshCooldown is how long an answer from GitHub stands even for an
+// explicit check, so pressing U again and again asks at most this often.
+const RefreshCooldown = 2 * time.Minute
+
+func cacheFile() (string, bool) {
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		return "", false
+	}
+	return filepath.Join(dir, "lazdo", "releases.json"), true
+}
+
+// fromCache returns the cached answer when it is younger than maxAge.
+func fromCache(maxAge time.Duration) ([]Release, bool) {
+	file, ok := cacheFile()
+	if !ok {
+		return nil, false
+	}
+	var c cached
+	b, err := os.ReadFile(file)
+	if err != nil || json.Unmarshal(b, &c) != nil || time.Since(c.Checked) >= maxAge {
+		return nil, false
+	}
+	return c.Releases, true
+}
+
+// Check is Newer at most once a day: most starts make no request at all.
+func Check(ctx context.Context, current string) ([]Release, error) {
+	return newerWithin(ctx, current, 24*time.Hour)
+}
+
+// Refresh is Newer asked of GitHub now, unless it was asked within
+// RefreshCooldown; the answer replaces the cache, so the daily check
+// starts over from it.
 func Refresh(ctx context.Context, current string) ([]Release, error) {
+	return newerWithin(ctx, current, RefreshCooldown)
+}
+
+func newerWithin(ctx context.Context, current string, maxAge time.Duration) ([]Release, error) {
 	if _, ok := parse(current); !ok {
 		return nil, nil // a development build isn't a release
+	}
+	if all, ok := fromCache(maxAge); ok {
+		return newerThan(current, all), nil
 	}
 	all, err := releases(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if dir, err := os.UserCacheDir(); err == nil {
-		file := filepath.Join(dir, "lazdo", "releases.json")
-		cached := struct {
-			Checked  time.Time `json:"checked"`
-			Releases []Release `json:"releases"`
-		}{time.Now(), all}
-		if b, err := json.Marshal(cached); err == nil && os.MkdirAll(filepath.Dir(file), 0o755) == nil {
+	if file, ok := cacheFile(); ok {
+		if b, err := json.Marshal(cached{time.Now(), all}); err == nil && os.MkdirAll(filepath.Dir(file), 0o755) == nil {
 			_ = os.WriteFile(file, b, 0o644)
 		}
 	}

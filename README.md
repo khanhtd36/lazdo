@@ -64,7 +64,7 @@ The scripts verify the download against the release's `checksums.txt`.
 
 **Updating:** lazdo checks for a newer release at most once a day, in the
 background, and shows `↑ v0.2.14 (U)` in the title when there is one. `U`
-checks GitHub right away, whatever the daily check saw, then lists what
+checks GitHub right away (at most every 2 minutes), then lists what
 changed and installs it, even while lazdo runs (restart to use
 it); `lazdo update` does the same from a shell. Copies installed with
 Homebrew or `go install` show their own update command instead.
