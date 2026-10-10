@@ -521,7 +521,7 @@ func (m *projectModel) repoRow(r ado.Repo, width int) string {
 	}
 	return truncate(joinCols(
 		fit(styleTitle.Render(r.Name), 30),
-		styleCyan.Render(fit(branch, 16)),
+		styleAccent.Render(fit(branch, 16)),
 		styleDim.Render(fit(pushed, 16)),
 		styleDim.Render(humanSize(r.Size)),
 	), width)
@@ -590,7 +590,7 @@ func (m *projectModel) runItems(runs []ado.Run) []pickItem {
 func runRow(r ado.Run, width int) string {
 	return truncate(joinCols(
 		runGlyph(r.Status, r.Result)+" "+fit(styleTitle.Render(r.BuildNumber), 14),
-		styleCyan.Render(fit(r.Branch(), 34)),
+		styleAccent.Render(fit(r.Branch(), 34)),
 		styleDim.Render(fit(r.Reason, 14)),
 		styleDim.Render(fit(nameInitials(r.RequestedFor.DisplayName), 4)),
 		styleDim.Render(fit(relTime(time.Since(r.QueueTime), r.QueueTime), 9)),

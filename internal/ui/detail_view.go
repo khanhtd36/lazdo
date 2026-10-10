@@ -97,13 +97,13 @@ func (d *detailModel) subtitleLine() string {
 		badge = styleBadgeDraft.Render("Draft")
 	}
 	head := fmt.Sprintf("%s !%d %s proposes to merge ", badge, d.pr.ID, d.pr.CreatedBy.DisplayName)
-	tail := " into " + styleCyan.Render(d.pr.TargetBranch())
+	tail := " into " + styleAccent.Render(d.pr.TargetBranch())
 	if d.loading {
 		tail += styleYellow.Render("  refreshing…")
 	}
 	// A long source branch gives way first, so the target stays in view.
 	room := d.width - 1 - ansi.StringWidth(head) - ansi.StringWidth(tail)
-	source := styleCyan.Render(truncate(d.pr.SourceBranch(), max(12, room)))
+	source := styleAccent.Render(truncate(d.pr.SourceBranch(), max(12, room)))
 	return truncate(head+source+tail, d.width-1)
 }
 
