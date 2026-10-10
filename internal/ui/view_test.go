@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -216,7 +217,22 @@ func TestUpdateNoticeAndDialog(t *testing.T) {
 	if !strings.Contains(ansi.Strip(m.titleLine()), "update v0.2.14 (U)") {
 		t.Fatalf("the title should offer the update: %q", ansi.Strip(m.titleLine()))
 	}
-	next, _ = m.Update(keyMsg("U"))
+	// U asks GitHub now, not the daily check's cache.
+	saved := refreshUpdates
+	defer func() { refreshUpdates = saved }()
+	refreshUpdates = func(context.Context, string) ([]update.Release, error) {
+		return []update.Release{{Tag: "v0.2.14", Notes: "## Changelog\n* 10529aa fix(checks): list a policy set on both branch and repo once\n"}}, nil
+	}
+	m.updates = nil // a stale cache that saw nothing newer
+	next, cmd := m.Update(keyMsg("U"))
+	m = next.(Model)
+	if cmd == nil || !strings.Contains(m.status, "checking for updates") {
+		t.Fatalf("U should check now, status %q", m.status)
+	}
+	if again, _ := m.Update(keyMsg("U")); again.(Model).modal != nil {
+		t.Fatal("U while checking should be ignored")
+	}
+	next, _ = m.Update(cmd())
 	m = next.(Model)
 	u, ok := m.modal.(*updateModal)
 	if !ok {

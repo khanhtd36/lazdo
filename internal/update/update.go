@@ -58,13 +58,28 @@ func Check(ctx context.Context, current string) ([]Release, error) {
 	if b, err := os.ReadFile(file); err == nil && json.Unmarshal(b, &cached) == nil && time.Since(cached.Checked) < 24*time.Hour {
 		return newerThan(current, cached.Releases), nil
 	}
+	return Refresh(ctx, current)
+}
+
+// Refresh is Newer asked of GitHub now, whatever the cache holds; the
+// answer replaces the cache, so the daily check starts over from it.
+func Refresh(ctx context.Context, current string) ([]Release, error) {
+	if _, ok := parse(current); !ok {
+		return nil, nil // a development build isn't a release
+	}
 	all, err := releases(ctx)
 	if err != nil {
 		return nil, err
 	}
-	cached.Checked, cached.Releases = time.Now(), all
-	if b, err := json.Marshal(cached); err == nil && os.MkdirAll(filepath.Dir(file), 0o755) == nil {
-		_ = os.WriteFile(file, b, 0o644)
+	if dir, err := os.UserCacheDir(); err == nil {
+		file := filepath.Join(dir, "lazdo", "releases.json")
+		cached := struct {
+			Checked  time.Time `json:"checked"`
+			Releases []Release `json:"releases"`
+		}{time.Now(), all}
+		if b, err := json.Marshal(cached); err == nil && os.MkdirAll(filepath.Dir(file), 0o755) == nil {
+			_ = os.WriteFile(file, b, 0o644)
+		}
 	}
 	return newerThan(current, all), nil
 }

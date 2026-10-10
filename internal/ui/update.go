@@ -18,8 +18,16 @@ var buildVersion = "dev"
 // SetVersion tells the UI which release is running.
 func SetVersion(v string) { buildVersion = v }
 
+// refreshUpdates asks GitHub for newer releases now; tests replace it.
+var refreshUpdates = update.Refresh
+
 type (
-	updatesMsg    struct{ releases []update.Release }
+	// updatesMsg brings the newer releases; manual when U asked for them.
+	updatesMsg struct {
+		releases []update.Release
+		manual   bool
+		err      error
+	}
 	updateDoneMsg struct {
 		text string
 		err  error
@@ -44,6 +52,37 @@ func (m Model) updateNote() string {
 	}
 	note := pick2(useSymbols, symPush+" ", "update ") + "v" + m.updates[0].Version() + " (U)"
 	return styleCyan.Render("  " + note)
+}
+
+// checkUpdatesNow is U: it asks GitHub now, not the daily check's cache,
+// which can be a day behind, then opens the update dialog or says lazdo
+// is the latest. Presses while a check runs are ignored.
+func (m Model) checkUpdatesNow() (tea.Model, tea.Cmd) {
+	if m.checkingUpdates {
+		return m, nil
+	}
+	m.checkingUpdates, m.status = true, "checking for updates…"
+	return m, func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		rs, err := refreshUpdates(ctx, buildVersion)
+		return updatesMsg{releases: rs, manual: true, err: err}
+	}
+}
+
+// onUpdates takes a check's answer: the title's hint follows it, and the
+// answer to U opens the dialog.
+func (m Model) onUpdates(msg updatesMsg) (tea.Model, tea.Cmd) {
+	if !msg.manual {
+		m.updates = msg.releases
+		return m, nil
+	}
+	m.checkingUpdates, m.status = false, ""
+	if msg.err != nil {
+		return m.Update(resultMsg(fmt.Errorf("check for updates: %w", msg.err), ""))
+	}
+	m.updates = msg.releases
+	return m.openUpdate()
 }
 
 // openUpdate shows what the newer releases change and offers to install.

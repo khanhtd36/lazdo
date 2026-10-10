@@ -54,8 +54,9 @@ type Model struct {
 	help   *helpModal   // non-nil while the shortcut help is open
 	modal  modal        // a dialog over any screen, such as checkout
 
-	lastCheckout map[string]string // repo key → path, this session only
-	updates      []update.Release  // releases newer than this build, newest first
+	lastCheckout    map[string]string // repo key → path, this session only
+	updates         []update.Release  // releases newer than this build, newest first
+	checkingUpdates bool              // U is asking GitHub
 
 	filter       string // dashboard / filter
 	filterTyping bool
@@ -199,7 +200,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.detail.update(msg)
 	case updatesMsg:
-		m.updates = msg.releases
+		return m.onUpdates(msg)
 	case updateDoneMsg:
 		if msg.err == nil {
 			m.updates = nil
@@ -263,7 +264,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.switchPage(p)
 			}
 			if msg.String() == "U" {
-				return m.openUpdate()
+				return m.checkUpdatesNow()
 			}
 		}
 		if m.page == pageProjects {
