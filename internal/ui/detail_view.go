@@ -22,9 +22,6 @@ func (d *detailModel) view() string {
 	b.WriteString(d.titleLine() + "\n")
 	b.WriteString(d.subtitleLine() + "\n")
 	b.WriteString(d.tabsLine() + "\n")
-	if !d.panes() { // framed panes separate themselves from the tabs
-		b.WriteString(styleDim.Render(strings.Repeat("─", max(0, d.width-1))) + "\n")
-	}
 
 	body := d.body()
 	if d.modal != nil {

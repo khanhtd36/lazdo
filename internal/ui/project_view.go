@@ -7,22 +7,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// bodyTop is the first body row: below the title, tabs and rule, or right
-// below the tabs over framed panes.
-func (m *projectModel) bodyTop() int {
-	if m.panes() {
-		return 2
-	}
-	return 3
-}
+// bodyTop is the first body row, right below the title and tabs: the block
+// tabs need no rule under them.
+func (m *projectModel) bodyTop() int { return 2 }
 
 func (m *projectModel) view() string {
 	var b strings.Builder
 	b.WriteString(truncate(m.titleLine(), m.width-1) + "\n")
 	b.WriteString(truncate(m.tabsLine(), m.width-1) + "\n")
-	if !m.panes() { // framed panes separate themselves from the tabs
-		b.WriteString(styleDim.Render(strings.Repeat("─", max(0, m.width-1))) + "\n")
-	}
 	for _, line := range m.body() {
 		b.WriteString(truncate(line, m.width-1) + "\n")
 	}

@@ -136,18 +136,8 @@ func (m *projectModel) init() tea.Cmd { return m.loadPushes() }
 
 // panes reports whether the body is framed panes, whose frames separate it
 // from the tabs, so no rule is drawn under them.
-func (m *projectModel) panes() bool {
-	return m.level == levelRepo || m.level == levelRun || (m.level == levelTabs && m.tab == projTabSettings)
-}
-
-// bodyHeight leaves room for the title, tabs, rule (when drawn), status and
-// help lines.
-func (m *projectModel) bodyHeight() int {
-	if m.panes() {
-		return max(1, m.height-4)
-	}
-	return max(1, m.height-5)
-}
+// bodyHeight leaves room for the title, tabs, status and help lines.
+func (m *projectModel) bodyHeight() int { return max(1, m.height-4) }
 
 // browserHeight is what the repo browser lays its panes out in: a row
 // short of the body, for the frames' bottom edge, so its heading row and
