@@ -16,8 +16,8 @@ var (
 	bgDelete  = lipgloss.Color("#4b1d22")
 	bgMissing = lipgloss.Color("#262626")
 
-	styleCursorLine = lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Bold(true)
-	styleRangeLine  = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	styleCursorLine = lipgloss.NewStyle().Foreground(accent).Bold(true)
+	styleRangeLine  = lipgloss.NewStyle().Foreground(lipgloss.Color("68"))
 	styleGutter     = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
 )
 

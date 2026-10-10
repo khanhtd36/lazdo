@@ -8,7 +8,7 @@ import (
 )
 
 // A split view's panes sit side by side, each framed with its name in the
-// top border; the focused pane's frame is cyan, the others gray.
+// top border; the focused pane's frame is in the accent color, the others gray.
 
 var styleFrame = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
@@ -40,7 +40,7 @@ func framePane(p pane, height int) []string {
 	edge := styleFrame
 	title := styleDim
 	if p.focused {
-		edge, title = styleCyan, styleCursor
+		edge, title = styleAccent, styleCursor
 	}
 	inner := max(1, p.width-2)
 	name := ""

@@ -26,7 +26,7 @@ const (
 
 var (
 	styleSection  = lipgloss.NewStyle().Bold(true)
-	styleSelected = lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Bold(true)
+	styleSelected = lipgloss.NewStyle().Foreground(accent).Bold(true)
 	styleNew      = lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("14"))
 )
 

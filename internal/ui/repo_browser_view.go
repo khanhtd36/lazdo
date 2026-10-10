@@ -99,29 +99,22 @@ func (b *repoBrowser) view(width, height int) []string {
 	return framePanes(height+1, panes...)
 }
 
-// tabsLine is the repo's Files / Commits / Tags switcher.
-func (b *repoBrowser) tabsLine() string {
-	parts := make([]string, 0, repoTabCount)
+func repoTabLabels() []string {
+	labels := make([]string, 0, repoTabCount)
 	for t := range repoTabCount {
-		label := fmt.Sprintf("%d %s", t+1, t.title())
-		if t == b.tab {
-			label = styleTabActive.Render(label)
-		}
-		parts = append(parts, label)
+		labels = append(labels, fmt.Sprintf("%d %s", t+1, t.title()))
 	}
-	return strings.Join(parts, tabGap)
+	return labels
 }
 
-func (b *repoBrowser) tabAt(x int) (repoTab, bool) {
-	start := 0
-	for t := range repoTabCount {
-		end := start + len(fmt.Sprintf("%d %s", t+1, t.title()))
-		if x >= start && x < end {
-			return t, true
-		}
-		start = end + len(tabGap)
-	}
-	return 0, false
+// tabsLine is the repo's Files / Commits / Tags switcher.
+func (b *repoBrowser) tabsLine(width int) string {
+	return tabBar(repoTabLabels(), int(b.tab), width)
+}
+
+func (b *repoBrowser) tabAt(x, width int) (repoTab, bool) {
+	t, ok := tabAt(repoTabLabels(), x, width)
+	return repoTab(t), ok
 }
 
 // commitsView is the branch pane beside the branch's commits, or a tag's

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 )
 
 // bodyTop is the first body row: below the title, tabs and rule, or right
@@ -91,29 +90,14 @@ func (m *projectModel) tabLabels() []string {
 
 func (m *projectModel) tabsLine() string {
 	if m.level == levelRepo {
-		return m.browser.tabsLine()
+		return m.browser.tabsLine(m.width - 1)
 	}
-	parts := make([]string, 0, projTabCount)
-	for t, label := range m.tabLabels() {
-		if projectTab(t) == m.tab {
-			parts = append(parts, styleTabActive.Render(label))
-		} else {
-			parts = append(parts, label)
-		}
-	}
-	return strings.Join(parts, tabGap)
+	return tabBar(m.tabLabels(), int(m.tab), m.width-1)
 }
 
 func (m *projectModel) tabAt(x int) (projectTab, bool) {
-	start := 0
-	for t, label := range m.tabLabels() {
-		end := start + ansi.StringWidth(label)
-		if x >= start && x < end {
-			return projectTab(t), true
-		}
-		start = end + len(tabGap)
-	}
-	return 0, false
+	t, ok := tabAt(m.tabLabels(), x, m.width-1)
+	return projectTab(t), ok
 }
 
 func (m *projectModel) body() []string {
@@ -181,7 +165,7 @@ func (m *projectModel) typing() bool {
 
 func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 	if isClick(msg) && msg.Y == 1 && m.level == levelRepo {
-		if t, ok := m.browser.tabAt(msg.X); ok {
+		if t, ok := m.browser.tabAt(msg.X, m.width-1); ok {
 			m.browser.tab, m.browser.pane = t, paneFiles
 			return m.browser.ensureHistory()
 		}

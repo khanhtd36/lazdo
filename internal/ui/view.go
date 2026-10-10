@@ -15,7 +15,7 @@ import (
 var (
 	styleTitle  = lipgloss.NewStyle().Bold(true)
 	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	styleCursor = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
+	styleCursor = lipgloss.NewStyle().Bold(true).Foreground(accent)
 	styleDim    = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 	styleGreen  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	styleYellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
@@ -156,28 +156,13 @@ func (m Model) pageLabels() []string {
 }
 
 func (m Model) pageAt(x int) (page, bool) {
-	start := len(titlePrefix)
-	for p, label := range m.pageLabels() {
-		end := start + ansi.StringWidth(label)
-		if x >= start && x < end {
-			return page(p), true
-		}
-		start = end + len(tabGap)
-	}
-	return 0, false
+	p, ok := tabAt(m.pageLabels(), x-len(titlePrefix), m.width-1-len(titlePrefix))
+	return page(p), ok
 }
 
 func (m Model) titleLine() string {
 	s := styleTitle.Render(strings.TrimSpace(titlePrefix)) + "  "
-	pages := make([]string, 0, pageCount)
-	for p, label := range m.pageLabels() {
-		if page(p) == m.page {
-			pages = append(pages, styleTabActive.Render(label))
-		} else {
-			pages = append(pages, label)
-		}
-	}
-	s += strings.Join(pages, tabGap) + styleDim.Render("   "+m.client.Org)
+	s += tabBar(m.pageLabels(), int(m.page), m.width-1-len(titlePrefix)) + styleDim.Render("   "+m.client.Org)
 	if m.me.DisplayName != "" {
 		s += styleDim.Render(" · " + m.me.DisplayName)
 	}
@@ -212,12 +197,12 @@ func (m Model) statusLine() string {
 
 // dashboardLine draws a row of the Pull requests page. A Section's header
 // is a rule across the screen; the focused Section, the one the cursor is
-// in, has a cyan rule and a cyan bar beside its rows, like a focused pane,
+// in, has an accent rule and an accent bar beside its rows, like a focused pane,
 // at no cost in width: the bar takes the margin column.
 func (m Model) dashboardLine(r row, cursor, focused bool) string {
 	edge, rule := styleDim, styleDim
 	if focused {
-		edge, rule = styleCyan, styleCursor
+		edge, rule = styleAccent, styleCursor
 	}
 	if r.pr == nil {
 		s := m.sections[r.section]

@@ -11,7 +11,6 @@ import (
 )
 
 var (
-	styleTabActive  = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("14"))
 	styleButton     = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("238")).Padding(0, 1)
 	styleButtonCTA  = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("25")).Padding(0, 1)
 	styleBadge      = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("25")).Padding(0, 1)
@@ -108,34 +107,17 @@ func (d *detailModel) subtitleLine() string {
 	return truncate(head+source+tail, d.width-1)
 }
 
-const tabGap = "   "
-
-// tabAt returns the tab whose label covers column x of the tabs line.
+// tabAt returns the tab covering column x of the tabs line.
 func (d *detailModel) tabAt(x int) (detailTab, bool) {
-	start := 0
-	for t, label := range d.tabLabels() {
-		end := start + ansi.StringWidth(label)
-		if x >= start && x < end {
-			return detailTab(t), true
-		}
-		start = end + len(tabGap)
-	}
-	return 0, false
+	t, ok := tabAt(d.tabLabels(), x, d.width-1)
+	return detailTab(t), ok
 }
 
 func (d *detailModel) tabsLine() string {
 	if d.standalone {
-		return styleTabActive.Render("Files") + styleDim.Render(fmt.Sprintf(" (%d)", len(d.files.changes)))
+		return tabBar([]string{fmt.Sprintf("Files (%d)", len(d.files.changes))}, 0, d.width-1)
 	}
-	parts := make([]string, 0, tabCount)
-	for t, label := range d.tabLabels() {
-		if detailTab(t) == d.tab {
-			parts = append(parts, styleTabActive.Render(label))
-		} else {
-			parts = append(parts, label)
-		}
-	}
-	return strings.Join(parts, tabGap)
+	return tabBar(d.tabLabels(), int(d.tab), d.width-1)
 }
 
 func (d *detailModel) tabLabels() []string {
