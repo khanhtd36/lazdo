@@ -348,3 +348,35 @@ func TestDeleteRepoNeedsItsName(t *testing.T) {
 		t.Fatal("the exact name should confirm")
 	}
 }
+
+func TestPermissionEditsWaitForSave(t *testing.T) {
+	s := fakeSettings(t)
+	g := ado.Group{Descriptor: "vssgp.Uy0xLTktMTU1MTM3NDI0NS0xMjA0NDAwOTY5", Name: "Contributors"}
+	s.data.Permissions = map[string][]ado.Permission{
+		"":                            {{Name: "View", Bit: 1, State: "Not set"}, {Name: "Edit", Bit: 2, State: "Not set"}},
+		"S-1-9-1551374245-1204400969": {{Name: "View", Bit: 1, State: "Allow"}, {Name: "Edit", Bit: 2, State: "Allow", Inherited: true}},
+	}
+	s.openPermissions(g)
+	s.detail.list.cursor = 1 // Edit: inherited Allow, so not set on the group
+	s.permKey(" ")
+	if got := s.detail.perm.pending[2]; got != "Allow" {
+		t.Fatalf("space on an inherited permission should set it explicitly first, got %q", got)
+	}
+	s.permKey(" ")
+	s.permKey(" ") // Allow → Deny → Not set: back where it was
+	if len(s.detail.perm.pending) != 0 {
+		t.Fatalf("cycling back to the saved state leaves nothing pending: %v", s.detail.perm.pending)
+	}
+	s.detail.list.cursor = 0
+	s.permKey(" ") // View: Allow → Deny
+	_, cmd := s.permKey("ctrl+s")
+	confirm, ok := cmd().(showModalMsg).modal.(*confirmModal)
+	if !ok || !strings.Contains(confirm.prompt, "View: Allow → Deny") {
+		t.Fatalf("ctrl+s should ask, listing the change: %+v", cmd())
+	}
+	other := ado.Group{Descriptor: "vssgp.QQ", Name: "Readers"} // nothing set at project level
+	s.openPermissions(other)
+	if len(s.detail.perm.base) != 2 {
+		t.Fatal("a group with nothing set should still list every permission, not set")
+	}
+}

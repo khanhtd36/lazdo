@@ -71,6 +71,8 @@ type settingsDetail struct {
 	// descriptor), and how to fetch them again after a change.
 	team, group string
 	reload      func() tea.Cmd
+	// perm is set for a group's permissions, which are edited here.
+	perm *permEdit
 }
 
 type (
@@ -110,6 +112,13 @@ func (s *settingsView) update(msg tea.Msg) tea.Cmd {
 		if msg.projectID == s.project.ID {
 			s.loading, s.data = false, msg.data
 			s.rebuild()
+			if d := s.detail; d != nil && d.perm != nil && len(d.perm.pending) == 0 {
+				s.openPermissions(d.perm.group) // show the saved permissions
+			}
+		}
+	case permDiscardMsg:
+		if s.detail != nil {
+			s.detail = nil
 		}
 	case settingsMembersMsg:
 		if s.detail != nil && s.detail.title == msg.title {
@@ -119,6 +128,9 @@ func (s *settingsView) update(msg tea.Msg) tea.Cmd {
 	case settingsSavedMsg:
 		if msg.err != nil {
 			return statusCmd("error: " + msg.err.Error())
+		}
+		if d := s.detail; d != nil && d.perm != nil {
+			d.perm.pending = map[int]string{} // saved; the reload shows them as set
 		}
 		var members tea.Cmd
 		if d := s.detail; d != nil && d.reload != nil {
@@ -188,6 +200,11 @@ func (s *settingsView) key(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 		}
 		if s.detail.reload != nil && !s.detail.list.typing {
 			if handled, cmd := s.memberKey(k); handled {
+				return true, cmd
+			}
+		}
+		if s.detail.perm != nil && !s.detail.list.typing {
+			if handled, cmd := s.permKey(k); handled {
 				return true, cmd
 			}
 		}
@@ -266,8 +283,7 @@ func (s *settingsView) open() tea.Cmd {
 		return s.detail.reload()
 	case ado.Group:
 		if s.section == secPermissions {
-			s.detail = &settingsDetail{title: "Project permissions of " + v.Name}
-			s.detail.list.setItems(permissionItems(s.data.Permissions[v.SID()]))
+			s.openPermissions(v)
 			return nil
 		}
 		s.detail = &settingsDetail{title: "Members of " + v.Name, loading: true, group: v.Descriptor}
@@ -554,27 +570,6 @@ func memberItems(ms []ado.Member) []pickItem {
 			text += styleYellow.Render("  admin")
 		}
 		items = append(items, settingsRow(text+styleDim.Render("  "+m.Detail), m))
-	}
-	return items
-}
-
-func permissionItems(ps []ado.Permission) []pickItem {
-	if len(ps) == 0 {
-		return []pickItem{settingsRow(styleDim.Render("Nothing set on this group at project level; it inherits."), nil)}
-	}
-	items := make([]pickItem, 0, len(ps))
-	for _, p := range ps {
-		state := styleDim.Render("Not set")
-		switch p.State {
-		case "Allow":
-			state = styleGreen.Render("Allow")
-		case "Deny":
-			state = styleRed.Render("Deny")
-		}
-		if p.Inherited {
-			state += styleDim.Render(" (inherited)")
-		}
-		items = append(items, settingsRow(fit(p.Name, 44)+" "+state, p))
 	}
 	return items
 }

@@ -62,6 +62,22 @@ func (c *Client) DeleteGroup(ctx context.Context, descriptor string) error {
 	return c.vssps(ctx, http.MethodDelete, "/_apis/graph/groups/"+url.PathEscape(descriptor), graphVersion(), nil, nil)
 }
 
+// SetProjectPermissions replaces a group's project-level permissions: the
+// bits in allow are allowed, those in deny denied, the rest not set (so
+// inherited). sid is the group's security ID.
+func (c *Client) SetProjectPermissions(ctx context.Context, projectID, sid string, allow, deny int) error {
+	body := map[string]any{
+		"token": "$PROJECT:vstfs:///Classification/TeamProject/" + projectID,
+		"merge": false, // replace the group's entry, so cleared bits go back to not set
+		"accessControlEntries": []any{map[string]any{
+			"descriptor": "Microsoft.TeamFoundation.Identity;" + sid,
+			"allow":      allow,
+			"deny":       deny,
+		}},
+	}
+	return c.do(ctx, http.MethodPost, "/_apis/accesscontrolentries/"+ProjectNamespace, v71(), body, nil)
+}
+
 // AddMember puts a user or group (by graph descriptor) into a group or team.
 func (c *Client) AddMember(ctx context.Context, member, container string) error {
 	return c.vssps(ctx, http.MethodPut, "/_apis/graph/memberships/"+url.PathEscape(member)+"/"+url.PathEscape(container), graphVersion(), nil, nil)

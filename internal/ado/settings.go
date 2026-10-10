@@ -227,7 +227,8 @@ type Permission struct {
 const ProjectNamespace = "52d39943-cb85-4d7f-8fa8-c6baac873819"
 
 // ProjectPermissions lists the project-level permissions of each group,
-// keyed by the group's SID.
+// keyed by the group's SID. Key "" holds every permission not set: a group
+// with nothing set at project level has no entry of its own.
 func (c *Client) ProjectPermissions(ctx context.Context, projectID string) (map[string][]Permission, error) {
 	var ns struct {
 		Value []struct {
@@ -257,6 +258,11 @@ func (c *Client) ProjectPermissions(ctx context.Context, projectID string) (map[
 		return nil, err
 	}
 	out := map[string][]Permission{}
+	unset := make([]Permission, 0, len(ns.Value[0].Actions))
+	for _, a := range ns.Value[0].Actions {
+		unset = append(unset, Permission{Name: a.DisplayName, Bit: a.Bit, State: "Not set"})
+	}
+	out[""] = unset
 	for _, acl := range acls.Value {
 		for desc, ace := range acl.Aces {
 			_, sid, _ := strings.Cut(desc, ";")
