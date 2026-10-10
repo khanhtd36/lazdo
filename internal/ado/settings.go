@@ -113,7 +113,7 @@ func (c *Client) TeamMembers(ctx context.Context, projectID, teamID string) ([]M
 	}
 	out := make([]Member, 0, len(resp.Value))
 	for _, m := range resp.Value {
-		out = append(out, Member{Name: m.Identity.DisplayName, Detail: m.Identity.UniqueName, Admin: m.IsTeamAdmin})
+		out = append(out, Member{Name: m.Identity.DisplayName, Detail: m.Identity.UniqueName, Admin: m.IsTeamAdmin, ID: m.Identity.ID})
 	}
 	sortMembers(out)
 	return out, nil
@@ -124,6 +124,9 @@ type Member struct {
 	Name, Detail string // Detail: an email, or "group"
 	Admin        bool   // a team administrator
 	IsGroup      bool
+	// ID (team members) or Descriptor (group members) names the member
+	// for removing it; Descriptor resolves from ID when needed.
+	ID, Descriptor string
 }
 
 func sortMembers(ms []Member) {
@@ -200,8 +203,8 @@ func (c *Client) GroupMembers(ctx context.Context, group string) ([]Member, erro
 	}
 	err := c.vssps(ctx, "POST", "/_apis/graph/subjectlookup", url.Values{"api-version": {"7.1-preview.1"}}, map[string]any{"lookupKeys": keys}, &subjects)
 	out := make([]Member, 0, len(subjects.Value))
-	for _, s := range subjects.Value {
-		m := Member{Name: s.DisplayName, Detail: s.MailAddress}
+	for desc, s := range subjects.Value {
+		m := Member{Name: s.DisplayName, Detail: s.MailAddress, Descriptor: desc}
 		if s.SubjectKind == "group" {
 			m.IsGroup, m.Detail = true, s.PrincipalName
 		}

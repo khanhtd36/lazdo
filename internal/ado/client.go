@@ -128,7 +128,11 @@ func (c *Client) doAt(ctx context.Context, host, method, path string, query url.
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
-	if in != nil {
+	switch in.(type) {
+	case nil:
+	case JSONPatch:
+		req.Header.Set("Content-Type", "application/json-patch+json")
+	default:
 		req.Header.Set("Content-Type", "application/json")
 	}
 	resp, err := c.http.Do(req)

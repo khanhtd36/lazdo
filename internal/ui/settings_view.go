@@ -67,6 +67,10 @@ type settingsDetail struct {
 	list    pickList
 	loading bool
 	err     error
+	// For a member list: whose members (a team's ID or a group's graph
+	// descriptor), and how to fetch them again after a change.
+	team, group string
+	reload      func() tea.Cmd
 }
 
 type (
@@ -116,7 +120,11 @@ func (s *settingsView) update(msg tea.Msg) tea.Cmd {
 		if msg.err != nil {
 			return statusCmd("error: " + msg.err.Error())
 		}
-		return tea.Batch(statusCmd(msg.text), s.load())
+		var members tea.Cmd
+		if s.detail != nil && s.detail.reload != nil {
+			members = s.detail.reload() // a member was added or removed
+		}
+		return tea.Batch(statusCmd(msg.text), s.load(), members)
 	}
 	return nil
 }
@@ -176,6 +184,11 @@ func (s *settingsView) key(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 		if handled {
 			return true, nil
 		}
+		if s.detail.reload != nil && !s.detail.list.typing {
+			if handled, cmd := s.memberKey(k); handled {
+				return true, cmd
+			}
+		}
 		if k == "esc" || k == "h" || k == "left" {
 			s.detail = nil
 			return true, nil
@@ -211,6 +224,7 @@ func (s *settingsView) key(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 	if !s.content.typing && s.data != nil {
 		edit := map[settingsSection]func(string) (bool, tea.Cmd){
 			secPolicies: s.policyKey, secRepos: s.repoKey, secVarGroups: s.varKey,
+			secTeams: s.teamKey, secGroups: s.groupKey,
 		}[s.section]
 		if edit != nil {
 			if handled, cmd := edit(k); handled {
@@ -237,28 +251,34 @@ func (s *settingsView) open() tea.Cmd {
 	}
 	switch v := it.value.(type) {
 	case ado.Team:
-		s.detail = &settingsDetail{title: "Members of " + v.Name, loading: true}
+		s.detail = &settingsDetail{title: "Members of " + v.Name, loading: true, team: v.ID}
 		client, p, title := s.client, s.project, s.detail.title
-		return func() tea.Msg {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			ms, err := client.TeamMembers(ctx, p.ID, v.ID)
-			return settingsMembersMsg{title: title, members: ms, err: err}
+		s.detail.reload = func() tea.Cmd {
+			return func() tea.Msg {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				ms, err := client.TeamMembers(ctx, p.ID, v.ID)
+				return settingsMembersMsg{title: title, members: ms, err: err}
+			}
 		}
+		return s.detail.reload()
 	case ado.Group:
 		if s.section == secPermissions {
 			s.detail = &settingsDetail{title: "Project permissions of " + v.Name}
 			s.detail.list.setItems(permissionItems(s.data.Permissions[v.SID()]))
 			return nil
 		}
-		s.detail = &settingsDetail{title: "Members of " + v.Name, loading: true}
+		s.detail = &settingsDetail{title: "Members of " + v.Name, loading: true, group: v.Descriptor}
 		client, title := s.client, s.detail.title
-		return func() tea.Msg {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			ms, err := client.GroupMembers(ctx, v.Descriptor)
-			return settingsMembersMsg{title: title, members: ms, err: err}
+		s.detail.reload = func() tea.Cmd {
+			return func() tea.Msg {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				ms, err := client.GroupMembers(ctx, v.Descriptor)
+				return settingsMembersMsg{title: title, members: ms, err: err}
+			}
 		}
+		return s.detail.reload()
 	}
 	return nil
 }
