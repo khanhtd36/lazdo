@@ -87,6 +87,25 @@ func (c *Client) DeleteVariableGroup(ctx context.Context, projectID string, id i
 	return c.do(ctx, http.MethodDelete, c.varGroupPath(projectID)+"/"+strconv.Itoa(id), q, nil, nil)
 }
 
+// SetAllPipelines turns "Grant access permission to all pipelines" on or
+// off for a service connection, as az devops service-endpoint update
+// --enable-for-all does.
+func (c *Client) SetAllPipelines(ctx context.Context, projectID, endpointID string, on bool) error {
+	body := map[string]any{
+		"allPipelines": map[string]bool{"authorized": on},
+		"resource":     map[string]string{"id": endpointID, "type": "endpoint"},
+	}
+	path := "/" + url.PathEscape(projectID) + "/_apis/pipelines/pipelinePermissions/endpoint/" + endpointID
+	return c.do(ctx, http.MethodPatch, path, url.Values{"api-version": {"7.1-preview.1"}}, body, nil)
+}
+
+// DeleteServiceConnection removes a service connection from the project;
+// pipelines that use it stop working.
+func (c *Client) DeleteServiceConnection(ctx context.Context, projectID, endpointID string) error {
+	q := url.Values{"projectIds": {projectID}, "api-version": {apiVersion}}
+	return c.do(ctx, http.MethodDelete, "/_apis/serviceendpoint/endpoints/"+endpointID, q, nil, nil)
+}
+
 // RepoBranchExists reports whether repo r has the branch, before making it
 // the default.
 func (c *Client) RepoBranchExists(ctx context.Context, r Repo, branch string) (bool, error) {

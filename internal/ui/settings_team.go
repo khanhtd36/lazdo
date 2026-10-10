@@ -79,6 +79,35 @@ func (s *settingsView) groupKey(k string) (bool, tea.Cmd) {
 	return true, nil
 }
 
+// connectionKey toggles a service connection's access for all pipelines
+// (space) and deletes it (d, after its name is typed: pipelines using it
+// break). Its credentials are never read or edited.
+func (s *settingsView) connectionKey(k string) (bool, tea.Cmd) {
+	it, ok := s.content.selected()
+	sc, isConn := it.value.(ado.ServiceConnection)
+	if !ok || !isConn {
+		return false, nil
+	}
+	client, project := s.client, s.project.ID
+	switch k {
+	case " ":
+		on := !sc.AllPipelines
+		verb, prompt := "opened to all pipelines", "Let every pipeline in the project use "+sc.Name+" without asking?"
+		if !on {
+			verb, prompt = "now asks pipelines for approval", "Make pipelines ask before using "+sc.Name+"?\nPipelines not yet approved for it will wait for approval."
+		}
+		return true, showModal(newConfirm(prompt, s.write(sc.Name+" "+verb, func(ctx context.Context) error {
+			return client.SetAllPipelines(ctx, project, sc.ID, on)
+		})))
+	case "d":
+		prompt := "Delete service connection " + sc.Name + "?\nPipelines that use it stop working."
+		return true, showModal(newNameConfirm(prompt, sc.Name, s.write("deleted "+sc.Name, func(ctx context.Context) error {
+			return client.DeleteServiceConnection(ctx, project, sc.ID)
+		})))
+	}
+	return false, nil
+}
+
 // memberKey adds (a) and removes (d) members in a team's or group's member
 // list.
 func (s *settingsView) memberKey(k string) (bool, tea.Cmd) {

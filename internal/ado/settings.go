@@ -399,14 +399,29 @@ type ServiceConnection struct {
 	URL      string `json:"url"`
 	IsReady  bool   `json:"isReady"`
 	IsShared bool   `json:"isShared"`
+	// AllPipelines is "Grant access permission to all pipelines".
+	AllPipelines bool `json:"-"`
 }
 
 func (c *Client) ServiceConnections(ctx context.Context, projectID string) ([]ServiceConnection, error) {
 	var resp struct {
 		Value []ServiceConnection `json:"value"`
 	}
-	err := c.get(ctx, "/"+url.PathEscape(projectID)+"/_apis/serviceendpoint/endpoints", url.Values{"api-version": {apiVersion}}, &resp)
-	return resp.Value, err
+	if err := c.get(ctx, "/"+url.PathEscape(projectID)+"/_apis/serviceendpoint/endpoints", url.Values{"api-version": {apiVersion}}, &resp); err != nil {
+		return nil, err
+	}
+	for i := range resp.Value {
+		var pp struct {
+			AllPipelines *struct {
+				Authorized bool `json:"authorized"`
+			} `json:"allPipelines"`
+		}
+		path := "/" + url.PathEscape(projectID) + "/_apis/pipelines/pipelinePermissions/endpoint/" + resp.Value[i].ID
+		if c.get(ctx, path, url.Values{"api-version": {"7.1-preview.1"}}, &pp) == nil && pp.AllPipelines != nil {
+			resp.Value[i].AllPipelines = pp.AllPipelines.Authorized
+		}
+	}
+	return resp.Value, nil
 }
 
 // VariableGroup is a set of pipeline variables; secret values never come back.

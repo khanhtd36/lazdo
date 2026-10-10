@@ -248,7 +248,7 @@ func (s *settingsView) key(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 	if !s.content.typing && s.data != nil {
 		edit := map[settingsSection]func(string) (bool, tea.Cmd){
 			secPolicies: s.policyKey, secRepos: s.repoKey, secVarGroups: s.varKey,
-			secTeams: s.teamKey, secGroups: s.groupKey,
+			secTeams: s.teamKey, secGroups: s.groupKey, secConnections: s.connectionKey,
 		}[s.section]
 		if edit != nil {
 			if handled, cmd := edit(k); handled {
@@ -421,7 +421,11 @@ func (s *settingsView) contentItems() []pickItem {
 			if !c.IsReady {
 				state = styleYellow.Render("not ready")
 			}
-			items = append(items, settingsRow(c.Name+styleDim.Render("  "+c.Type+"  "+c.URL+"  ")+state, c))
+			access := styleDim.Render("  · pipelines need approval")
+			if c.AllPipelines {
+				access = styleDim.Render("  · ") + styleYellow.Render("all pipelines")
+			}
+			items = append(items, settingsRow(c.Name+styleDim.Render("  "+c.Type+"  "+c.URL+"  ")+state+access, c))
 		}
 	case secVarGroups:
 		items = varGroupItems(d.VarGroups)
