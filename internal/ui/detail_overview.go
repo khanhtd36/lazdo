@@ -382,7 +382,7 @@ func (d *detailModel) renderChecks(width int) []string {
 	}
 	switch {
 	case failed > 0:
-		out = append(out, styleRed.Render(fmt.Sprintf("✗ %d required %s failed", failed, plural(failed, "check", "checks"))))
+		out = append(out, styleRed.Render(fmt.Sprintf("× %d required %s failed", failed, plural(failed, "check", "checks"))))
 	case pending > 0:
 		out = append(out, styleYellow.Render(fmt.Sprintf("● %d required %s pending", pending, plural(pending, "check", "checks"))))
 	default:
@@ -403,7 +403,7 @@ func (d *detailModel) renderChecks(width int) []string {
 	}
 	out = append(out, d.mergeLine())
 	if by := d.data.AutoCompleteSetBy; by != nil && by.ID != "" {
-		out = append(out, styleCyan.Render("⟳ Auto-complete set by "+by.DisplayName))
+		out = append(out, styleCyan.Render("↻ Auto-complete set by "+by.DisplayName))
 	}
 	return out
 }
@@ -420,7 +420,7 @@ func policyIcon(status string) string {
 	case "approved":
 		return styleGreen.Render("✓")
 	case "rejected", "broken":
-		return styleRed.Render("✗")
+		return styleRed.Render("×")
 	case "running":
 		return styleYellow.Render("●")
 	default:
@@ -603,11 +603,11 @@ func (d *detailModel) mergeLine() string {
 		}
 		return s
 	case "conflicts":
-		return styleRed.Render("✗") + fmt.Sprintf(" Merge conflicts in %d %s (see Conflicts tab)", len(d.data.Conflicts), plural(len(d.data.Conflicts), "file", "files"))
+		return styleRed.Render("×") + fmt.Sprintf(" Merge conflicts in %d %s (see Conflicts tab)", len(d.data.Conflicts), plural(len(d.data.Conflicts), "file", "files"))
 	case "queued":
 		return styleYellow.Render("●") + " Checking for merge conflicts"
 	case "failure", "rejectedByPolicy":
-		return styleRed.Render("✗") + " Merge failed: " + d.data.MergeFailure
+		return styleRed.Render("×") + " Merge failed: " + d.data.MergeFailure
 	}
 	return styleDim.Render("○ Merge status: " + d.data.MergeStatus)
 }
@@ -896,7 +896,7 @@ func voteGlyph(v int) string {
 	case v >= ado.VoteApprovedWithSuggests:
 		return styleGreen.Render("✓")
 	case v <= ado.VoteRejected:
-		return styleRed.Render("✗")
+		return styleRed.Render("×")
 	case v <= ado.VoteWaitingForAuthor:
 		return styleYellow.Render("!")
 	}

@@ -375,7 +375,7 @@ func (c *completeDialog) view(int) string {
 			label = styleYellow
 		}
 		for _, b := range c.blockers {
-			lines = append(lines, label.Render("✗ "+b))
+			lines = append(lines, label.Render("× "+b))
 		}
 		if c.auto {
 			lines = append(lines, styleDim.Render("  completes automatically once these pass"))

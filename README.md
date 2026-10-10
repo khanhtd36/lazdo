@@ -19,7 +19,7 @@ Sections, across every project of the organization:
 - **Created by me**.
 
 Each row: title, markers, author, ID, repo → target branch, resolved/total
-comment threads, checks: build policies and required external ones (`✓` `✗` `●` running), last update. Reviewer votes
+comment threads, checks: build policies and required external ones (`✓` `×` `●` running), last update. Reviewer votes
 are in the PR detail.
 
 The title is bold when there is something new: pushes or comments since

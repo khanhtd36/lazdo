@@ -177,7 +177,7 @@ func (c *checkoutModal) preview() string {
 		return styleGreen.Render("✓ clone " + c.req.repo + " into a new folder here")
 	case actions.PlanRefuse:
 	}
-	return styleRed.Render("✗ " + c.plan.Reason)
+	return styleRed.Render("× " + c.plan.Reason)
 }
 
 func (c *checkoutModal) view(int) string {

@@ -329,7 +329,7 @@ func votes(reviewers []ado.Reviewer) string {
 		case r.Vote >= ado.VoteApprovedWithSuggests:
 			parts = append(parts, styleGreen.Render(in+"~"))
 		case r.Vote <= ado.VoteRejected:
-			parts = append(parts, styleRed.Render(in+"✗"))
+			parts = append(parts, styleRed.Render(in+"×"))
 		case r.Vote <= ado.VoteWaitingForAuthor:
 			parts = append(parts, styleYellow.Render(in+"!"))
 		default:
@@ -383,7 +383,7 @@ func build(b buildResult, ok bool) string {
 	case ado.BuildPassed:
 		return styleGreen.Render("✓")
 	case ado.BuildFailed:
-		return styleRed.Render("✗")
+		return styleRed.Render("×")
 	case ado.BuildRunning:
 		return styleYellow.Render("●")
 	case ado.BuildNone:

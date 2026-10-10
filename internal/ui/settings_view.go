@@ -399,7 +399,7 @@ func (s *settingsView) contentItems() []pickItem {
 		}
 	case secRepos:
 		for _, r := range d.Repos {
-			text := r.Name + styleDim.Render("  ⎇ "+r.DefaultBranchName()+"  "+humanSize(r.Size))
+			text := r.Name + styleDim.Render("  ⑂ "+r.DefaultBranchName()+"  "+humanSize(r.Size))
 			if r.IsDisabled {
 				text += styleYellow.Render("  disabled")
 			}

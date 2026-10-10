@@ -192,7 +192,7 @@ func projectRow(p ado.ProjectInfo, prs, repos, width int) string {
 }
 
 func repoSearchRow(r ado.Repo, width int) string {
-	return truncate(joinCols(styleCyan.Render("⎇ ")+styleTitle.Render(r.Name),
+	return truncate(joinCols(styleCyan.Render("⑂ ")+styleTitle.Render(r.Name),
 		styleDim.Render("repo in "+r.Project.Name), styleDim.Render(r.DefaultBranchName())), width)
 }
 

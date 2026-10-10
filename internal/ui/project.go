@@ -620,9 +620,9 @@ func runGlyph(state, result string) string {
 	case result == "partiallySucceeded" || result == "succeededWithIssues":
 		return styleYellow.Render("!")
 	case result == "failed":
-		return styleRed.Render("✗")
+		return styleRed.Render("×")
 	case result == "canceled" || result == "skipped":
-		return styleDim.Render("⊘")
+		return styleDim.Render("–")
 	}
 	return styleDim.Render("·")
 }

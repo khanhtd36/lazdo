@@ -47,7 +47,7 @@ func (m *projectModel) titleLine() string {
 	crumbs := []string{styleTitle.Render(m.project.Name)}
 	switch m.level {
 	case levelRepo:
-		crumbs = append(crumbs, "Repos", styleTitle.Render(m.repo.Name), styleAccent.Render("⎇ "+m.browser.branch))
+		crumbs = append(crumbs, "Repos", styleTitle.Render(m.repo.Name), styleAccent.Render("⑂ "+m.browser.branch))
 	case levelRuns:
 		crumbs = append(crumbs, "Pipelines", styleTitle.Render(m.pipeline.Name), "runs")
 	case levelRun:
