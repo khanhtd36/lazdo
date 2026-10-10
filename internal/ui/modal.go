@@ -18,7 +18,7 @@ type modal interface {
 	view(width int) string
 }
 
-var styleModal = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("12")).Padding(0, 1)
+var styleModal = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(accent).Padding(0, 1)
 
 // --- Menu ---
 

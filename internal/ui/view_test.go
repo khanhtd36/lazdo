@@ -261,11 +261,11 @@ func TestDashboardPanesShareOneScroll(t *testing.T) {
 	if n := len(strings.Split(view, "\n")); n != m.height {
 		t.Fatalf("view is %d lines, want %d:\n%s", n, m.height, view)
 	}
-	if !strings.Contains(view, "pr number 11") || !strings.Contains(view, "╰") {
+	if !strings.Contains(view, "pr number 11") || !strings.Contains(view, "└") {
 		t.Fatalf("the last PR and its pane's bottom edge should be in view:\n%s", view)
 	}
 	press("j") // onto the next Section's header, the pane below
-	if !strings.Contains(ansi.Strip(m.View()), "╭▌") {
+	if !strings.Contains(ansi.Strip(m.View()), "┌▌") {
 		t.Fatalf("cursor should be on the next pane's header:\n%s", ansi.Strip(m.View()))
 	}
 	for range 13 {

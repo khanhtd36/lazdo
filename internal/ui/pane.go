@@ -49,7 +49,7 @@ func framePane(p pane, height int) []string {
 	}
 	fill := max(0, inner-1-ansi.StringWidth(name))
 	out := make([]string, 0, height)
-	out = append(out, edge.Render("╭─")+name+edge.Render(strings.Repeat("─", fill)+"╮"))
+	out = append(out, edge.Render("┌─")+name+edge.Render(strings.Repeat("─", fill)+"┐"))
 	for i := range max(0, height-2) {
 		line := ""
 		if i < len(p.lines) {
@@ -57,5 +57,5 @@ func framePane(p pane, height int) []string {
 		}
 		out = append(out, edge.Render("│")+padRight(truncate(line, inner), inner)+edge.Render("│"))
 	}
-	return append(out, edge.Render("╰"+strings.Repeat("─", inner)+"╯"))
+	return append(out, edge.Render("└"+strings.Repeat("─", inner)+"┘"))
 }

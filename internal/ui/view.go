@@ -228,7 +228,7 @@ func (m Model) dashboardLine(l dashLine, r row, cursor, focused bool) string {
 	inner := max(1, m.width-3)
 	switch {
 	case l.bottom:
-		return edge.Render("╰" + strings.Repeat("─", inner) + "╯")
+		return edge.Render("└" + strings.Repeat("─", inner) + "┘")
 	case r.pr == nil:
 		s := m.sections[r.section]
 		arrow := "▾"
@@ -241,7 +241,7 @@ func (m Model) dashboardLine(l dashLine, r row, cursor, focused bool) string {
 		}
 		name := title.Render(truncate(fmt.Sprintf(" %s %s (%d) ", arrow, s.Kind.Title(), len(s.PRs)), max(1, inner-2)))
 		fill := max(0, inner-1-ansi.StringWidth(name))
-		return edge.Render("╭") + lead + name + edge.Render(strings.Repeat("─", fill)+"╮")
+		return edge.Render("┌") + lead + name + edge.Render(strings.Repeat("─", fill)+"┐")
 	}
 	mark := " "
 	if cursor {
