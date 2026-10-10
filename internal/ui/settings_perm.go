@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -115,7 +116,27 @@ func (s *settingsView) permKey(k string) (bool, tea.Cmd) {
 	return false, nil
 }
 
-type permDiscardMsg struct{}
+type (
+	permDiscardMsg    struct{}
+	settingsReloadMsg struct{} // read the settings again, after a save settles
+)
+
+// applySaved shows saved changes as set without waiting for the server,
+// whose access list may still read back the old values.
+func (s *settingsView) applySaved(e *permEdit) {
+	base := make([]ado.Permission, len(e.base))
+	for i, p := range e.base {
+		if now, ok := e.pending[p.Bit]; ok {
+			p.State, p.Inherited = now, false
+		}
+		base[i] = p
+	}
+	e.base, e.pending = base, map[int]string{}
+	s.data.Permissions[e.group.SID()] = base
+	cursor := s.detail.list.cursor
+	s.detail.list.setItems(s.permItems())
+	s.detail.list.cursor = cursor
+}
 
 func (s *settingsView) permPrompt() string {
 	e := s.detail.perm
@@ -131,24 +152,21 @@ func (s *settingsView) permPrompt() string {
 	return strings.Join(lines, "\n")
 }
 
-// savePermissions writes the group's whole entry: every permission set to
-// Allow or Deny, the rest not set.
+// savePermissions writes only the changed permissions, one each, so the
+// group's other permissions are never rewritten from a possibly stale read.
 func (s *settingsView) savePermissions() tea.Cmd {
 	e := s.detail.perm
-	allow, deny := 0, 0
-	for _, p := range e.base {
-		switch e.state(p) {
-		case "Allow":
-			allow |= p.Bit
-		case "Deny":
-			deny |= p.Bit
-		}
-	}
-	client, project, sid, name, n := s.client, s.project.ID, e.group.SID(), e.group.Name, len(e.pending)
+	changes := maps.Clone(e.pending)
+	client, project, sid, name, n := s.client, s.project.ID, e.group.SID(), e.group.Name, len(changes)
 	return s.write(fmt.Sprintf("saved %d permission %s for %s", n, plural(n, "change", "changes"), name), func(ctx context.Context) error {
 		if sid == "" {
 			return fmt.Errorf("couldn't work out %s's security ID", name)
 		}
-		return client.SetProjectPermissions(ctx, project, sid, allow, deny)
+		for bit, state := range changes {
+			if err := client.SetProjectPermission(ctx, project, sid, bit, state); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }

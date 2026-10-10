@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 // Team, security group and membership writes. A team is backed by a
@@ -62,17 +63,28 @@ func (c *Client) DeleteGroup(ctx context.Context, descriptor string) error {
 	return c.vssps(ctx, http.MethodDelete, "/_apis/graph/groups/"+url.PathEscape(descriptor), graphVersion(), nil, nil)
 }
 
-// SetProjectPermissions replaces a group's project-level permissions: the
-// bits in allow are allowed, those in deny denied, the rest not set (so
-// inherited). sid is the group's security ID.
-func (c *Client) SetProjectPermissions(ctx context.Context, projectID, sid string, allow, deny int) error {
+// SetProjectPermission sets one project-level permission (bit) of a group
+// (by security ID) to "Allow", "Deny" or "Not set", leaving the group's
+// other permissions alone, as az devops security permission update and
+// reset do. Changing one bit at a time matters: the access list can read
+// back stale for a moment after a write, and replacing the whole entry from
+// a stale read would undo changes just made.
+func (c *Client) SetProjectPermission(ctx context.Context, projectID, sid string, bit int, state string) error {
+	token := "$PROJECT:vstfs:///Classification/TeamProject/" + projectID
+	descriptor := "Microsoft.TeamFoundation.Identity;" + sid
+	if state == "Not set" {
+		q := url.Values{"descriptor": {descriptor}, "token": {token}, "api-version": {apiVersion}}
+		return c.do(ctx, http.MethodDelete, "/_apis/permissions/"+ProjectNamespace+"/"+strconv.Itoa(bit), q, nil, nil)
+	}
+	allow, deny := bit, 0
+	if state == "Deny" {
+		allow, deny = 0, bit
+	}
 	body := map[string]any{
-		"token": "$PROJECT:vstfs:///Classification/TeamProject/" + projectID,
-		"merge": false, // replace the group's entry, so cleared bits go back to not set
+		"token": token,
+		"merge": true, // add to the group's entry; the bit leaves the other side
 		"accessControlEntries": []any{map[string]any{
-			"descriptor": "Microsoft.TeamFoundation.Identity;" + sid,
-			"allow":      allow,
-			"deny":       deny,
+			"descriptor": descriptor, "allow": allow, "deny": deny,
 		}},
 	}
 	return c.do(ctx, http.MethodPost, "/_apis/accesscontrolentries/"+ProjectNamespace, v71(), body, nil)

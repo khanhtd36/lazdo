@@ -116,6 +116,8 @@ func (s *settingsView) update(msg tea.Msg) tea.Cmd {
 				s.openPermissions(d.perm.group) // show the saved permissions
 			}
 		}
+	case settingsReloadMsg:
+		return s.load()
 	case permDiscardMsg:
 		if s.detail != nil {
 			s.detail = nil
@@ -130,7 +132,10 @@ func (s *settingsView) update(msg tea.Msg) tea.Cmd {
 			return statusCmd("error: " + msg.err.Error())
 		}
 		if d := s.detail; d != nil && d.perm != nil {
-			d.perm.pending = map[int]string{} // saved; the reload shows them as set
+			// The access list can read back stale for a moment: show what was
+			// saved now, and read the server again a little later.
+			s.applySaved(d.perm)
+			return tea.Batch(statusCmd(msg.text), tea.Tick(3*time.Second, func(time.Time) tea.Msg { return settingsReloadMsg{} }))
 		}
 		var members tea.Cmd
 		if d := s.detail; d != nil && d.reload != nil {
