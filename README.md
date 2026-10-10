@@ -173,8 +173,10 @@ Inside a project:
   off, `N` adds a variable group, and in a member list `a` adds people or
   groups by name or email and `d` removes one. Forms list what will change
   before `ctrl+s` saves. A secret's value is never shown; left empty, the
-  stored secret is kept. Permissions and service connections are
-  read-only for now.
+  stored secret is kept. In a group's permissions, `space` cycles one
+  through not set, allow and deny; changes wait until `ctrl+s`, which
+  lists them and asks first, and each is saved on its own. Service
+  connections are read-only for now.
 
 **Checkout** (`c`, wherever a branch is shown) asks for a folder: the working
 directory if it is a clone of the repo, the last folder you used, or a new
