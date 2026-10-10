@@ -175,8 +175,9 @@ Inside a project:
   before `ctrl+s` saves. A secret's value is never shown; left empty, the
   stored secret is kept. In a group's permissions, `space` cycles one
   through not set, allow and deny; changes wait until `ctrl+s`, which
-  lists them and asks first, and each is saved on its own. Service
-  connections are read-only for now.
+  lists them and asks first, and each is saved on its own. On a service
+  connection, `space` grants or withdraws access for all pipelines and `d`
+  deletes it (after its name is typed); credentials are never shown.
 
 **Checkout** (`c`, wherever a branch is shown) asks for a folder: the working
 directory if it is a clone of the repo, the last folder you used, or a new
