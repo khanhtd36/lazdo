@@ -167,12 +167,14 @@ Inside a project:
   grouped by branch, each written as the rule it enforces; `enter` on a
   team or group lists its members, and in Permissions shows the group's
   project-level permissions. Editable so far: branch policies,
-  repositories and variable groups. `e` edits, `n` creates, `d` deletes
-  (a repository only after its name is typed; it goes to the recycle
-  bin), `space` turns a policy on or off, `N` adds a variable group. Forms
-  list what will change before `ctrl+s` saves. A secret's value is never
-  shown; left empty, the stored secret is kept. Teams, groups,
-  permissions and service connections are read-only for now.
+  repositories, variable groups, teams and security groups. `e` edits,
+  `n` creates, `d` deletes (a repository or group only after its name is
+  typed; repositories go to the recycle bin), `space` turns a policy on or
+  off, `N` adds a variable group, and in a member list `a` adds people or
+  groups by name or email and `d` removes one. Forms list what will change
+  before `ctrl+s` saves. A secret's value is never shown; left empty, the
+  stored secret is kept. Permissions and service connections are
+  read-only for now.
 
 **Checkout** (`c`, wherever a branch is shown) asks for a folder: the working
 directory if it is a clone of the repo, the last folder you used, or a new
