@@ -10,6 +10,13 @@ A terminal view of one person's Azure DevOps pull requests across an organizatio
 One of the dashboard's top-level views: Pull requests (Me's pull requests in Sections) or Projects.
 _Avoid_: tab (reserved for the views inside a pull request or project), screen
 
+**Pane**:
+One of the side-by-side areas of a split view, such as a repo's branches beside its files, or a run's steps beside its log. Each is framed and named.
+_Avoid_: panel, box, column
+
+**Focused pane**:
+The pane that takes the keys; its frame is highlighted. While a popup is open, no pane is focused.
+
 **Me**:
 The signed-in Azure DevOps identity whose pull requests the dashboard shows.
 _Avoid_: user, current user

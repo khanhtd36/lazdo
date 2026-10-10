@@ -128,13 +128,13 @@ func (m Model) View() string {
 	}
 
 	rows := m.rows()
+	focused := -1 // the Section the cursor is in
+	if m.cursor >= 0 && m.cursor < len(rows) {
+		focused = rows[m.cursor].section
+	}
 	end := min(len(rows), m.offset+m.listHeight())
 	for i := m.offset; i < end; i++ {
-		prefix := "  "
-		if i == m.cursor {
-			prefix = styleCursor.Render("▌ ")
-		}
-		b.WriteString(truncate(prefix+m.renderRow(rows[i]), m.width-1) + "\n")
+		b.WriteString(truncate(m.dashboardLine(rows[i], i == m.cursor, rows[i].section == focused), m.width-1) + "\n")
 	}
 	for i := end - m.offset; i < m.listHeight(); i++ {
 		b.WriteString("\n")
@@ -210,16 +210,38 @@ func (m Model) statusLine() string {
 	return ""
 }
 
-func (m Model) renderRow(r row) string {
-	s := m.sections[r.section]
+// dashboardLine draws a row of the Pull requests page. A Section's header
+// is a rule across the screen; the focused Section, the one the cursor is
+// in, has a cyan rule and a cyan bar beside its rows, like a focused pane,
+// at no cost in width: the bar takes the margin column.
+func (m Model) dashboardLine(r row, cursor, focused bool) string {
+	edge, rule := styleDim, styleDim
+	if focused {
+		edge, rule = styleCyan, styleCursor
+	}
 	if r.pr == nil {
+		s := m.sections[r.section]
 		arrow := "▾"
 		if m.collapsed[s.Kind] {
 			arrow = "▸"
 		}
-		return styleHeader.Render(fmt.Sprintf("%s %s (%d)", arrow, s.Kind.Title(), len(s.PRs)))
+		lead := rule.Render("─")
+		if cursor {
+			lead = styleCursor.Render("▌")
+		}
+		title := rule.Render(fmt.Sprintf("─ %s %s (%d) ", arrow, s.Kind.Title(), len(s.PRs)))
+		fill := max(0, m.width-1-1-ansi.StringWidth(title))
+		return lead + title + rule.Render(strings.Repeat("─", fill))
 	}
-	return m.renderPR(r.pr)
+	bar := " "
+	if focused {
+		bar = edge.Render("┃")
+	}
+	mark := " "
+	if cursor {
+		mark = styleCursor.Render("▌")
+	}
+	return bar + mark + m.renderPR(r.pr)
 }
 
 func (m Model) renderPR(pr *ado.PullRequest) string {
