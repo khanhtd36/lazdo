@@ -86,17 +86,13 @@ func (l rowLayout) width(c column) int {
 }
 
 func (m Model) rowLayout() rowLayout {
-	return m.rowLayoutWidth(m.width)
-}
-
-func (m Model) rowLayoutWidth(width int) rowLayout {
 	l := rowLayout{compact: m.width < compactWidth}
 	badges := 22 // room for typical badges like "[draft] [2 new pushes]"
 	if l.compact {
 		badges = 9 // "[d] [+8p]"
 	}
 	// What's left once the title has its third, after cursor, indent, gaps.
-	room := width - 6 - badges - max(24, width/3)
+	room := m.width - 6 - badges - max(24, m.width/3)
 	for _, c := range columnPriority {
 		if need := l.width(c) + 1; need <= room || c == columnID {
 			l.shown[c] = true
@@ -125,58 +121,46 @@ func (m Model) View() string {
 	var b strings.Builder
 	b.WriteString(m.titleLine() + "\n")
 	if m.page == pageProjects {
-		for _, line := range padLines(m.projects.view(m.width-1, m.listHeight()), m.listHeight()) {
-			b.WriteString(truncate(line, m.width-1) + "\n")
+		listHeight := m.dashboardListHeight()
+		innerWidth := max(1, m.width-5)
+		lines := m.projects.view(innerWidth, listHeight)
+		lines = padLines(lines, listHeight)
+		panel := stylePanelFocused
+		if m.projects.list.typing {
+			panel = stylePanelBlurred
 		}
+		for i := range lines {
+			lines[i] = padRight(truncate(lines[i], innerWidth), innerWidth)
+		}
+		b.WriteString(panel.Render(strings.Join(lines, "\n")) + "\n")
 		b.WriteString(m.statusLine() + "\n")
 		b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width-1)))
 		return b.String()
 	}
 
-	panelWidth := max(20, (m.width-3)/2)
-	leftWidth := panelWidth
-	rightWidth := max(20, m.width-1-leftWidth-2)
-	panelHeight := max(3, (m.height-3)/2)
-	panels := make([]string, 0, len(m.sections))
-	for i := range m.sections {
-		width := leftWidth
-		if i%2 == 1 {
-			width = rightWidth
+	rows := m.rows()
+	listHeight := m.dashboardListHeight()
+	innerWidth := max(1, m.width-5)
+	end := min(len(rows), m.offset+listHeight)
+	var panelLines []string
+	for i := m.offset; i < end; i++ {
+		prefix := "  "
+		if i == m.cursor {
+			prefix = styleCursor.Render("▌ ")
 		}
-		panels = append(panels, m.dashboardPaneView(i, width, panelHeight, i == m.dashboardPane))
+		panelLines = append(panelLines, padRight(truncate(prefix+m.renderRow(rows[i]), innerWidth), innerWidth))
 	}
-	if len(panels) == 4 {
-		b.WriteString(lipgloss.JoinVertical(lipgloss.Top,
-			lipgloss.JoinHorizontal(lipgloss.Top, panels[0], panels[1]),
-			lipgloss.JoinHorizontal(lipgloss.Top, panels[2], panels[3]),
-		) + "\n")
-	} else {
-		for _, panel := range panels {
-			b.WriteString(panel + "\n")
-		}
+	for i := end - m.offset; i < listHeight; i++ {
+		panelLines = append(panelLines, strings.Repeat(" ", innerWidth))
 	}
+	panel := stylePanelFocused
+	if m.filterTyping {
+		panel = stylePanelBlurred
+	}
+	b.WriteString(panel.Render(strings.Join(panelLines, "\n")) + "\n")
 	b.WriteString(m.statusLine() + "\n")
 	b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width-1)))
 	return b.String()
-}
-
-func (m Model) dashboardPaneView(section, width, height int, focused bool) string {
-	lines := []string{styleHeader.Render(fmt.Sprintf("%s (%d)", m.sections[section].Kind.Title(), len(m.dashboardItems(section))))}
-	items := m.dashboardItems(section)
-	visible := max(1, height-2)
-	start := m.paneOffsets[section]
-	end := min(len(items), start+visible)
-	for i := start; i < end; i++ {
-		prefix := "  "
-		if focused && i == m.paneCursors[section] {
-			prefix = styleCursor.Render("▌ ")
-		}
-		lines = append(lines, prefix+m.renderPRWidth(items[i], max(1, width-4)))
-	}
-	for len(lines) < height-1 {
-		lines = append(lines, "")
-	}
-	return strings.Join(framePane(lines, width, height, focused), "\n")
 }
 
 const titlePrefix = "lazdo  "
@@ -258,14 +242,10 @@ func (m Model) renderRow(r row) string {
 }
 
 func (m Model) renderPR(pr *ado.PullRequest) string {
-	return m.renderPRWidth(pr, m.width)
-}
-
-func (m Model) renderPRWidth(pr *ado.PullRequest, width int) string {
 	stats, hasStats := m.stats[pr.ID]
 	buildRes, hasBuild := m.builds[pr.ID]
 
-	layout := m.rowLayoutWidth(width)
+	layout := m.rowLayout()
 
 	var badges []string
 	if pr.IsDraft {
@@ -297,7 +277,7 @@ func (m Model) renderPRWidth(pr *ado.PullRequest, width int) string {
 	right := strings.Join(shown, " ")
 
 	// 2 cursor + 2 indent + 1 gap before right + 1 spare so the line never wraps.
-	titleWidth := width - 6 - ansi.StringWidth(right) - ansi.StringWidth(badgeText)
+	titleWidth := m.width - 6 - ansi.StringWidth(right) - ansi.StringWidth(badgeText)
 	if badgeText != "" {
 		titleWidth--
 	}

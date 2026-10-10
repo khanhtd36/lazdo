@@ -39,10 +39,20 @@ func TestDashboardClickSelectsThenOpens(t *testing.T) {
 
 	x, y := findRow(t, m.View(), "fix: click me")
 	next, _ := m.Update(click(x, y))
+	m = next.(Model)
+	if m.detail != nil || m.cursor != 1 {
+		t.Fatalf("first click: detail open=%v cursor=%d", m.detail != nil, m.cursor)
+	}
+	next, _ = m.Update(click(x, y))
 	if next.(Model).detail == nil {
-		t.Fatal("clicking the selected PR should open it")
+		t.Fatal("second click on the selected PR should open it")
 	}
 
+	_, hy := findRow(t, m.View(), "Wait for approval")
+	next, _ = m.Update(click(4, hy))
+	if !next.(Model).collapsed[ado.SectionNeedsReview] {
+		t.Fatal("clicking a section header should collapse it")
+	}
 }
 
 func TestDetailClickTabsButtonsAndMenu(t *testing.T) {

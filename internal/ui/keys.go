@@ -33,8 +33,8 @@ var (
 		{keys: "g / G", desc: "top / bottom", press: "g"},
 	}
 	dashboardKeys = []binding{
-		{keys: "tab / shift+tab", desc: "next / previous pull request pane", press: "tab", hint: "pane"},
-		{keys: "enter", desc: "open the selected pull request", press: "enter", hint: "open"},
+		{keys: "enter", desc: "open the pull request, or collapse a section", press: "enter", hint: "open"},
+		{keys: "J / K", desc: "next / previous section", press: "J", hint: "section"},
 		{keys: "/", desc: "filter pull requests by title, author, ID or branch", press: "/", hint: "filter"},
 		{keys: "y", desc: "copy menu: URL, branch, ID, title", press: "y", hint: "copy"},
 		{keys: "o", desc: "open the pull request in the browser", press: "o", hint: "browser"},
