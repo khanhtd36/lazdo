@@ -156,7 +156,7 @@ const (
 
 // HowInstalled tells from where the executable lives.
 func HowInstalled(exe string) Method {
-	p := filepath.ToSlash(strings.ToLower(exe))
+	p := strings.ReplaceAll(filepath.ToSlash(strings.ToLower(exe)), "\\", "/")
 	switch {
 	case strings.Contains(p, "/cellar/") || strings.Contains(p, "/homebrew/") || strings.Contains(p, "/linuxbrew/"):
 		return ByHomebrew
