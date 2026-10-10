@@ -121,8 +121,10 @@ func (s *settingsView) update(msg tea.Msg) tea.Cmd {
 			return statusCmd("error: " + msg.err.Error())
 		}
 		var members tea.Cmd
-		if s.detail != nil && s.detail.reload != nil {
-			members = s.detail.reload() // a member was added or removed
+		if d := s.detail; d != nil && d.reload != nil {
+			// A member was added or removed. The member list can lag behind
+			// the change for a moment, so it is read now and again shortly.
+			members = tea.Batch(d.reload(), tea.Tick(2*time.Second, func(time.Time) tea.Msg { return d.reload()() }))
 		}
 		return tea.Batch(statusCmd(msg.text), s.load(), members)
 	}
