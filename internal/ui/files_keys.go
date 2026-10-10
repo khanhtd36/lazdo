@@ -485,15 +485,13 @@ func (d *detailModel) scrollDiffToCursor() {
 		f.top = f.cursor
 		return
 	}
+	// Walk up from the cursor to the highest top that still shows it: only
+	// a screenful of lines is measured, however far the cursor jumped.
 	height := d.bodyHeight() - 2 // inside the diff's frame
-	for f.top < f.cursor {
-		rows := 0
-		for i := f.top; i <= f.cursor; i++ {
-			rows += d.lineRowCount(i)
-		}
-		if rows <= height {
-			return
-		}
-		f.top++
+	top, rows := f.cursor, d.lineRowCount(f.cursor)
+	for top > f.top && rows+d.lineRowCount(top-1) <= height {
+		top--
+		rows += d.lineRowCount(top)
 	}
+	f.top = top
 }

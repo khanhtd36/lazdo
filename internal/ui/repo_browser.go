@@ -9,7 +9,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/khanhtd36/lazdo/internal/ado"
 )
@@ -34,7 +33,7 @@ type fileContent struct {
 	binary   bool
 	tooLarge bool
 	raw      []string
-	hl       [][]seg
+	hl       *hlText
 	markdown bool
 }
 
@@ -62,6 +61,9 @@ type repoBrowser struct {
 		key  string
 		rows []string
 		src  []int // source line of each row; -1 for rendered markdown
+		part []int // the row's place among its source line's rows
+		nw   int   // line number width
+		cw   int   // source text width
 	}
 	top         int
 	cur         int // cursor row in the content pane
@@ -695,7 +697,8 @@ func (b *repoBrowser) searchKey(msg tea.KeyMsg, width, height int) {
 			b.search += s
 		}
 	}
-	b.findMatches(b.contentRows(b.contentWidth(width)))
+	b.contentRows(b.contentWidth(width))
+	b.findMatches()
 	if len(b.matches) > 0 && b.searching {
 		b.match = 0
 		b.cur = b.matches[0]
@@ -703,14 +706,14 @@ func (b *repoBrowser) searchKey(msg tea.KeyMsg, width, height int) {
 	}
 }
 
-func (b *repoBrowser) findMatches(rows []string) {
+func (b *repoBrowser) findMatches() {
 	b.matches = nil
 	if b.search == "" {
 		return
 	}
 	q := strings.ToLower(b.search)
-	for i, r := range rows {
-		if strings.Contains(strings.ToLower(ansi.Strip(r)), q) {
+	for i := range b.rendered.rows {
+		if strings.Contains(strings.ToLower(b.rowText(i)), q) {
 			b.matches = append(b.matches, i)
 		}
 	}

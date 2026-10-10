@@ -299,3 +299,30 @@ func TestSubmoduleParsing(t *testing.T) {
 		t.Fatalf("a URL naming its project should get that one: %+v", r)
 	}
 }
+
+func TestDiffCacheDropsLeastRecentPastBudget(t *testing.T) {
+	d := fakeFiles(t, 200)
+	saved := diffBudget
+	defer func() { diffBudget = saved }()
+	big := func() *fileDiff {
+		return &fileDiff{leftRaw: make([]string, 1000), rightRaw: make([]string, 1000)}
+	}
+	d.files.diffs = map[string]*fileDiff{"a": big(), "b": big(), "c": big()}
+	diffBudget = 3 * big().size()
+	d.useDiff("a")
+	d.useDiff("b")
+	d.useDiff("c")
+	if len(d.files.diffs) != 3 {
+		t.Fatalf("all three fit the budget, kept %d", len(d.files.diffs))
+	}
+	diffBudget = 2 * big().size()
+	d.useDiff("a") // a is now the most recent; b is the oldest
+	if _, ok := d.files.diffs["b"]; ok || len(d.files.diffs) != 2 {
+		t.Fatalf("b should go first, kept %d diffs", len(d.files.diffs))
+	}
+	diffBudget = 1
+	d.useDiff("c")
+	if _, ok := d.files.diffs["c"]; !ok || len(d.files.diffs) != 1 {
+		t.Fatal("the diff in use stays, even over budget")
+	}
+}

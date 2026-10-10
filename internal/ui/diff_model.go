@@ -2,6 +2,7 @@ package ui
 
 import (
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/alecthomas/chroma/v2"
@@ -112,7 +113,6 @@ type seg struct {
 
 const tabWidth = 4
 
-// highlight splits a file into lines of colored segments with chroma.
 // displayText makes file text safe to draw: tabs become spaces, and
 // characters a terminal might draw at a different width than counted, or
 // act on, are dropped (a byte order mark) or shown as "?" (control
@@ -134,49 +134,148 @@ func displayText(text string) string {
 	}, text)
 }
 
-func highlight(filename, text string) [][]seg {
+// hlText is a file's highlighted lines, kept small: each line is a slice
+// of the displayed text, and its colors are runs over it, stored for the
+// whole file in one array. A big file costs a few bytes per colored run,
+// not a string and a color name for each.
+type hlText struct {
+	lines []hlLine
+	spans []span
+}
+
+type hlLine struct {
+	text     string
+	from, to uint32 // the line's runs: spans[from:to]
+}
+
+// span colors a line's text up to end with palette[color]; text after the
+// last span is in the default color.
+type span struct {
+	end   uint32
+	color uint16
+}
+
+const hlStyle = "github-dark"
+
+// palette is every color the highlight style uses; 0 is the default.
+var palette, paletteIndex = func() ([]string, map[string]uint16) {
+	colors, index := []string{""}, map[string]uint16{"": 0}
+	style := styles.Get(hlStyle)
+	for _, tt := range style.Types() {
+		if e := style.Get(tt); e.Colour.IsSet() {
+			c := e.Colour.String()
+			if _, ok := index[c]; !ok {
+				index[c] = uint16(len(colors))
+				colors = append(colors, c)
+			}
+		}
+	}
+	return colors, index
+}()
+
+func (h *hlText) len() int { return len(h.lines) }
+
+// segs is line i (from 0) as colored segments, nil out of range.
+func (h *hlText) segs(i int) []seg {
+	if h == nil || i < 0 || i >= len(h.lines) {
+		return nil
+	}
+	l := h.lines[i]
+	out := make([]seg, 0, l.to-l.from+1)
+	at := 0
+	for _, s := range h.spans[l.from:l.to] {
+		end := min(int(s.end), len(l.text))
+		if end > at {
+			out = append(out, seg{text: l.text[at:end], fg: palette[s.color]})
+			at = end
+		}
+	}
+	if at < len(l.text) {
+		out = append(out, seg{text: l.text[at:]})
+	}
+	return out
+}
+
+// highlight splits a file into lines and colors them with chroma.
+func highlight(filename, text string) *hlText {
 	text = displayText(text)
+	h := plainLines(text)
 	lexer := lexers.Match(path.Base(filename))
 	if lexer == nil {
 		lexer = lexers.Analyse(text)
 	}
 	if lexer == nil {
-		lexer = lexers.Fallback
+		return h
 	}
-	lexer = chroma.Coalesce(lexer)
-	style := styles.Get("github-dark")
-	lines := [][]seg{nil}
-	it, err := lexer.Tokenise(nil, text)
+	it, err := chroma.Coalesce(lexer).Tokenise(nil, text)
 	if err != nil {
-		return plainLines(text)
+		return h
 	}
-	for tok := it(); tok != chroma.EOF; tok = it() {
-		fg := ""
-		if e := style.Get(tok.Type); e.Colour.IsSet() {
-			fg = e.Colour.String()
+	style := styles.Get(hlStyle)
+	colorOf := map[chroma.TokenType]uint16{}
+	line, at := 0, 0 // where the next token starts
+	for tok := it(); tok != chroma.EOF && line < len(h.lines); tok = it() {
+		c, ok := colorOf[tok.Type]
+		if !ok {
+			if e := style.Get(tok.Type); e.Colour.IsSet() {
+				c = paletteIndex[e.Colour.String()]
+			}
+			colorOf[tok.Type] = c
 		}
 		for i, part := range strings.Split(tok.Value, "\n") {
 			if i > 0 {
-				lines = append(lines, nil)
+				h.lines[line].to = uint32(len(h.spans))
+				line, at = line+1, 0
+				if line >= len(h.lines) {
+					break
+				}
+				h.lines[line].from = uint32(len(h.spans))
 			}
-			if part != "" {
-				lines[len(lines)-1] = append(lines[len(lines)-1], seg{text: part, fg: fg})
+			at += len(part)
+			if part == "" {
+				continue
+			}
+			if n := len(h.spans); n > int(h.lines[line].from) && h.spans[n-1].color == c {
+				h.spans[n-1].end = uint32(at) // same color as the run before: extend it
+			} else {
+				h.spans = append(h.spans, span{end: uint32(at), color: c})
 			}
 		}
 	}
-	if n := len(lines); n > 0 && len(lines[n-1]) == 0 && strings.HasSuffix(text, "\n") {
-		lines = lines[:n-1]
+	if line < len(h.lines) {
+		h.lines[line].to = uint32(len(h.spans))
 	}
-	return lines
+	for i := line + 1; i < len(h.lines); i++ { // lines the lexer never reached
+		h.lines[i].from, h.lines[i].to = uint32(len(h.spans)), uint32(len(h.spans))
+	}
+	h.spans = slices.Clip(h.spans)
+	return h
 }
 
-func plainLines(text string) [][]seg {
+// plainLines splits text into uncolored lines.
+func plainLines(text string) *hlText {
 	parts := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
-	out := make([][]seg, len(parts))
-	for i, p := range parts {
-		out[i] = []seg{{text: p}}
+	if text == "" {
+		parts = nil
 	}
-	return out
+	h := &hlText{lines: make([]hlLine, len(parts))}
+	for i, p := range parts {
+		h.lines[i].text = p
+	}
+	return h
+}
+
+// wrapCount is how many rows wrapSegs makes of text, without making them.
+func wrapCount(text string, width int) int {
+	rows, used := 1, 0
+	for _, r := range text {
+		w := runewidth.RuneWidth(r)
+		if used+w > width && used > 0 {
+			rows, used = rows+1, 0
+		}
+		used += w
+	}
+	return rows
 }
 
 // wrapSegs breaks a line of segments into rows at most width cells wide.

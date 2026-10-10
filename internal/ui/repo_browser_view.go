@@ -43,40 +43,83 @@ func (b *repoBrowser) currentContent() *fileContent {
 	return b.contents[folderKey(b.branch, b.file)]
 }
 
-// contentRows renders the file into screen rows for the given width: the
-// markdown view, or numbered, highlighted and wrapped source.
+// contentRows lays the file out in screen rows for the given width: the
+// markdown view, rendered whole, or numbered and wrapped source. Source
+// rows are only counted here, and drawn by contentRow when they come on
+// screen: an empty entry is a row not drawn yet.
 func (b *repoBrowser) contentRows(width int) []string {
 	fc := b.currentContent()
 	if fc == nil || fc.err != nil || fc.binary || fc.tooLarge {
 		return nil
 	}
+	r := &b.rendered
 	key := fmt.Sprintf("%s|%s|%d|%v", b.branch, b.file, width, b.markdownRaw)
-	if b.rendered.key == key {
-		return b.rendered.rows
+	if r.key == key {
+		return r.rows
 	}
-	var rows []string
-	var src []int
+	r.key, r.rows, r.src, r.part = key, nil, nil, nil
 	if fc.markdown && !b.markdownRaw {
-		rows = strings.Split(b.md.render(strings.Join(fc.raw, "\n"), max(20, width-1)), "\n")
-		for range rows {
-			src = append(src, -1)
+		r.rows = strings.Split(b.md.render(strings.Join(fc.raw, "\n"), max(20, width-1)), "\n")
+		for range r.rows {
+			r.src, r.part = append(r.src, -1), append(r.part, 0)
 		}
 	} else {
-		nw := max(3, len(fmt.Sprint(len(fc.hl))))
-		for i, line := range fc.hl {
-			for j, r := range cell(line, max(10, width-nw-2), nil) {
-				num := strings.Repeat(" ", nw)
-				if j == 0 {
-					num = styleGutter.Render(fmt.Sprintf("%*d", nw, i+1))
-				}
-				rows = append(rows, num+" "+r)
-				src = append(src, i)
+		r.nw = max(3, len(fmt.Sprint(fc.hl.len())))
+		r.cw = max(10, width-r.nw-2)
+		for i := range fc.hl.len() {
+			for j := range wrapCount(fc.hl.lines[i].text, r.cw) {
+				r.src, r.part = append(r.src, i), append(r.part, j)
 			}
 		}
+		r.rows = make([]string, len(r.src))
 	}
-	b.rendered.key, b.rendered.rows, b.rendered.src = key, rows, src
-	b.findMatches(rows) // rows moved: re-find the search hits
-	return rows
+	b.findMatches() // rows moved: re-find the search hits
+	return r.rows
+}
+
+// contentRow draws screen row n of the laid out file, styling its source
+// line's rows on first sight.
+func (b *repoBrowser) contentRow(n int) string {
+	r := &b.rendered
+	fc := b.currentContent()
+	if n < 0 || n >= len(r.rows) || fc == nil {
+		return ""
+	}
+	if r.rows[n] == "" && r.src[n] >= 0 {
+		i, first := r.src[n], n-r.part[n]
+		for j, row := range cell(fc.hl.segs(i), r.cw, nil) {
+			if first+j >= len(r.rows) || r.src[first+j] != i {
+				break
+			}
+			num := strings.Repeat(" ", r.nw)
+			if j == 0 {
+				num = styleGutter.Render(fmt.Sprintf("%*d", r.nw, i+1))
+			}
+			r.rows[first+j] = num + " " + row
+		}
+	}
+	return r.rows[n]
+}
+
+// rowText is row n's plain text, for search.
+func (b *repoBrowser) rowText(n int) string {
+	r := &b.rendered
+	fc := b.currentContent()
+	if n < 0 || n >= len(r.rows) || fc == nil {
+		return ""
+	}
+	if r.src[n] < 0 {
+		return ansi.Strip(r.rows[n])
+	}
+	parts := wrapSegs([]seg{{text: fc.hl.lines[r.src[n]].text}}, r.cw)
+	if r.part[n] >= len(parts) {
+		return ""
+	}
+	var s strings.Builder
+	for _, p := range parts[r.part[n]] {
+		s.WriteString(p.text)
+	}
+	return s.String()
 }
 
 func (b *repoBrowser) view(width, height int) []string {
@@ -238,7 +281,7 @@ func (b *repoBrowser) contentView(width, height int) []string {
 		case matched[n]:
 			mark = styleYellow.Render("▌")
 		}
-		out[i] = mark + truncate(rows[n], width-1)
+		out[i] = mark + truncate(b.contentRow(n), width-1)
 	}
 	return out
 }

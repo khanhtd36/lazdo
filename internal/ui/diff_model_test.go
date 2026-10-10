@@ -81,11 +81,11 @@ func TestWholeFileLines(t *testing.T) {
 func TestHighlightKeepsLines(t *testing.T) {
 	src := "package main\n\n/* multi\nline */\nfunc main() {\n\tx := \"a\"\n}\n"
 	lines := highlight("main.go", src)
-	if len(lines) != 7 {
-		t.Fatalf("got %d lines, want 7", len(lines))
+	if lines.len() != 7 {
+		t.Fatalf("got %d lines, want 7", lines.len())
 	}
 	var b strings.Builder
-	for _, s := range lines[5] {
+	for _, s := range lines.segs(5) {
 		b.WriteString(s.text)
 	}
 	if b.String() != "    x := \"a\"" {
@@ -105,5 +105,32 @@ func TestWrapSegs(t *testing.T) {
 	}
 	if strings.Join(got, "|") != "abc|def|gh" {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestWrapCountMatchesWrapSegs(t *testing.T) {
+	for _, text := range []string{"", "abc", "abcdef", "abcdefg", "日本語のテキスト", "a日本b語c", strings.Repeat("x", 25)} {
+		for _, width := range []int{1, 2, 3, 5, 10} {
+			if got, want := wrapCount(text, width), len(wrapSegs([]seg{{text: text}}, width)); got != want {
+				t.Errorf("wrapCount(%q, %d) = %d, wrapSegs makes %d", text, width, got, want)
+			}
+		}
+	}
+}
+
+func TestHighlightColorsRuns(t *testing.T) {
+	h := highlight("main.go", "x := \"a\" // note\n")
+	var colored, plain int
+	text := ""
+	for _, s := range h.segs(0) {
+		text += s.text
+		if s.fg != "" {
+			colored++
+		} else {
+			plain++
+		}
+	}
+	if text != "x := \"a\" // note" || colored == 0 {
+		t.Fatalf("segs rebuild %q with %d colored runs", text, colored)
 	}
 }

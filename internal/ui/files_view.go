@@ -10,14 +10,27 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/khanhtd36/lazdo/internal/ado"
+	"github.com/khanhtd36/lazdo/internal/sysmem"
 )
 
 const (
-	// maxDiffLines bounds the files lazdo colors and lays out, off the UI
-	// thread: about 1.3s and 90MB at the limit (an 11k-line file takes 0.3s).
+	// maxDiffLines bounds the files lazdo colors, off the UI thread: a
+	// 20k-line file takes about 1s and 12MB; lines are laid out only as
+	// they come on screen.
 	maxDiffLines    = 50000
 	sideBySideWidth = 160
 )
+
+// diffBudget is how much memory the opened files' diffs may keep, so
+// going back to a file is instant: a sixteenth of the machine's memory,
+// between 128MB and 2GB. Past it, the files looked at longest ago go.
+var diffBudget = func() int {
+	total := sysmem.Total()
+	if total == 0 {
+		return 256 << 20
+	}
+	return int(min(max(total/16, 128<<20), 2<<30))
+}()
 
 // comparison is what the Files tab diffs: push base against push target
 // (base 0 is the merge base, i.e. all changes), or one commit against its
@@ -52,8 +65,66 @@ type fileDiff struct {
 	submodule        *submoduleChange // set instead of lines for a submodule
 	leftRaw          []string
 	rightRaw         []string
-	leftHL, rightHL  [][]seg
+	leftHL, rightHL  *hlText
 	sbs, inline      []diffLine
+	bytes            int // estimated memory, set on first size()
+}
+
+// size estimates the diff's memory: the text, kept raw and as displayed,
+// plus per-line and per-color bookkeeping.
+func (fd *fileDiff) size() int {
+	if fd.bytes == 0 {
+		n := 1024
+		for _, raw := range [][]string{fd.leftRaw, fd.rightRaw} {
+			for _, l := range raw {
+				n += 2*len(l) + 16 + 24 // raw and displayed text, two headers
+			}
+		}
+		for _, hl := range []*hlText{fd.leftHL, fd.rightHL} {
+			if hl != nil {
+				n += 8 * len(hl.spans)
+			}
+		}
+		fd.bytes = n + 24*(len(fd.sbs)+len(fd.inline))
+	}
+	return fd.bytes
+}
+
+// useDiff marks a file's diff as just looked at, then drops the diffs
+// looked at longest ago while the cache is over diffBudget.
+func (d *detailModel) useDiff(key string) {
+	f := &d.files
+	f.tick++
+	f.used[key] = f.tick
+	cost := func(k string) int {
+		n := 0
+		if fd := f.diffs[k]; fd != nil {
+			n += fd.size()
+		}
+		if c := d.rowCaches[k]; c != nil {
+			n += c.bytes
+		}
+		return n
+	}
+	total := 0
+	for k := range f.diffs {
+		total += cost(k)
+	}
+	for total > diffBudget {
+		oldest := ""
+		for k, fd := range f.diffs {
+			if k != key && fd != nil && (oldest == "" || f.used[k] < f.used[oldest]) {
+				oldest = k
+			}
+		}
+		if oldest == "" {
+			return
+		}
+		total -= cost(oldest)
+		delete(f.diffs, oldest)
+		delete(d.rowCaches, oldest)
+		delete(f.used, oldest)
+	}
 }
 
 type filesView struct {
@@ -74,6 +145,8 @@ type filesView struct {
 	side       ado.Side
 
 	diffs      map[string]*fileDiff // by comparison key + path; nil value = loading
+	used       map[string]uint64    // when each diff was last looked at, in ticks
+	tick       uint64
 	cursor     int
 	top        int
 	anchor     int // first line of a V range, -1 when none
@@ -89,7 +162,7 @@ type filesView struct {
 }
 
 func newFilesView() filesView {
-	return filesView{diffs: map[string]*fileDiff{}, anchor: -1}
+	return filesView{diffs: map[string]*fileDiff{}, used: map[string]uint64{}, anchor: -1}
 }
 
 type (
@@ -255,6 +328,7 @@ func (d *detailModel) ensureDiff() tea.Cmd {
 	}
 	key := d.diffKey(ch)
 	if _, ok := d.files.diffs[key]; ok {
+		d.useDiff(key)
 		return nil
 	}
 	d.files.diffs[key] = nil
@@ -310,8 +384,9 @@ func loadFileDiff(ctx context.Context, client *ado.Client, pr ado.PullRequest, c
 		fd.tooLarge = true
 		return fd
 	}
-	fd.leftHL = highlight(ch.Item.Path, string(left))
+	wg.Go(func() { fd.leftHL = highlight(ch.Item.Path, string(left)) })
 	fd.rightHL = highlight(ch.Item.Path, string(right))
+	wg.Wait()
 	fd.sbs = sideBySideLines(blocks, len(fd.leftRaw), len(fd.rightRaw))
 	fd.inline = inlineLines(fd.sbs)
 	return fd

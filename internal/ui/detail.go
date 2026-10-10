@@ -210,6 +210,9 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		}
 	case fileDiffMsg:
 		d.files.diffs[msg.key] = msg.diff
+		if ch := d.selectedChange(); ch != nil {
+			d.useDiff(d.diffKey(ch))
+		}
 		d.landCursor()
 		d.scrollDiffToCursor()
 	case visitMsg:

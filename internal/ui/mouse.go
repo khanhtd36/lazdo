@@ -253,7 +253,7 @@ func (d *detailModel) filesMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	if ch == nil || fd == nil || len(lines) == 0 {
 		return nil
 	}
-	rows := d.layoutRows(fd, d.rowCache(ch))
+	cache := d.rowCache(ch)
 	row := 1
 	for i := f.top; i < len(lines); i++ {
 		n := d.lineRowCount(i)
@@ -276,7 +276,7 @@ func (d *detailModel) filesMouse(msg tea.MouseMsg, by int) tea.Cmd {
 			}
 			// A click on the line's thread, or a second click on the line,
 			// steps into the thread.
-			onThread := by >= row+len(rows[i])
+			onThread := by >= row+len(d.lineRows(fd, cache, i))
 			_, hasThread := d.diffThread()
 			f.inThread = hasThread && (onThread || wasCursor)
 			f.commentSel = 0

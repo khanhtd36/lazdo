@@ -25,16 +25,25 @@ var (
 // added: left and right cells in side-by-side, only right inline.
 type rowPair struct{ left, right string }
 
-// diffRows caches the rendered rows of every line for one layout.
+// diffRows caches the rendered rows of the lines drawn so far, for one
+// layout; a nil entry is a line not rendered yet. Only lines that come on
+// screen, or are counted to scroll, get rendered, so a big file costs what
+// is looked at, not its length.
 type diffRows struct {
-	key  string
-	rows [][]rowPair
+	key   string
+	rows  [][]rowPair
+	bytes int // the rendered rows' text, for the diff budget
 }
 
-var segStyles = map[string]lipgloss.Style{}
+type segStyleKey struct {
+	fg string
+	bg lipgloss.TerminalColor
+}
+
+var segStyles = map[segStyleKey]lipgloss.Style{}
 
 func segStyle(fg string, bg lipgloss.TerminalColor) lipgloss.Style {
-	key := fmt.Sprintf("%s|%v", fg, bg)
+	key := segStyleKey{fg, bg}
 	if s, ok := segStyles[key]; ok {
 		return s
 	}
@@ -72,12 +81,8 @@ func (fd *fileDiff) numberWidth() int {
 	return max(3, len(strconv.Itoa(max(len(fd.leftRaw), len(fd.rightRaw)))))
 }
 
-func lineSegs(hl [][]seg, n int) []seg {
-	if n <= 0 || n > len(hl) {
-		return nil
-	}
-	return hl[n-1]
-}
+// lineSegs is file line n (from 1) as colored segments.
+func lineSegs(hl *hlText, n int) []seg { return hl.segs(n - 1) }
 
 func num(n, width int) string {
 	if n == 0 {
@@ -86,58 +91,68 @@ func num(n, width int) string {
 	return styleGutter.Render(fmt.Sprintf("%*d", width, n))
 }
 
-// layoutRows renders (and caches) the rows of every line for the current
-// width and mode.
-func (d *detailModel) layoutRows(fd *fileDiff, cache *diffRows) [][]rowPair {
+// lineRows renders (and caches) the screen rows of diff line i for the
+// current width and mode.
+func (d *detailModel) lineRows(fd *fileDiff, cache *diffRows, i int) []rowPair {
 	sbs := d.isSideBySide()
 	dw := d.diffWidth()
-	key := fmt.Sprintf("%d|%v", dw, sbs)
-	if cache.key == key {
-		return cache.rows
-	}
-	nw := fd.numberWidth()
 	lines := fd.inline
 	if sbs {
 		lines = fd.sbs
 	}
-	rows := make([][]rowPair, len(lines))
-	for i, l := range lines {
-		if sbs {
-			half := (dw - 1) / 2
-			cw := max(5, half-nw-2)
-			leftBg, rightBg := tints(l)
-			left := cell(lineSegs(fd.leftHL, l.left), cw, leftBg)
-			right := cell(lineSegs(fd.rightHL, l.right), max(5, dw-1-half-nw-2), rightBg)
-			for j := range max(len(left), len(right)) {
-				lnum, rnum := strings.Repeat(" ", nw), strings.Repeat(" ", nw)
-				if j == 0 {
-					lnum, rnum = num(l.left, nw), num(l.right, nw)
-				}
-				rows[i] = append(rows[i], rowPair{
-					left:  lnum + " " + pick(left, j, cw, leftBg),
-					right: rnum + " " + pick(right, j, max(5, dw-1-half-nw-2), rightBg),
-				})
-			}
-			continue
-		}
-		cw := max(5, dw-1-2*nw-4)
-		segs, bg, mark := lineSegs(fd.rightHL, l.right), lipgloss.TerminalColor(nil), " "
-		switch l.kind {
-		case lineAdd:
-			bg, mark = bgAdd, styleGreen.Render("+")
-		case lineDelete:
-			segs, bg, mark = lineSegs(fd.leftHL, l.left), bgDelete, styleRed.Render("-")
-		case lineContext, lineEdit:
-		}
-		for j, r := range cell(segs, cw, bg) {
-			prefix := strings.Repeat(" ", 2*nw+3)
-			if j == 0 {
-				prefix = num(l.left, nw) + " " + num(l.right, nw) + " " + mark
-			}
-			rows[i] = append(rows[i], rowPair{right: prefix + " " + r})
+	key := strconv.Itoa(dw) + strconv.FormatBool(sbs)
+	if cache.key != key || len(cache.rows) != len(lines) {
+		cache.key, cache.rows, cache.bytes = key, make([][]rowPair, len(lines)), 24*len(lines)
+	}
+	if i < 0 || i >= len(lines) {
+		return nil
+	}
+	if cache.rows[i] == nil {
+		cache.rows[i] = renderLine(fd, lines[i], sbs, dw)
+		for _, rp := range cache.rows[i] {
+			cache.bytes += len(rp.left) + len(rp.right) + 32
 		}
 	}
-	cache.key, cache.rows = key, rows
+	return cache.rows[i]
+}
+
+func renderLine(fd *fileDiff, l diffLine, sbs bool, dw int) []rowPair {
+	nw := fd.numberWidth()
+	var rows []rowPair
+	if sbs {
+		half := (dw - 1) / 2
+		cw, rw := max(5, half-nw-2), max(5, dw-1-half-nw-2)
+		leftBg, rightBg := tints(l)
+		left := cell(lineSegs(fd.leftHL, l.left), cw, leftBg)
+		right := cell(lineSegs(fd.rightHL, l.right), rw, rightBg)
+		for j := range max(len(left), len(right)) {
+			lnum, rnum := strings.Repeat(" ", nw), strings.Repeat(" ", nw)
+			if j == 0 {
+				lnum, rnum = num(l.left, nw), num(l.right, nw)
+			}
+			rows = append(rows, rowPair{
+				left:  lnum + " " + pick(left, j, cw, leftBg),
+				right: rnum + " " + pick(right, j, rw, rightBg),
+			})
+		}
+		return rows
+	}
+	cw := max(5, dw-1-2*nw-4)
+	segs, bg, mark := lineSegs(fd.rightHL, l.right), lipgloss.TerminalColor(nil), " "
+	switch l.kind {
+	case lineAdd:
+		bg, mark = bgAdd, styleGreen.Render("+")
+	case lineDelete:
+		segs, bg, mark = lineSegs(fd.leftHL, l.left), bgDelete, styleRed.Render("-")
+	case lineContext, lineEdit:
+	}
+	for j, r := range cell(segs, cw, bg) {
+		prefix := strings.Repeat(" ", 2*nw+3)
+		if j == 0 {
+			prefix = num(l.left, nw) + " " + num(l.right, nw) + " " + mark
+		}
+		rows = append(rows, rowPair{right: prefix + " " + r})
+	}
 	return rows
 }
 
@@ -170,13 +185,15 @@ func (d *detailModel) lineRowCount(i int) int {
 	if fd == nil || ch == nil {
 		return 1
 	}
-	rows := d.layoutRows(fd, d.rowCache(ch))
-	if i >= len(rows) {
+	rows := d.lineRows(fd, d.rowCache(ch), i)
+	if rows == nil {
 		return 1
 	}
-	return len(rows[i]) + len(d.threadRows(ch, i))
+	return len(rows) + len(d.threadRows(ch, i))
 }
 
+// rowCache is a file's rendered rows; they go with its diff when the diff
+// budget is spent.
 func (d *detailModel) rowCache(ch *ado.Change) *diffRows {
 	key := d.diffKey(ch)
 	c, ok := d.rowCaches[key]
@@ -294,11 +311,11 @@ func (d *detailModel) renderDiffPane(h int) []string {
 		return out
 	}
 
-	rows := d.layoutRows(fd, d.rowCache(ch))
+	cache := d.rowCache(ch)
 	lines := d.diffLines()
 	row := 1
 	for i := f.top; i < len(lines) && row < h; i++ {
-		for _, rp := range rows[i] {
+		for _, rp := range d.lineRows(fd, cache, i) {
 			if row >= h {
 				break
 			}
