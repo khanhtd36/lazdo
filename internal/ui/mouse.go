@@ -93,7 +93,7 @@ func (m Model) projectsMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	y := msg.Y - 1 // below the title line
-	if !isClick(msg) || y < 0 || y >= m.listHeight() || !l.click(y) {
+	if !isClick(msg) || y < 0 || y >= m.listHeight() || !m.projects.click(y) {
 		return m, nil
 	}
 	return m.onProjectsKey(tea.KeyMsg{Type: tea.KeyEnter})

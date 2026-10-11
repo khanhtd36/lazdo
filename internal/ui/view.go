@@ -184,6 +184,11 @@ func (m Model) titleLine() string {
 }
 
 func (m Model) statusLine() string {
+	if m.page == pageProjects && m.err == nil && m.status == "" {
+		if hint, ok := m.projects.list.filterHint(); ok {
+			return hint
+		}
+	}
 	switch {
 	case m.filterTyping:
 		return styleSelected.Render("/"+m.filter+"▏") + styleDim.Render("  enter open · esc clear")

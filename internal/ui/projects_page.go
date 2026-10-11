@@ -272,9 +272,22 @@ func (p *projectsPage) newProject(client *ado.Client, pr ado.ProjectInfo) *proje
 func (p *projectsPage) view(width, height int) []string {
 	switch {
 	case p.err != nil && !p.loaded:
-		return []string{styleRed.Render(truncate("error: "+p.err.Error(), width))}
+		return framePanes(height, pane{title: "Projects", width: width, lines: []string{styleRed.Render("error: " + p.err.Error())}, focused: true})
 	case !p.loaded:
-		return []string{styleDim.Render("  loading projects…")}
+		return framePanes(height, pane{title: "Projects", width: width, lines: []string{styleDim.Render("loading projects…")}, focused: true})
+	case p.filtering():
+		// A filter ranks matches from every group in one list.
+		return framePanes(height, listPane("Projects", &p.list, width, height, true))
 	}
-	return p.list.view(width, height)
+	return p.list.stackedView(width, height)
+}
+
+func (p *projectsPage) filtering() bool { return p.list.typing || p.list.filter != "" }
+
+// click selects the row at body row y, activating it when it was selected.
+func (p *projectsPage) click(y int) bool {
+	if p.filtering() {
+		return p.list.click(y - 1) // below the pane's top edge
+	}
+	return p.list.stackedClick(y)
 }

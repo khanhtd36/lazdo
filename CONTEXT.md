@@ -11,7 +11,7 @@ One of the dashboard's top-level views: Pull requests (Me's pull requests in Sec
 _Avoid_: tab (reserved for the views inside a pull request or project), screen
 
 **Pane**:
-One of the side-by-side areas of a split view, such as a repo's branches beside its files, or a run's steps beside its log. Each is framed and named.
+A framed, named area of a screen. A split view sets panes side by side, such as a repo's branches beside its files; a grouped list stacks one pane per group, such as the Pull requests page's Sections.
 _Avoid_: panel, box, column
 
 **Focused pane**:
