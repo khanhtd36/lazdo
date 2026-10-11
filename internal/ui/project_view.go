@@ -24,6 +24,11 @@ func (m *projectModel) view() string {
 			status = s
 		}
 	}
+	if l := m.currentList(); l != nil && status == "" {
+		if hint, ok := l.filterHint(); ok {
+			status = hint
+		}
+	}
 	switch {
 	case m.err != nil:
 		status = styleRed.Render("error: " + m.err.Error())
@@ -102,20 +107,26 @@ func (m *projectModel) body() []string {
 		return m.browser.view(w, m.browserHeight())
 	case levelRuns:
 		if m.runsLoading && m.runList.items == nil {
-			return padLines([]string{styleDim.Render("  loading runs…")}, h)
+			return messagePane("Runs", "loading runs…", w, h)
 		}
-		return m.runList.view(w, h)
+		return framePanes(h, listPane(fmt.Sprintf("Runs (%d)", m.runList.matches()), &m.runList, w, h, true))
 	case levelRun:
 		return m.run.view(w, h)
 	case levelTabs:
 	}
 	if m.tab == projTabPipelines && !m.pipelinesLoaded {
-		return padLines([]string{styleDim.Render("  loading pipelines…")}, h)
+		return messagePane("Pipelines", "loading pipelines…", w, h)
 	}
 	if m.tab == projTabSettings {
 		return m.settings.view(w, h)
 	}
-	return m.lists[m.tab].view(w, h)
+	l := &m.lists[m.tab]
+	return framePanes(h, listPane(fmt.Sprintf("%s (%d)", m.tab.title(), len(l.items)), l, w, h, true))
+}
+
+// messagePane is a lone focused pane holding a line such as "loading…".
+func messagePane(title, msg string, width, height int) []string {
+	return framePanes(height, pane{title: title, width: width, lines: []string{styleDim.Render(msg)}, focused: true})
 }
 
 func padLines(lines []string, h int) []string {
@@ -186,7 +197,7 @@ func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 		l.wheel(d)
 		return nil
 	}
-	if isClick(msg) && l.click(by) {
+	if isClick(msg) && l.click(by-1) { // below the pane's top edge
 		return m.key(tea.KeyMsg{Type: tea.KeyEnter})
 	}
 	return nil
