@@ -145,6 +145,11 @@ func (d *detailModel) statusLine() string {
 	if s, ok := d.find.status(); ok && d.tab == tabOverview {
 		return truncate(s, d.width-1)
 	}
+	if (d.tab == tabCommits || d.tab == tabConflicts) && d.status == "" {
+		if hint, ok := d.lists[d.tab].filterHint(); ok {
+			return hint
+		}
+	}
 	switch {
 	case d.status != "" && strings.HasPrefix(d.status, "error"):
 		return styleRed.Render(truncate(d.status, d.width-1))

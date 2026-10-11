@@ -89,7 +89,12 @@ func (d *detailModel) copyCommit(id string) tea.Cmd {
 }
 
 func (d *detailModel) renderList() string {
-	return strings.Join(d.lists[d.tab].view(d.width-1, d.bodyHeight()), "\n")
+	n := len(d.data.Commits)
+	if d.tab == tabConflicts {
+		n = len(d.data.Conflicts)
+	}
+	title := fmt.Sprintf("%s (%d)", d.tab.title(), n)
+	return strings.Join(framePanes(d.bodyHeight(), listPane(title, &d.lists[d.tab], d.width-1, d.bodyHeight(), true)), "\n")
 }
 
 // --- Files ---

@@ -311,7 +311,7 @@ func (d *detailModel) listMouse(msg tea.MouseMsg, by int) tea.Cmd {
 		l.wheel(delta)
 		return nil
 	}
-	if isClick(msg) && l.click(by) {
+	if isClick(msg) && l.click(by-1) { // below the pane's top edge
 		return d.listKey(tea.KeyMsg{Type: tea.KeyEnter})
 	}
 	return nil
