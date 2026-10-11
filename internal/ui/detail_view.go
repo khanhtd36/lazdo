@@ -42,7 +42,7 @@ func (d *detailModel) view() string {
 
 func (d *detailModel) body() string {
 	if d.tab == tabOverview {
-		return d.vp.View()
+		return d.renderOverviewPanes()
 	}
 	if d.data == nil {
 		return d.renderOverview() // loading or error text

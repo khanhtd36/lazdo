@@ -301,10 +301,7 @@ func (d *detailModel) renderOverview() string {
 		}
 		return styleDim.Render("loading…")
 	}
-	mainWidth := d.width - 2
-	if d.width >= twoColumnsWidth {
-		mainWidth = d.width - sidebarWidth - 3
-	}
+	mainWidth := d.overviewWidth() - 3 // inside its frame, a column spare
 	main := make([]string, 0, 64)
 	main = append(main, d.renderChecks(mainWidth)...)
 	main = append(main, "", styleSection.Render("Description"))
@@ -317,25 +314,40 @@ func (d *detailModel) renderOverview() string {
 	activity, offsets := d.renderActivity(mainWidth)
 	main = append(main, activity...)
 
-	side := d.renderSidebar(sidebarWidth)
-	if d.width < twoColumnsWidth {
-		all := append(side, "")
+	if !d.sideBySide() {
+		all := append(d.renderSidebar(mainWidth), "")
 		d.entryLines = shift(offsets, len(all)+activityStart)
 		return strings.Join(append(all, main...), "\n")
 	}
 	d.entryLines = shift(offsets, activityStart)
-	rows := make([]string, max(len(main), len(side)))
-	for i := range rows {
-		left, right := "", ""
-		if i < len(main) {
-			left = main[i]
-		}
-		if i < len(side) {
-			right = side[i]
-		}
-		rows[i] = fit(left, mainWidth) + "  " + truncate(right, sidebarWidth)
+	return strings.Join(main, "\n")
+}
+
+// sideBySide reports a screen wide enough to set the side panes beside the
+// Overview; narrower, they lead it.
+func (d *detailModel) sideBySide() bool { return d.width >= twoColumnsWidth }
+
+// overviewWidth is the Overview pane's width, frame included.
+func (d *detailModel) overviewWidth() int {
+	if d.sideBySide() {
+		return d.width - 1 - sidebarWidth - 2
 	}
-	return strings.Join(rows, "\n")
+	return d.width - 1
+}
+
+// renderOverviewPanes frames the Overview, its selected activity entry's
+// place in the bottom edge, beside the side panes, which never take keys.
+func (d *detailModel) renderOverviewPanes() string {
+	h := d.bodyHeight()
+	main := pane{title: "Overview", width: d.overviewWidth(), lines: strings.Split(d.vp.View(), "\n"), focused: true}
+	if d.threadSel >= 0 {
+		main.pos = position(d.threadSel+1, len(d.entryLines))
+	}
+	if !d.sideBySide() || d.data == nil {
+		return strings.Join(framePanes(h, main), "\n")
+	}
+	side := stackPanes(sidebarWidth+2, h, d.sidebarPanes(sidebarWidth)...)
+	return strings.Join(joinColumns(framePanes(h, main), side), "\n")
 }
 
 func shift(xs []int, by int) []int {
@@ -846,7 +858,9 @@ func voteText(v int) string {
 
 // --- Sidebar ---
 
-func (d *detailModel) renderSidebar(width int) []string {
+// sidebarPanes are the Overview's side panes: Reviewers, Tags and Work
+// items, each titled by its heading.
+func (d *detailModel) sidebarPanes(width int) []pane {
 	var required, optional []ado.Reviewer
 	for _, r := range d.data.Reviewers {
 		if r.IsRequired {
@@ -855,7 +869,7 @@ func (d *detailModel) renderSidebar(width int) []string {
 			optional = append(optional, r)
 		}
 	}
-	out := []string{styleSection.Render("Reviewers")}
+	var reviewers []string
 	for _, group := range []struct {
 		title string
 		rs    []ado.Reviewer
@@ -863,30 +877,47 @@ func (d *detailModel) renderSidebar(width int) []string {
 		if len(group.rs) == 0 {
 			continue
 		}
-		out = append(out, styleDim.Render(group.title))
+		reviewers = append(reviewers, styleDim.Render(group.title))
 		for _, r := range group.rs {
-			out = append(out, "  "+voteGlyph(r.Vote)+" "+truncate(r.DisplayName, width-4))
-			out = append(out, "    "+styleDim.Render(voteText(r.Vote)))
+			reviewers = append(reviewers, "  "+voteGlyph(r.Vote)+" "+truncate(r.DisplayName, width-4))
+			reviewers = append(reviewers, "    "+styleDim.Render(voteText(r.Vote)))
 		}
 	}
-	out = append(out, "", styleSection.Render("Tags"))
-	tags := 0
+	if len(reviewers) == 0 {
+		reviewers = append(reviewers, styleDim.Render("No reviewers"))
+	}
+	var tags []string
 	for _, l := range d.data.Labels {
 		if l.Active {
-			out = append(out, "  "+truncate(l.Name, width-2))
-			tags++
+			tags = append(tags, truncate(l.Name, width))
 		}
 	}
-	if tags == 0 {
-		out = append(out, styleDim.Render("  No tags"))
+	if len(tags) == 0 {
+		tags = append(tags, styleDim.Render("No tags"))
 	}
-	out = append(out, "", styleSection.Render("Work items"))
+	var items []string
 	for _, w := range d.data.WorkItems {
-		out = append(out, "  "+truncate(fmt.Sprintf("#%d %s", w.ID, w.Fields.Title), width-2))
-		out = append(out, "    "+styleDim.Render(w.Fields.Type+" · "+w.Fields.State))
+		items = append(items, truncate(fmt.Sprintf("#%d %s", w.ID, w.Fields.Title), width))
+		items = append(items, "  "+styleDim.Render(w.Fields.Type+" · "+w.Fields.State))
 	}
-	if len(d.data.WorkItems) == 0 {
-		out = append(out, styleDim.Render("  No work items"))
+	if len(items) == 0 {
+		items = append(items, styleDim.Render("No work items"))
+	}
+	return []pane{{title: "Reviewers", lines: reviewers}, {title: "Tags", lines: tags}, {title: "Work items", lines: items}}
+}
+
+// renderSidebar is the side panes as plain sections, for a screen too
+// narrow to set them beside the Overview.
+func (d *detailModel) renderSidebar(width int) []string {
+	var out []string
+	for i, p := range d.sidebarPanes(width - 2) {
+		if i > 0 {
+			out = append(out, "")
+		}
+		out = append(out, styleSection.Render(p.title))
+		for _, l := range p.lines {
+			out = append(out, "  "+l)
+		}
 	}
 	return out
 }

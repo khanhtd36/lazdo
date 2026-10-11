@@ -166,9 +166,8 @@ func (d *detailModel) bodyTop() int { return 3 }
 
 func (d *detailModel) resize(width, height int) {
 	d.width, d.height = width, height
-	// One column short of the screen: the viewport pads lines to its width
-	// and a full-width line would wrap.
-	d.vp.Width, d.vp.Height = width-1, d.bodyHeight()
+	// Inside the Overview pane's frame.
+	d.vp.Width, d.vp.Height = d.overviewWidth()-2, paneInnerHeight(d.bodyHeight())
 	d.rebuildOverview()
 }
 

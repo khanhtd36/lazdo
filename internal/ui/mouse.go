@@ -208,10 +208,10 @@ func (d *detailModel) overviewMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	if !isClick(msg) {
 		return nil
 	}
-	if d.width >= twoColumnsWidth && msg.X >= d.width-sidebarWidth-3 {
-		return nil // the sidebar has nothing to click
+	if msg.X >= d.overviewWidth() || by < 1 {
+		return nil // the side panes have nothing to click, nor the frame
 	}
-	line := d.vp.YOffset + by
+	line := d.vp.YOffset + by - 1 // below the pane's top edge
 	entry := -1
 	for i, start := range d.entryLines {
 		if line >= start {
