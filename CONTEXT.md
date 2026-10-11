@@ -1,6 +1,6 @@
 # lazdo
 
-A terminal view of one person's Azure DevOps pull requests across an organization, modeled on the Azure DevOps "My pull requests" and pull request pages.
+A terminal UI for Azure DevOps, modeled on its web pages: one person's pull requests across an organization, each pull request, and the organization's projects with their repos, pipelines and settings.
 
 ## Language
 
