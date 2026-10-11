@@ -21,6 +21,14 @@ The pane that takes the keys; its frame is highlighted. While a popup is open, n
 The signed-in Azure DevOps identity whose pull requests the dashboard shows.
 _Avoid_: user, current user
 
+**Organization**:
+The Azure DevOps organization lazdo shows, one at a time; switching starts lazdo over on another.
+_Avoid_: org (fine in the UI), tenant (the Entra directory an organization belongs to)
+
+**Account**:
+An Azure CLI login lazdo takes tokens from: az's own, or one lazdo added. Me is who the account is in the organization.
+_Avoid_: profile, user
+
 **Section**:
 One of the four fixed groups a pull request falls into on the dashboard: Wait for approval, Waiting for author, Assigned to me, Created by me.
 _Avoid_: tab, category, list

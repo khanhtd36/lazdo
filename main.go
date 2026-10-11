@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/khanhtd36/lazdo/internal/ado"
+	"github.com/khanhtd36/lazdo/internal/prefs"
 	"github.com/khanhtd36/lazdo/internal/termprobe"
 	"github.com/khanhtd36/lazdo/internal/ui"
 	"github.com/khanhtd36/lazdo/internal/update"
@@ -110,13 +111,37 @@ func chooseSymbols(symbols, ascii bool, env string) bool {
 }
 
 func run(org string, interval time.Duration) error {
-	if org == "" {
-		var err error
-		if org, err = ado.DefaultOrg(); err != nil {
-			return err
-		}
+	pair, err := startPair(org, prefs.Load())
+	if err != nil {
+		return err
 	}
-	model := ui.New(ado.NewClient(ado.OrgName(org)), interval)
-	_, err := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
+	model := ui.New(ado.NewClientAs(pair.Org, ado.AccountDir(pair.Account), pair.Tenant), interval)
+	_, err = tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
 	return err
+}
+
+// startPair is the org to open and its account: --org, else the last one
+// used in lazdo, else az's default org, with az's own login.
+func startPair(org string, p prefs.Prefs) (prefs.Pair, error) {
+	if org != "" {
+		org = ado.OrgName(org)
+		if r, ok := p.For(org); ok && accountExists(r.Account) {
+			return r, nil
+		}
+		return prefs.Pair{Org: org}, nil
+	}
+	if len(p.Recent) > 0 && accountExists(p.Recent[0].Account) {
+		return p.Recent[0], nil
+	}
+	org, err := ado.DefaultOrg()
+	return prefs.Pair{Org: org}, err
+}
+
+// accountExists is whether a remembered account is still there.
+func accountExists(name string) bool {
+	if name == "" {
+		return true
+	}
+	_, err := os.Stat(ado.AccountDir(name))
+	return err == nil
 }

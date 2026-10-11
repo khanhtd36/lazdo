@@ -44,6 +44,7 @@ type projectsPage struct {
 }
 
 type projectsLoadedMsg struct {
+	from     *ado.Client
 	projects []ado.ProjectInfo
 	recent   []string
 	repos    []ado.Repo
@@ -72,7 +73,7 @@ func (p *projectsPage) load(client *ado.Client) tea.Cmd {
 		// Recent projects are a nicety from an undocumented call; the page
 		// works without them.
 		_ = errRecent
-		msg.err = firstErr(errP, errR, errPR)
+		msg.from, msg.err = client, firstErr(errP, errR, errPR)
 		return msg
 	}
 }

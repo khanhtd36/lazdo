@@ -88,12 +88,18 @@ func (c *Client) Me(ctx context.Context) (Identity, error) {
 		AuthenticatedUser struct {
 			ID                  string `json:"id"`
 			ProviderDisplayName string `json:"providerDisplayName"`
+			Properties          struct {
+				Account struct {
+					Value string `json:"$value"`
+				} `json:"Account"`
+			} `json:"properties"`
 		} `json:"authenticatedUser"`
 	}
 	if err := c.get(ctx, "/_apis/connectionData", nil, &resp); err != nil {
 		return Identity{}, err
 	}
-	return Identity{ID: resp.AuthenticatedUser.ID, DisplayName: resp.AuthenticatedUser.ProviderDisplayName}, nil
+	u := resp.AuthenticatedUser
+	return Identity{ID: u.ID, DisplayName: u.ProviderDisplayName, UniqueName: u.Properties.Account.Value}, nil
 }
 
 // ActivePRs searches active PRs across the whole organization. Pass

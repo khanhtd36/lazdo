@@ -1,3 +1,4 @@
+| `O` | switch organization or account |
 # lazdo
 
 A terminal UI for Azure DevOps, in the spirit of lazygit: review pull
@@ -76,10 +77,19 @@ az login --allow-no-subscriptions
 az devops configure -d organization=https://dev.azure.com/<org>   # optional, else pass --org
 ```
 
+**Several orgs or accounts:** `O` (or a click on the org in the title)
+lists every org of every account, last used first, and switches lazdo to
+the one picked; lazdo opens on it next time too. An org no list has can
+be typed in the filter. Accounts are az logins: az's own, plus any added
+with "+ Add account…", which runs `az login` into a folder of lazdo's
+(`AZURE_CONFIG_DIR`), so two accounts of one org never fight over az's
+default. `d` removes an added account. With more than one account the
+title shows which one by email.
+
 ## Usage
 
 ```sh
-lazdo                    # default org from `az devops configure`
+lazdo                    # last org used, else the default from `az devops configure`
 lazdo --org contoso      # or a full https://dev.azure.com/<org> URL
 lazdo --interval 30s     # auto-refresh period (default 2m)
 lazdo --ascii            # markers as words, without checking the terminal

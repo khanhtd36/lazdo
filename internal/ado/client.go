@@ -21,16 +21,25 @@ import (
 const adoResourceID = "499b84ac-1321-427f-aa17-267ca6975798"
 
 type Client struct {
-	Org  string // organization name, e.g. "contoso"
-	http *http.Client
+	Org string // organization name, e.g. "contoso"
+	// Account is the az login folder the token comes from; "" is az's own.
+	Account string
+	http    *http.Client
 
 	mu          sync.Mutex
 	token       string
 	tokenExpiry time.Time
+	tenant      string // the org's Entra tenant, once looked up
+	tenantKnown bool
 }
 
-func NewClient(org string) *Client {
-	return &Client{Org: org, http: &http.Client{Timeout: 30 * time.Second}}
+func NewClient(org string) *Client { return NewClientAs(org, "", "") }
+
+// NewClientAs talks to org with the account whose az login lives in dir
+// ("" is az's own login), taking tokens for tenant; with tenant "" it
+// asks Azure DevOps for the org's tenant.
+func NewClientAs(org, dir, tenant string) *Client {
+	return &Client{Org: org, Account: dir, tenant: tenant, tenantKnown: tenant != "", http: &http.Client{Timeout: 30 * time.Second}}
 }
 
 // DefaultOrg reads the organization configured by `az devops configure`.
@@ -63,27 +72,14 @@ func (c *Client) accessToken(ctx context.Context) (string, error) {
 	if c.token != "" && time.Until(c.tokenExpiry) > 5*time.Minute {
 		return c.token, nil
 	}
-	out, err := exec.CommandContext(ctx, "az", "account", "get-access-token",
-		"--resource", adoResourceID, "-o", "json").Output()
+	if !c.tenantKnown {
+		c.tenant, c.tenantKnown = OrgTenant(ctx, c.Org), true
+	}
+	token, expiry, err := azToken(ctx, c.Account, c.tenant)
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return "", fmt.Errorf("az account get-access-token failed (run `az login`): %s", strings.TrimSpace(string(exitErr.Stderr)))
-		}
-		return "", fmt.Errorf("az account get-access-token: %w", err)
+		return "", err
 	}
-	var tok struct {
-		AccessToken string `json:"accessToken"`
-		ExpiresOn   int64  `json:"expires_on"`
-	}
-	if err := json.Unmarshal(out, &tok); err != nil {
-		return "", fmt.Errorf("parse az token: %w", err)
-	}
-	c.token = tok.AccessToken
-	c.tokenExpiry = time.Unix(tok.ExpiresOn, 0)
-	if tok.ExpiresOn == 0 {
-		c.tokenExpiry = time.Now().Add(30 * time.Minute)
-	}
+	c.token, c.tokenExpiry = token, expiry
 	return c.token, nil
 }
 

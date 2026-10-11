@@ -53,6 +53,7 @@ var (
 		{keys: "1 / 2", desc: "Pull requests / Projects page", hint: "pages"},
 		{keys: "[ / ]", desc: "previous / next page", press: "]"},
 		{keys: "U", desc: "check for a newer lazdo now, and offer to install it", press: "U"},
+		{keys: "O", desc: "switch organization or account (or click the org in the title)", press: "O"},
 	}
 	detailKeys = []binding{
 		{keys: "1-4", desc: "Overview, Files, Commits, Conflicts tab", hint: "tabs"},

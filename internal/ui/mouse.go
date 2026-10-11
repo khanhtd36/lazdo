@@ -51,6 +51,9 @@ func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if p, ok := m.pageAt(msg.X); ok {
 			return m.switchPage(p)
 		}
+		if m.onOrgName(msg.X) {
+			return m.openOrgPicker()
+		}
 		return m, nil
 	}
 	if m.page == pageProjects {

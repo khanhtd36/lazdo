@@ -166,8 +166,8 @@ func (m Model) pageAt(x int) (page, bool) {
 func (m Model) titleLine() string {
 	s := styleTitle.Render(strings.TrimSpace(titlePrefix)) + "  "
 	s += tabBar(m.pageLabels(), int(m.page), m.width-len(titlePrefix)) + styleDim.Render("   "+m.client.Org)
-	if m.me.DisplayName != "" {
-		s += styleDim.Render(" · " + m.me.DisplayName)
+	if who := m.whoAmI(); who != "" {
+		s += styleDim.Render(" · " + who)
 	}
 	if m.page == pageProjects {
 		if m.projects.loading {
@@ -484,4 +484,13 @@ func (m Model) sectionPosition(rows []row, section int) string {
 		return ""
 	}
 	return position(at, n)
+}
+
+// whoAmI names the user in the title: by email when there are accounts to
+// tell apart, else by name.
+func (m Model) whoAmI() string {
+	if m.manyAccounts && m.me.UniqueName != "" {
+		return m.me.UniqueName
+	}
+	return m.me.DisplayName
 }

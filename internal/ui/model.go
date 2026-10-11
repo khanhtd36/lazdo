@@ -60,6 +60,7 @@ type Model struct {
 	updating        *updateRun        // an update downloading, nil otherwise
 	installed       string            // the version an update put in place, to use on restart
 	updateFailed    *updateFailure    // the last update's error, until U shows it
+	manyAccounts    bool              // lazdo has accounts besides az's own: the title names which
 
 	filter       string // dashboard / filter
 	filterTyping bool
@@ -75,24 +76,28 @@ func New(client *ado.Client, interval time.Duration) Model {
 		sem:       make(chan struct{}, maxParallelBuilds),
 
 		lastCheckout: map[string]string{},
+		manyAccounts: len(ado.ExtraAccounts()) > 0,
 	}
 }
 
 type (
 	listMsg struct {
+		from     *ado.Client
 		me       ado.Identity
 		sections []ado.Section
 		err      error
 	}
 	statsMsg struct {
+		from  *ado.Client
 		stats map[int]ado.Stats
 		err   error
 	}
 	buildMsg struct {
+		from   *ado.Client
 		id     int
 		result buildResult
 	}
-	tickMsg   struct{}
+	tickMsg   struct{ from *ado.Client }
 	statusMsg string
 )
 
@@ -106,18 +111,18 @@ func (m Model) fetchList() tea.Cmd {
 		if me.ID == "" {
 			var err error
 			if me, err = client.Me(ctx); err != nil {
-				return listMsg{err: err}
+				return listMsg{from: client, err: err}
 			}
 		}
 		reviewing, err := client.ActivePRs(ctx, "reviewerId", me.ID)
 		if err != nil {
-			return listMsg{err: err}
+			return listMsg{from: client, err: err}
 		}
 		created, err := client.ActivePRs(ctx, "creatorId", me.ID)
 		if err != nil {
-			return listMsg{err: err}
+			return listMsg{from: client, err: err}
 		}
-		return listMsg{me: me, sections: ado.Classify(me.ID, reviewing, created)}
+		return listMsg{from: client, me: me, sections: ado.Classify(me.ID, reviewing, created)}
 	}
 }
 
@@ -127,7 +132,7 @@ func (m Model) fetchStats(prs []ado.PullRequest) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		stats, err := client.Stats(ctx, prs)
-		return statsMsg{stats: stats, err: err}
+		return statsMsg{from: client, stats: stats, err: err}
 	}
 }
 
@@ -139,15 +144,19 @@ func (m Model) fetchBuild(pr ado.PullRequest) tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		state, err := client.Build(ctx, pr)
-		return buildMsg{id: pr.ID, result: buildResult{state: state, err: err}}
+		return buildMsg{from: client, id: pr.ID, result: buildResult{state: state, err: err}}
 	}
 }
 
 func (m Model) tick() tea.Cmd {
-	return tea.Tick(m.interval, func(time.Time) tea.Msg { return tickMsg{} })
+	client := m.client
+	return tea.Tick(m.interval, func(time.Time) tea.Msg { return tickMsg{from: client} })
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if s, ok := msg.(fromClient); ok && s.source() != nil && s.source() != m.client {
+		return m, nil // an answer for the org lazdo has since switched from
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -221,6 +230,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, updateTick()
 		}
 		return m, nil
+	case accountsMsg, accountOrgsMsg, accountAddedMsg, accountRemovedMsg:
+		return m.onAccountMsg(msg)
+	case orgSwitchMsg:
+		return m.switchOrg(msg.pair)
 	case updateDoneMsg:
 		return m.onUpdateDone(msg)
 	case listMsg:
@@ -280,8 +293,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if p, ok := m.pageKey(msg.String()); ok {
 				return m.switchPage(p)
 			}
-			if msg.String() == "U" {
+			switch msg.String() {
+			case "U":
 				return m.checkUpdatesNow()
+			case "O":
+				return m.openOrgPicker()
 			}
 		}
 		if m.page == pageProjects {
@@ -310,12 +326,16 @@ func (m Model) inTextInput() bool {
 		switch m.modal.(type) {
 		case *checkoutModal, *tagDialog, *formModal, *nameConfirm:
 			return true
+		case *orgPicker:
+			return m.modal.(*orgPicker).list.typing
 		}
 		return false
 	case m.detail != nil && m.detail.modal != nil:
-		switch m.detail.modal.(type) {
+		switch dm := m.detail.modal.(type) {
 		case *editorModal, *completeDialog, *prEditor:
 			return true
+		case *targetPicker:
+			return dm.list.typing
 		}
 		return false
 	}
@@ -639,3 +659,13 @@ func (m *Model) clampCursor() {
 
 // listHeight is the number of rows left after the title and footer lines.
 func (m Model) listHeight() int { return m.height - 3 }
+
+// fromClient is a message answering a request to one org: after a switch,
+// those from the old org are dropped.
+type fromClient interface{ source() *ado.Client }
+
+func (m listMsg) source() *ado.Client           { return m.from }
+func (m statsMsg) source() *ado.Client          { return m.from }
+func (m buildMsg) source() *ado.Client          { return m.from }
+func (m tickMsg) source() *ado.Client           { return m.from }
+func (m projectsLoadedMsg) source() *ado.Client { return m.from }

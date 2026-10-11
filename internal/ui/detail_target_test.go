@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -74,5 +75,15 @@ func TestClickTargetBranchOpensPicker(t *testing.T) {
 	d.onMouse(tea.MouseMsg{X: x + 1, Y: 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 	if _, ok := d.modal.(*targetPicker); !ok {
 		t.Fatalf("a click on the target branch should open the picker, got %T", d.modal)
+	}
+}
+
+func TestQIsTypedInTheTargetFilter(t *testing.T) {
+	m := New(ado.NewClient("org"), time.Minute)
+	m.detail = fakeDetail(t, 120)
+	md, _ := m.detail.openTargetPicker()
+	m.detail.modal = md
+	if !m.inTextInput() {
+		t.Fatal("q must type into the branch filter, not quit lazdo")
 	}
 }
