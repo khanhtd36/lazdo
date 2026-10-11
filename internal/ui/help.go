@@ -179,7 +179,7 @@ func (h *helpModal) run() (closed bool, key *tea.KeyMsg) {
 func (h *helpModal) view() string {
 	rows := h.rows()
 	lines := make([]string, 0, h.listHeight()+4)
-	title := styleSection.Render("Keyboard shortcuts")
+	title := styleSection.Render("Keyboard shortcuts") + styleDim.Render("  lazdo "+versionLabel())
 	switch {
 	case h.typing:
 		title += "  " + styleSelected.Render("/"+h.filter+"▏")

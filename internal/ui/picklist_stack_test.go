@@ -45,7 +45,8 @@ func TestStackedListPanes(t *testing.T) {
 func TestListShowsHeadersAboveTheTopRow(t *testing.T) {
 	head := func(s string) pickItem { return pickItem{header: true, render: func(int) string { return s }} }
 	row := func(s string) pickItem { return pickItem{search: s, render: func(int) string { return s }} }
-	items := []pickItem{head("repo"), head("src")}
+	items := make([]pickItem, 0, 32)
+	items = append(items, head("repo"), head("src"))
 	for i := range 30 {
 		items = append(items, row("file"+strconv.Itoa(i)))
 	}

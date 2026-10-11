@@ -109,7 +109,7 @@ func (m *projectModel) body() []string {
 		if m.runsLoading && m.runList.items == nil {
 			return messagePane("Runs", "loading runs…", w, h)
 		}
-		return framePanes(h, listPane(fmt.Sprintf("Runs (%d)", m.runList.matches()), &m.runList, w, h, true))
+		return framePanes(h, listPane(fmt.Sprintf("Runs (%d)", len(m.runList.items)), &m.runList, w, h))
 	case levelRun:
 		return m.run.view(w, h)
 	case levelTabs:
@@ -121,7 +121,7 @@ func (m *projectModel) body() []string {
 		return m.settings.view(w, h)
 	}
 	l := &m.lists[m.tab]
-	return framePanes(h, listPane(fmt.Sprintf("%s (%d)", m.tab.title(), len(l.items)), l, w, h, true))
+	return framePanes(h, listPane(fmt.Sprintf("%s (%d)", m.tab.title(), len(l.items)), l, w, h))
 }
 
 // messagePane is a lone focused pane holding a line such as "loading…".

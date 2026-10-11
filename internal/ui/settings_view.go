@@ -316,9 +316,13 @@ func (s *settingsView) view(width, height int) []string {
 	if s.detail != nil {
 		rightTitle = s.detail.title
 	}
+	rightPos := s.content.position()
+	if s.detail != nil {
+		rightPos = s.detail.list.position()
+	}
 	return framePanes(height,
-		pane{title: "Settings", width: leftW, lines: s.sections.view(leftW-2, inner), focused: onLeft},
-		pane{title: rightTitle, width: width - leftW, lines: s.rightView(width-leftW-2, inner), focused: !onLeft},
+		pane{title: "Settings", width: leftW, lines: s.sections.view(leftW-2, inner), focused: onLeft, pos: s.sections.position()},
+		pane{title: rightTitle, width: width - leftW, lines: s.rightView(width-leftW-2, inner), focused: !onLeft, pos: rightPos},
 	)
 }
 

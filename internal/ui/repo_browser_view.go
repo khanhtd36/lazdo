@@ -36,6 +36,25 @@ func framed(lines []string, width int, focused bool) pane {
 	return pane{title: strings.TrimSpace(title), width: width, lines: rest, focused: focused}
 }
 
+func withPos(p pane, pos string) pane {
+	p.pos = pos
+	return p
+}
+
+// contentPosition is the cursor's source line of the file's lines, or its
+// row of a rendered markdown view.
+func (b *repoBrowser) contentPosition() string {
+	r := &b.rendered
+	fc := b.currentContent()
+	if fc == nil || b.cur < 0 || b.cur >= len(r.src) {
+		return ""
+	}
+	if r.src[b.cur] < 0 {
+		return position(b.cur+1, len(r.src))
+	}
+	return position(r.src[b.cur]+1, fc.hl.len())
+}
+
 func (b *repoBrowser) currentContent() *fileContent {
 	if b.file == "" {
 		return nil
@@ -134,11 +153,11 @@ func (b *repoBrowser) view(width, height int) []string {
 	bw, tw, cw := b.columns(width)
 	var panes []pane
 	if bw > 0 {
-		panes = append(panes, framed(b.paneList(&b.branches, bw-2, height, paneBranches, "Branches", !b.branchesLoaded), bw, b.pane == paneBranches))
+		panes = append(panes, withPos(framed(b.paneList(&b.branches, bw-2, height, paneBranches, "Branches", !b.branchesLoaded), bw, b.pane == paneBranches), b.branches.position()))
 	}
 	panes = append(panes,
-		framed(b.paneList(&b.tree, tw-2, height, paneFiles, b.branch, len(b.tree.items) == 0), tw, b.pane == paneFiles),
-		framed(b.contentView(cw-2, height), cw, b.pane == paneContent))
+		withPos(framed(b.paneList(&b.tree, tw-2, height, paneFiles, b.branch, len(b.tree.items) == 0), tw, b.pane == paneFiles), b.tree.position()),
+		withPos(framed(b.contentView(cw-2, height), cw, b.pane == paneContent), b.contentPosition()))
 	return framePanes(height+1, panes...)
 }
 
@@ -177,11 +196,11 @@ func (b *repoBrowser) commitsView(width, height int) []string {
 		head = h.release.tag.Name + " · no earlier version tag"
 	}
 	loading := h.commitList.items == nil && (h.commitsLoading || h.release != nil)
-	list := framed(b.paneList(&h.commitList, cw-2, height, paneFiles, head, loading), cw, b.pane == paneFiles)
+	list := withPos(framed(b.paneList(&h.commitList, cw-2, height, paneFiles, head, loading), cw, b.pane == paneFiles), h.commitList.position())
 	if bw == 0 {
 		return framePanes(height+1, list)
 	}
-	branches := framed(b.paneList(&b.branches, bw-2, height, paneBranches, "Branches", !b.branchesLoaded), bw, b.pane == paneBranches)
+	branches := withPos(framed(b.paneList(&b.branches, bw-2, height, paneBranches, "Branches", !b.branchesLoaded), bw, b.pane == paneBranches), b.branches.position())
 	return framePanes(height+1, branches, list)
 }
 
@@ -203,7 +222,7 @@ func (b *repoBrowser) tagsView(width, height int) []string {
 		}
 	}
 	lines := append(list, styleDim.Render(strings.Repeat("─", max(0, inner))), truncate(styleDim.Render(detail), inner))
-	return framePanes(height+1, framed(lines, width, true))
+	return framePanes(height+1, withPos(framed(lines, width, true), h.tagList.position()))
 }
 
 // paneList renders a list with a one-line heading; the heading is

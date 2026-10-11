@@ -82,3 +82,12 @@ func TestHelpFollowsContext(t *testing.T) {
 		t.Fatal("tree pane should list file tree keys first")
 	}
 }
+
+func TestHelpShowsVersion(t *testing.T) {
+	SetVersion("0.2.19")
+	defer SetVersion("dev")
+	h := newHelp(nil, 120, 30)
+	if !strings.Contains(ansi.Strip(h.view()), "lazdo v0.2.19") {
+		t.Fatalf("the help popup should show the version:\n%s", ansi.Strip(h.view()))
+	}
+}

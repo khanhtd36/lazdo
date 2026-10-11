@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -136,7 +137,7 @@ func (m Model) View() string {
 	end := min(len(lines), m.offset+m.listHeight())
 	for i := m.offset; i < end; i++ {
 		l := lines[i]
-		b.WriteString(truncate(m.dashboardLine(l, rows[l.row], l.row == m.cursor && !l.bottom, l.section == focused), m.width-1) + "\n")
+		b.WriteString(truncate(m.dashboardLine(rows, l, l.row == m.cursor && !l.bottom, l.section == focused), m.width-1) + "\n")
 	}
 	for i := end - m.offset; i < m.listHeight(); i++ {
 		b.WriteString("\n")
@@ -225,7 +226,8 @@ func dashLines(rows []row) []dashLine {
 // dashboardLine draws a line of the Pull requests page. Each Section is a
 // framed pane, its header the top edge; the focused Section, the one the
 // cursor is in, is framed in the accent color like any focused pane.
-func (m Model) dashboardLine(l dashLine, r row, cursor, focused bool) string {
+func (m Model) dashboardLine(rows []row, l dashLine, cursor, focused bool) string {
+	r := rows[l.row]
 	edge, title := styleFrame, styleDim
 	if focused {
 		edge, title = styleAccent, styleCursor
@@ -233,7 +235,11 @@ func (m Model) dashboardLine(l dashLine, r row, cursor, focused bool) string {
 	inner := max(1, m.width-3)
 	switch {
 	case l.bottom:
-		return edge.Render("└" + strings.Repeat("─", inner) + "┘")
+		pos := ""
+		if focused {
+			pos = m.sectionPosition(rows, l.section)
+		}
+		return bottomEdge(edge, inner, pos)
 	case r.pr == nil:
 		s := m.sections[r.section]
 		arrow := "▾"
@@ -244,7 +250,11 @@ func (m Model) dashboardLine(l dashLine, r row, cursor, focused bool) string {
 		if cursor {
 			lead = styleCursor.Render("▌")
 		}
-		name := title.Render(truncate(fmt.Sprintf(" %s %s (%d) ", arrow, s.Kind.Title(), len(s.PRs)), max(1, inner-2)))
+		count := strconv.Itoa(len(s.PRs))
+		if m.filter != "" { // how many the filter leaves
+			count += " → " + strconv.Itoa(m.sectionRows(rows, r.section))
+		}
+		name := title.Render(truncate(fmt.Sprintf(" %s %s (%s) ", arrow, s.Kind.Title(), count), max(1, inner-2)))
 		fill := max(0, inner-1-ansi.StringWidth(name))
 		return edge.Render("┌") + lead + name + edge.Render(strings.Repeat("─", fill)+"┐")
 	}
@@ -446,4 +456,33 @@ func padRight(s string, w int) string {
 		return s + strings.Repeat(" ", w-n)
 	}
 	return s
+}
+
+// sectionRows counts the pull requests a Section shows.
+func (m Model) sectionRows(rows []row, section int) int {
+	n := 0
+	for _, r := range rows {
+		if r.section == section && r.pr != nil {
+			n++
+		}
+	}
+	return n
+}
+
+// sectionPosition is the cursor's place among its Section's pull
+// requests, "" on the header.
+func (m Model) sectionPosition(rows []row, section int) string {
+	at, n := 0, 0
+	for i, r := range rows {
+		if r.section == section && r.pr != nil {
+			n++
+			if i == m.cursor {
+				at = n
+			}
+		}
+	}
+	if at == 0 {
+		return ""
+	}
+	return position(at, n)
 }

@@ -397,8 +397,8 @@ func (v *runView) view(width, height int) []string {
 	}
 	v.tree.unfocused = v.logPane
 	return framePanes(height,
-		pane{title: "Steps", width: treeW, lines: v.tree.view(treeW-2, inner), focused: !v.logPane},
-		pane{title: logTitle, width: width - treeW, lines: v.logView(width-treeW-2, inner), focused: v.logPane},
+		pane{title: "Steps", width: treeW, lines: v.tree.view(treeW-2, inner), focused: !v.logPane, pos: v.tree.position()},
+		pane{title: logTitle, width: width - treeW, lines: v.logView(width-treeW-2, inner), focused: v.logPane, pos: position(v.cur+1, len(v.lines))},
 	)
 }
 

@@ -277,7 +277,7 @@ func (p *projectsPage) view(width, height int) []string {
 		return framePanes(height, pane{title: "Projects", width: width, lines: []string{styleDim.Render("loading projects…")}, focused: true})
 	case p.filtering():
 		// A filter ranks matches from every group in one list.
-		return framePanes(height, listPane("Projects", &p.list, width, height, true))
+		return framePanes(height, listPane("Projects", &p.list, width, height))
 	}
 	return p.list.stackedView(width, height)
 }

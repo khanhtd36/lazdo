@@ -150,3 +150,11 @@ func (u *updateModal) view(width int) string {
 	}
 	return styleModal.Render(strings.Join(lines, "\n"))
 }
+
+// versionLabel is the running build for display: "v0.2.19", or "dev".
+func versionLabel() string {
+	if buildVersion == "dev" || buildVersion == "" {
+		return "dev"
+	}
+	return "v" + strings.TrimPrefix(buildVersion, "v")
+}

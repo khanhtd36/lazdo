@@ -242,12 +242,13 @@ func (d *detailModel) renderFiles() string {
 	h := d.bodyHeight()
 	onTree := d.files.pane == paneTree && d.treeWidth() > 0
 	diff := framed(d.renderDiffPane(h-1), d.diffWidth()+2, !onTree)
+	diff.pos = position(d.files.cursor+1, len(d.diffLines()))
 	tw := d.treeWidth()
 	if tw == 0 {
 		return strings.Join(framePanes(h, diff), "\n")
 	}
 	d.files.tree.unfocused = !onTree
-	tree := pane{title: "Files", width: tw, lines: d.renderTree(h-2, tw-2), focused: onTree}
+	tree := pane{title: "Files", width: tw, lines: d.renderTree(h-2, tw-2), focused: onTree, pos: d.files.tree.position()}
 	return strings.Join(framePanes(h, tree, diff), "\n")
 }
 

@@ -107,15 +107,15 @@ func framePane(p pane, height int) []string {
 	return append(out, bottomEdge(edge, inner, p.pos))
 }
 
-// listPane frames a list: its filter, when one is typed or kept, follows
+// listPane frames a list, the one keys go to: its filter, when one is typed or kept, follows
 // the title, and the cursor's place is in the bottom edge.
-func listPane(title string, l *pickList, width, height int, focused bool) pane {
+func listPane(title string, l *pickList, width, height int) pane {
 	l.titled = true
 	return pane{
 		title:   title + l.filterNote(),
 		width:   width,
 		lines:   l.view(width-2, paneInnerHeight(height)),
-		focused: focused,
+		focused: true,
 		pos:     l.position(),
 	}
 }

@@ -291,3 +291,15 @@ func TestDashboardPanesShareOneScroll(t *testing.T) {
 		t.Fatalf("back at the top, offset %d:\n%s", m.offset, view)
 	}
 }
+
+func TestSectionTitlesCountFilterMatches(t *testing.T) {
+	m := New(ado.NewClient("org"), 0)
+	m.width, m.height, m.loading = 120, 20, false
+	m.me = ado.Identity{ID: "me"}
+	me := []ado.Reviewer{{Identity: ado.Identity{ID: "me"}}}
+	m.sections = ado.Classify("me", []ado.PullRequest{{ID: 1, Title: "fix: alpha", Reviewers: me}, {ID: 2, Title: "feat: beta", Reviewers: me}}, nil)
+	m.filter = "alpha"
+	if view := ansi.Strip(m.View()); !strings.Contains(view, "Wait for approval (2 → 1)") {
+		t.Fatalf("the title should count what the filter leaves:\n%s", view)
+	}
+}
