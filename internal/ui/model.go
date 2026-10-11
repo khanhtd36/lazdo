@@ -57,6 +57,9 @@ type Model struct {
 	lastCheckout    map[string]string // repo key → path, this session only
 	updates         []update.Release  // releases newer than this build, newest first
 	checkingUpdates bool              // U is asking GitHub
+	updating        *updateRun        // an update downloading, nil otherwise
+	installed       string            // the version an update put in place, to use on restart
+	updateFailed    *updateFailure    // the last update's error, until U shows it
 
 	filter       string // dashboard / filter
 	filterTyping bool
@@ -211,11 +214,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.detail.update(msg)
 	case updatesMsg:
 		return m.onUpdates(msg)
-	case updateDoneMsg:
-		if msg.err == nil {
-			m.updates = nil
+	case updateStartMsg:
+		return m.startUpdate(msg)
+	case updateTickMsg:
+		if m.updating != nil {
+			return m, updateTick()
 		}
-		return m.Update(resultMsg(msg.err, msg.text))
+		return m, nil
+	case updateDoneMsg:
+		return m.onUpdateDone(msg)
 	case listMsg:
 		return m.onList(msg)
 	case statsMsg:

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,8 +19,12 @@ var buildVersion = "dev"
 // SetVersion tells the UI which release is running.
 func SetVersion(v string) { buildVersion = v }
 
-// refreshUpdates asks GitHub for newer releases now; tests replace it.
-var refreshUpdates = update.Refresh
+// refreshUpdates asks GitHub for newer releases now and installUpdate puts
+// one in place; tests replace them.
+var (
+	refreshUpdates = update.Refresh
+	installUpdate  = update.Install
+)
 
 type (
 	// updatesMsg brings the newer releases; manual when U asked for them.
@@ -28,65 +33,105 @@ type (
 		manual   bool
 		err      error
 	}
+	// updateStartMsg is y in the update dialog.
+	updateStartMsg struct {
+		release update.Release
+		exe     string
+	}
+	// updateTickMsg redraws the title while an update downloads.
+	updateTickMsg struct{}
 	updateDoneMsg struct {
-		text string
-		err  error
+		version string
+		err     error
 	}
 )
+
+// updateRun is an update in progress; the download writes its step, the
+// title reads it.
+type updateRun struct {
+	version string
+	step    atomic.Pointer[update.Step]
+}
+
+func (r *updateRun) String() string {
+	if s := r.step.Load(); s != nil {
+		return s.String()
+	}
+	return "starting"
+}
+
+// updateFailure is an update that failed, shown atop the next update dialog.
+type updateFailure struct {
+	version string
+	err     error
+}
 
 // checkUpdates looks for newer releases in the background, asking GitHub
 // at most once a day; a failed check stays silent.
 func checkUpdates() tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		rs, _ := update.Check(ctx, buildVersion)
+		rs, _ := update.Check(context.Background(), buildVersion)
 		return updatesMsg{releases: rs}
 	}
 }
 
-// updateNote is the title line's hint that a newer release is out.
+// updateNote is the title line's word on updates: one downloading, one
+// installed, one failed, or a newer release out.
 func (m Model) updateNote() string {
-	if len(m.updates) == 0 {
+	var note string
+	switch {
+	case m.updating != nil:
+		note = "updating v" + m.updating.version + " " + strings.TrimPrefix(m.updating.String(), "downloading ")
+	case m.installed != "":
+		note = "v" + m.installed + " installed, restart lazdo"
+	case m.updateFailed != nil:
+		return styleRed.Render("  update failed (U)")
+	case len(m.updates) > 0:
+		note = pick2(useSymbols, symPush+" ", "update ") + "v" + m.updates[0].Version() + " (U)"
+	default:
 		return ""
 	}
-	note := pick2(useSymbols, symPush+" ", "update ") + "v" + m.updates[0].Version() + " (U)"
 	return styleCyan.Render("  " + note)
 }
 
 // checkUpdatesNow is U: it asks GitHub now, not the daily check's cache,
 // which can be a day behind, then opens the update dialog or says lazdo
-// is the latest. Presses while a check runs are ignored.
+// is the latest. While a check or an update runs it says so instead.
 func (m Model) checkUpdatesNow() (tea.Model, tea.Cmd) {
-	if m.checkingUpdates {
-		return m, nil
+	switch {
+	case m.checkingUpdates:
+		return m, statusCmd("already checking for updates…")
+	case m.updating != nil:
+		return m, statusCmd("already updating to v" + m.updating.version + ": " + m.updating.String())
+	case m.installed != "":
+		return m, statusCmd("v" + m.installed + " is installed, restart lazdo to use it")
 	}
 	m.checkingUpdates, m.status = true, "checking for updates…"
 	return m, func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		rs, err := refreshUpdates(ctx, buildVersion)
+		rs, err := refreshUpdates(context.Background(), buildVersion)
 		return updatesMsg{releases: rs, manual: true, err: err}
 	}
 }
 
 // onUpdates takes a check's answer: the title's hint follows it, and the
-// answer to U opens the dialog.
+// answer to U opens the dialog, with the last failed update atop it.
 func (m Model) onUpdates(msg updatesMsg) (tea.Model, tea.Cmd) {
 	if !msg.manual {
 		m.updates = msg.releases
 		return m, nil
 	}
 	m.checkingUpdates, m.status = false, ""
+	failed := m.updateFailed
+	m.updateFailed = nil
 	if msg.err != nil {
 		return m.Update(resultMsg(fmt.Errorf("check for updates: %w", msg.err), ""))
 	}
 	m.updates = msg.releases
-	return m.openUpdate()
+	return m.openUpdate(failed)
 }
 
 // openUpdate shows what the newer releases change and offers to install.
-func (m Model) openUpdate() (tea.Model, tea.Cmd) {
+func (m Model) openUpdate(failed *updateFailure) (tea.Model, tea.Cmd) {
 	if len(m.updates) == 0 {
 		return m, statusCmd(fmt.Sprintf("lazdo %s is the latest", buildVersion))
 	}
@@ -94,14 +139,44 @@ func (m Model) openUpdate() (tea.Model, tea.Cmd) {
 	if err != nil {
 		return m, statusCmd("error: " + err.Error())
 	}
-	m.modal = &updateModal{releases: m.updates, exe: exe, how: update.HowInstalled(exe)}
+	m.modal = &updateModal{releases: m.updates, exe: exe, how: update.HowInstalled(exe), failed: failed}
 	return m, nil
+}
+
+// startUpdate downloads and installs a release in the background; the
+// title follows its progress.
+func (m Model) startUpdate(msg updateStartMsg) (tea.Model, tea.Cmd) {
+	if m.updating != nil {
+		return m, nil
+	}
+	run := &updateRun{version: msg.release.Version()}
+	m.updating, m.updateFailed = run, nil
+	install := func() tea.Msg {
+		err := installUpdate(context.Background(), msg.release, msg.exe, func(s update.Step) { run.step.Store(&s) })
+		return updateDoneMsg{version: run.version, err: err}
+	}
+	return m, tea.Batch(install, updateTick())
+}
+
+func updateTick() tea.Cmd {
+	return tea.Tick(200*time.Millisecond, func(time.Time) tea.Msg { return updateTickMsg{} })
+}
+
+func (m Model) onUpdateDone(msg updateDoneMsg) (tea.Model, tea.Cmd) {
+	m.updating = nil
+	if msg.err != nil {
+		m.updateFailed = &updateFailure{version: msg.version, err: msg.err}
+		return m.Update(resultMsg(fmt.Errorf("update: %w", msg.err), ""))
+	}
+	m.installed, m.updates = msg.version, nil
+	return m.Update(resultMsg(nil, "updated to v"+msg.version+", restart lazdo to use it"))
 }
 
 type updateModal struct {
 	releases []update.Release
 	exe      string
 	how      update.Method
+	failed   *updateFailure // the last try, when it failed
 }
 
 const updateChangeRows = 15
@@ -114,15 +189,8 @@ func (u *updateModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 		if u.how != update.ByScript {
 			return u, nil
 		}
-		latest, exe := u.releases[0], u.exe
-		return nil, func() tea.Msg {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-			defer cancel()
-			if err := update.Install(ctx, latest, exe); err != nil {
-				return updateDoneMsg{err: fmt.Errorf("update: %w", err)}
-			}
-			return updateDoneMsg{text: "updated to v" + latest.Version() + ", restart lazdo to use it"}
-		}
+		start := updateStartMsg{release: u.releases[0], exe: u.exe}
+		return nil, func() tea.Msg { return start }
 	}
 	return u, nil
 }
@@ -131,6 +199,9 @@ func (u *updateModal) view(width int) string {
 	w := min(100, max(40, width-10))
 	latest := u.releases[0].Version()
 	lines := []string{styleSection.Render(fmt.Sprintf("lazdo v%s → v%s", buildVersion, latest)), ""}
+	if f := u.failed; f != nil {
+		lines = append(lines, styleRed.Render(truncate(fmt.Sprintf("last try (v%s) failed: %v", f.version, f.err), w)), "")
+	}
 	changes := update.Changes(u.releases)
 	if len(changes) == 0 {
 		lines = append(lines, styleDim.Render("No change list was published with this release."))

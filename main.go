@@ -55,8 +55,7 @@ func main() {
 // selfUpdate is `lazdo update`: it lists what newer releases change and
 // installs the latest, unless Homebrew or go install manage this copy.
 func selfUpdate(exe string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
+	ctx := context.Background() // slow is fine; a stalled download stops on its own
 	rs, err := update.Newer(ctx, version)
 	if err != nil {
 		return err
@@ -74,7 +73,18 @@ func selfUpdate(exe string) error {
 		fmt.Println("This copy is managed elsewhere; update it with:\n  " + cmd)
 		return nil
 	}
-	if err := update.Install(ctx, rs[0], exe); err != nil {
+	// One line, rewritten in place as the download goes.
+	last := ""
+	err = update.Install(ctx, rs[0], exe, func(s update.Step) {
+		if line := s.String(); line != last {
+			last = line
+			fmt.Print("\r" + line + "\x1b[K")
+		}
+	})
+	if last != "" {
+		fmt.Print("\r\x1b[K")
+	}
+	if err != nil {
 		return err
 	}
 	fmt.Printf("Updated to %s.\n", rs[0].Version())

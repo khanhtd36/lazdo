@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -301,5 +302,68 @@ func TestSectionTitlesCountFilterMatches(t *testing.T) {
 	m.filter = "alpha"
 	if view := ansi.Strip(m.View()); !strings.Contains(view, "Wait for approval (2 → 1)") {
 		t.Fatalf("the title should count what the filter leaves:\n%s", view)
+	}
+}
+
+func TestUpdateShowsProgressFailureAndInstalled(t *testing.T) {
+	SetVersion("0.2.13")
+	defer SetVersion("dev")
+	savedRefresh, savedInstall := refreshUpdates, installUpdate
+	defer func() { refreshUpdates, installUpdate = savedRefresh, savedInstall }()
+	v14 := update.Release{Tag: "v0.2.14"}
+	refreshUpdates = func(context.Context, string) ([]update.Release, error) { return []update.Release{v14}, nil }
+	installUpdate = func(context.Context, update.Release, string, func(update.Step)) error { return nil } // the steps below arrive as messages
+	m := New(ado.NewClient("org"), time.Minute)
+	m.width, m.height, m.loading = 160, 20, false
+	title := func() string { return ansi.Strip(m.titleLine()) }
+	step := func(msg tea.Msg) tea.Cmd {
+		t.Helper()
+		next, cmd := m.Update(msg)
+		m = next.(Model)
+		return cmd
+	}
+
+	// y starts the download; the title follows it.
+	step(updateStartMsg{release: v14, exe: "lazdo"})
+	if !strings.Contains(title(), "updating v0.2.14 starting") {
+		t.Fatalf("title %q", title())
+	}
+	m.updating.step.Store(&update.Step{Done: 3 << 20, Total: 8 << 20})
+	if !strings.Contains(title(), "updating v0.2.14 3.0/8.0 MB") {
+		t.Fatalf("title %q", title())
+	}
+	// U meanwhile says how far it is, rather than offering a second one.
+	if msg, ok := step(keyMsg("U"))().(statusMsg); !ok || string(msg) != "already updating to v0.2.14: downloading 3.0/8.0 MB" {
+		t.Fatalf("U while updating: %#v", msg)
+	}
+
+	// A failure marks the title, and the next U shows it atop a fresh offer.
+	step(updateDoneMsg{version: "0.2.14", err: errors.New("no data from GitHub for 30s (3.0/8.0 MB downloaded)")})
+	if !strings.Contains(title(), "update failed (U)") || m.updating != nil {
+		t.Fatalf("title %q", title())
+	}
+	step(step(keyMsg("U"))())
+	u, ok := m.modal.(*updateModal)
+	if !ok {
+		t.Fatalf("U should open the dialog, got %T", m.modal)
+	}
+	if v := ansi.Strip(u.view(160)); !strings.Contains(v, "last try (v0.2.14) failed: no data from GitHub for 30s") {
+		t.Fatalf("dialog:\n%s", v)
+	}
+	if strings.Contains(title(), "failed") {
+		t.Fatalf("U has shown the failure, title %q", title())
+	}
+
+	// y again; this time it works.
+	cmd := step(step(keyMsg("y"))())
+	if m.updating == nil || cmd == nil {
+		t.Fatal("y should start the update")
+	}
+	step(updateDoneMsg{version: "0.2.14"})
+	if !strings.Contains(title(), "v0.2.14 installed, restart lazdo") {
+		t.Fatalf("title %q", title())
+	}
+	if msg, ok := step(keyMsg("U"))().(statusMsg); !ok || !strings.Contains(string(msg), "restart lazdo") {
+		t.Fatalf("U once installed: %#v", msg)
 	}
 }

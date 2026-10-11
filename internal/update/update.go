@@ -217,7 +217,10 @@ func (m Method) Command() string {
 // release's checksums and puts it in place of exe. On Windows the running
 // file can't be overwritten but can be renamed, so it moves to exe+".old"
 // first; Cleanup removes that on the next start.
-func Install(ctx context.Context, r Release, exe string) error {
+func Install(ctx context.Context, r Release, exe string, report func(Step)) error {
+	if report == nil {
+		report = func(Step) {}
+	}
 	arch := runtime.GOARCH
 	if arch == "amd64" {
 		arch = "x86_64"
@@ -229,14 +232,15 @@ func Install(ctx context.Context, r Release, exe string) error {
 	asset := fmt.Sprintf("lazdo_%s_%s_%s%s", r.Version(), runtime.GOOS, arch, ext)
 	base := "https://github.com/" + repo + "/releases/download/" + r.Tag + "/"
 
-	archive, err := get(ctx, base+asset)
+	archive, err := get(ctx, base+asset, stallAfter, func(done, total int64) { report(Step{Done: done, Total: total}) })
 	if err != nil {
 		return err
 	}
-	sums, err := get(ctx, base+"checksums.txt")
+	sums, err := get(ctx, base+"checksums.txt", stallAfter, nil)
 	if err != nil {
 		return err
 	}
+	report(Step{Verifying: true, Done: int64(len(archive)), Total: int64(len(archive))})
 	if err := verify(archive, sums, asset); err != nil {
 		return err
 	}
@@ -327,26 +331,93 @@ func replace(exe string, bin []byte) error {
 // Cleanup removes the copy a previous update moved aside.
 func Cleanup(exe string) { _ = os.Remove(exe + ".old") }
 
-func get(ctx context.Context, url string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
+// Step is how far an Install is: Done of Total bytes downloaded (Total is 0
+// when GitHub doesn't say), then the checksum check.
+type Step struct {
+	Verifying   bool
+	Done, Total int64
+}
+
+// String is "downloading 3.1/8.4 MB" or "checking checksum".
+func (s Step) String() string {
+	if s.Verifying {
+		return "checking checksum"
+	}
+	return "downloading " + megabytes(s.Done, s.Total)
+}
+
+// megabytes is "3.1/8.4 MB", or "3.1 MB" without a total.
+func megabytes(done, total int64) string {
+	mb := func(n int64) string { return strconv.FormatFloat(float64(n)/(1<<20), 'f', 1, 64) }
+	if total <= 0 {
+		return mb(done) + " MB"
+	}
+	return mb(done) + "/" + mb(total) + " MB"
+}
+
+// A slow download goes on as long as data keeps coming; it stops when none
+// arrives for stallAfter (checkStallAfter for the list of releases).
+var (
+	stallAfter      = 30 * time.Second
+	checkStallAfter = 20 * time.Second
+)
+
+var errStalled = errors.New("stalled")
+
+// get reads url, giving up once no data arrives for stall; progress, when
+// set, hears the bytes read so far and the total.
+func get(ctx context.Context, url string, stall time.Duration, progress func(done, total int64)) ([]byte, error) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	timer := time.AfterFunc(stall, func() { cancel(errStalled) })
+	defer timer.Stop()
+	var done, total int64
+	fail := func(err error) error {
+		if !errors.Is(context.Cause(ctx), errStalled) {
+			return err
+		}
+		if done == 0 && total == 0 {
+			return fmt.Errorf("no answer from GitHub for %s", stall)
+		}
+		return fmt.Errorf("no data from GitHub for %s (%s downloaded)", stall, megabytes(done, total))
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fail(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
 	}
-	return io.ReadAll(resp.Body)
+	total = max(0, resp.ContentLength)
+	var out bytes.Buffer
+	buf := make([]byte, 32<<10)
+	for {
+		timer.Reset(stall)
+		if progress != nil {
+			progress(done, total)
+		}
+		n, err := resp.Body.Read(buf)
+		out.Write(buf[:n])
+		done += int64(n)
+		if errors.Is(err, io.EOF) {
+			if progress != nil {
+				progress(done, total)
+			}
+			return out.Bytes(), nil
+		}
+		if err != nil {
+			return nil, fail(err)
+		}
+	}
 }
 
 func getJSON(ctx context.Context, url string, out any) error {
-	b, err := get(ctx, url)
+	b, err := get(ctx, url, checkStallAfter, nil)
 	if err != nil {
 		return err
 	}
