@@ -73,6 +73,8 @@ type settingsDetail struct {
 	reload      func() tea.Cmd
 	// perm is set for a group's permissions, which are edited here.
 	perm *permEdit
+	// user is the descriptor of the user whose groups are listed.
+	user string
 }
 
 type (
@@ -115,6 +117,9 @@ func (s *settingsView) update(msg tea.Msg) tea.Cmd {
 			if d := s.detail; d != nil && d.perm != nil && len(d.perm.pending) == 0 {
 				s.openPermissions(d.perm.group) // show the saved permissions
 			}
+			if d := s.detail; d != nil && d.user != "" {
+				s.refreshUser()
+			}
 		}
 	case settingsReloadMsg:
 		return s.load()
@@ -142,6 +147,10 @@ func (s *settingsView) update(msg tea.Msg) tea.Cmd {
 			// A member was added or removed. The member list can lag behind
 			// the change for a moment, so it is read now and again shortly.
 			members = tea.Batch(d.reload(), tea.Tick(2*time.Second, func(time.Time) tea.Msg { return d.reload()() }))
+		}
+		if s.section == secPermissions {
+			// Memberships can read back stale for a moment, like member lists.
+			members = tea.Tick(3*time.Second, func(time.Time) tea.Msg { return settingsReloadMsg{} })
 		}
 		return tea.Batch(statusCmd(msg.text), s.load(), members)
 	}
@@ -213,6 +222,11 @@ func (s *settingsView) key(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 				return true, cmd
 			}
 		}
+		if s.detail.user != "" && !s.detail.list.typing {
+			if handled, cmd := s.userKey(k); handled {
+				return true, cmd
+			}
+		}
 		if k == "esc" || k == "h" || k == "left" {
 			s.detail = nil
 			return true, nil
@@ -249,6 +263,7 @@ func (s *settingsView) key(msg tea.KeyMsg, height int) (bool, tea.Cmd) {
 		edit := map[settingsSection]func(string) (bool, tea.Cmd){
 			secPolicies: s.policyKey, secRepos: s.repoKey, secVarGroups: s.varKey,
 			secTeams: s.teamKey, secGroups: s.groupKey, secConnections: s.connectionKey,
+			secPermissions: s.permissionKey,
 		}[s.section]
 		if edit != nil {
 			if handled, cmd := edit(k); handled {
@@ -286,6 +301,9 @@ func (s *settingsView) open() tea.Cmd {
 			}
 		}
 		return s.detail.reload()
+	case ado.ProjectUser:
+		s.openUser(v)
+		return nil
 	case ado.Group:
 		if s.section == secPermissions {
 			s.openPermissions(v)
@@ -397,7 +415,9 @@ func (s *settingsView) contentItems() []pickItem {
 		for _, t := range d.Teams {
 			items = append(items, settingsRow(t.Name+styleDim.Render("  "+t.Description), t))
 		}
-	case secGroups, secPermissions:
+	case secPermissions:
+		items = s.permissionItems()
+	case secGroups:
 		for _, g := range d.Groups {
 			items = append(items, settingsRow(g.Name+styleDim.Render("  "+firstLine(g.Description)), g))
 		}

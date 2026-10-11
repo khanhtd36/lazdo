@@ -120,15 +120,15 @@ var (
 	}
 	settingsKeys = []binding{
 		{keys: "tab / h / l", desc: "sections ⇄ content", press: "tab", hint: "pane"},
-		{keys: "enter", desc: "a team's or group's members; a group's permissions (in Permissions)", press: "enter", hint: "open"},
+		{keys: "enter", desc: "a team's or group's members; in Permissions, a group's permissions or a user's groups", press: "enter", hint: "open"},
 		{keys: "J / K", desc: "next / previous branch (Branch policies)", press: "J"},
 		{keys: "e", desc: "edit: a branch policy, repository, team, group, variable group or variable", press: "e", hint: "edit"},
 		{keys: "n", desc: "new: branch policy, repository, team, group, or variable in the group", press: "n", hint: "new"},
-		{keys: "a", desc: "add people or groups (in a team's or group's members)", press: "a"},
+		{keys: "a", desc: "add people or groups (a team's or group's members); add users, or a user to a group (Permissions)", press: "a"},
 		{keys: "N", desc: "new variable group (Variable groups)", press: "N"},
 		{keys: "space", desc: "turn a branch policy on or off; cycle a permission; open a service connection to all pipelines", press: " "},
 		{keys: "ctrl+s", desc: "save permission changes (lists them and asks first)", press: "ctrl+s"},
-		{keys: "d", desc: "delete, or remove a member (a repository or group asks for its name)", press: "d"},
+		{keys: "d", desc: "delete, or remove a member or user (a repository or group asks for its name)", press: "d"},
 		{keys: "/", desc: "filter the list", press: "/", hint: "filter"},
 		{keys: "r", desc: "reload the settings", press: "r", hint: "refresh"},
 	}

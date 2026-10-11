@@ -249,6 +249,14 @@ Inside a project:
   connection, `space` grants or withdraws access for all pipelines and `d`
   deletes it (after its name is typed); credentials are never shown.
 
+  Permissions lists the groups, then the users: everyone in the project's
+  groups, directly or through a group nested in them (`via Developers`),
+  with the groups they're in. `a` adds people to a group (Contributors
+  unless you pick another); `d` on a user removes them from every project
+  group they're in, saying when a group from outside the project still
+  lets them in. `enter` on a user lists their groups, where `a` adds them
+  to another and `d` removes them from one.
+
   ![Settings: branch policies written as the rules they enforce](docs/screenshots/7-settings.png)
 
 **Checkout** (`c`, wherever a branch is shown) asks for a folder: the working

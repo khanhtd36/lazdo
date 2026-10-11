@@ -469,6 +469,7 @@ type ProjectSettings struct {
 	Overview    Overview
 	Teams       []Team
 	Groups      []Group
+	Users       []ProjectUser
 	Permissions map[string][]Permission // by group SID
 	Repos       []Repo
 	Policies    []PolicyConfig
@@ -502,6 +503,14 @@ func (c *Client) ProjectSettings(ctx context.Context, p ProjectInfo) *ProjectSet
 	run("repos", func() (err error) { s.Repos, err = c.ProjectRepos(ctx, p.ID); return err })
 	run("teams", func() (err error) { s.Teams, err = c.Teams(ctx, p.ID); return err })
 	run("groups", func() (err error) { s.Groups, err = c.Groups(ctx, p.ID); return err })
+	run("users", func() error {
+		gs, err := c.Groups(ctx, p.ID)
+		if err != nil {
+			return err
+		}
+		s.Users, err = c.ProjectUsers(ctx, gs)
+		return err
+	})
 	run("permissions", func() (err error) { s.Permissions, err = c.ProjectPermissions(ctx, p.ID); return err })
 	run("policies", func() (err error) { return c.loadPolicies(ctx, p.ID, s) })
 	run("queues", func() (err error) { s.Queues, err = c.AgentQueues(ctx, p.ID); return err })

@@ -74,6 +74,14 @@ _Avoid_: build definition, release (release pipelines are out of scope)
 One execution of a pipeline, made of stages, jobs and steps, each with a status and a log.
 _Avoid_: build (for the execution)
 
+**Project group**:
+A security group of a project, such as Contributors or Readers; what its members may do is set by its permissions.
+_Avoid_: role, team (a team is a group with its own backlog)
+
+**Project user**:
+A person with access to a project through its groups, directly or through a group nested in one. Shown as "Users".
+_Avoid_: member (for this sense), Me (that is the signed-in person)
+
 ### Review
 
 **Reviewer**:
