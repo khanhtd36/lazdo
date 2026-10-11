@@ -159,7 +159,7 @@ func (d *detailModel) modalMouse(msg tea.MouseMsg) tea.Cmd {
 	h, w := strings.Count(box, "\n")+1, ansi.StringWidth(firstLine(box))
 	// lipgloss.Place centers with the smaller half of the gap before the box.
 	top := d.bodyTop() + max(0, (d.bodyHeight()-h)/2)
-	left := max(0, (d.width-1-w)/2)
+	left := max(0, (d.width-w)/2)
 	inside := msg.Y >= top && msg.Y < top+h && msg.X >= left && msg.X < left+w
 
 	if menu, ok := d.modal.(*menuModal); ok {

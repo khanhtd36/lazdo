@@ -188,5 +188,5 @@ func (c *checkoutModal) view(int) string {
 
 // place centers the dialog over the screen.
 func placeModal(m modal, width, height int) string {
-	return lipgloss.Place(width-1, height, lipgloss.Center, lipgloss.Center, m.view(width))
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, m.view(width))
 }

@@ -72,7 +72,7 @@ func TestDetailFitsWidth(t *testing.T) {
 		for _, tab := range []string{"1", "2", "3", "4"} {
 			press(d, tab)
 			for _, line := range strings.Split(d.view(), "\n") {
-				if w := ansi.StringWidth(line); w >= width {
+				if w := ansi.StringWidth(line); w > width {
 					t.Errorf("width %d tab %s: line %d wide: %q", width, tab, w, ansi.Strip(line))
 				}
 			}
@@ -257,7 +257,7 @@ func TestDetailSubtitleKeepsTargetBranch(t *testing.T) {
 	d := fakeDetail(t, 100)
 	d.pr.SourceRefName = "refs/heads/QA-11284-workflow-worker-is-orphaned-when-the-main-das-process-is-killed-the-next-start"
 	line := ansi.Strip(d.subtitleLine())
-	if !strings.HasSuffix(line, "… into develop") || ansi.StringWidth(line) > 99 {
+	if !strings.HasSuffix(line, "… into develop") || ansi.StringWidth(line) > 100 {
 		t.Fatalf("a long source branch should be cut so the target shows: %q", line)
 	}
 }

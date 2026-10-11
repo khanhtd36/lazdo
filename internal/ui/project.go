@@ -282,7 +282,7 @@ func (m *projectModel) key(msg tea.KeyMsg) tea.Cmd {
 	}
 	switch m.level {
 	case levelRepo:
-		if handled, cmd := m.browser.key(msg, m.width-1, m.browserHeight()); handled {
+		if handled, cmd := m.browser.key(msg, m.width, m.browserHeight()); handled {
 			return cmd
 		}
 		if msg.String() == "esc" {

@@ -120,11 +120,11 @@ func (m Model) View() string {
 	var b strings.Builder
 	b.WriteString(m.titleLine() + "\n")
 	if m.page == pageProjects {
-		for _, line := range padLines(m.projects.view(m.width-1, m.listHeight()), m.listHeight()) {
-			b.WriteString(truncate(line, m.width-1) + "\n")
+		for _, line := range padLines(m.projects.view(m.width, m.listHeight()), m.listHeight()) {
+			b.WriteString(truncate(line, m.width) + "\n")
 		}
 		b.WriteString(m.statusLine() + "\n")
-		b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width-1)))
+		b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width)))
 		return b.String()
 	}
 
@@ -137,13 +137,13 @@ func (m Model) View() string {
 	end := min(len(lines), m.offset+m.listHeight())
 	for i := m.offset; i < end; i++ {
 		l := lines[i]
-		b.WriteString(truncate(m.dashboardLine(rows, l, l.row == m.cursor && !l.bottom, l.section == focused), m.width-1) + "\n")
+		b.WriteString(truncate(m.dashboardLine(rows, l, l.row == m.cursor && !l.bottom, l.section == focused), m.width) + "\n")
 	}
 	for i := end - m.offset; i < m.listHeight(); i++ {
 		b.WriteString("\n")
 	}
 	b.WriteString(m.statusLine() + "\n")
-	b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width-1)))
+	b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width)))
 	return b.String()
 }
 
@@ -159,13 +159,13 @@ func (m Model) pageLabels() []string {
 }
 
 func (m Model) pageAt(x int) (page, bool) {
-	p, ok := tabAt(m.pageLabels(), x-len(titlePrefix), m.width-1-len(titlePrefix))
+	p, ok := tabAt(m.pageLabels(), x-len(titlePrefix), m.width-len(titlePrefix))
 	return page(p), ok
 }
 
 func (m Model) titleLine() string {
 	s := styleTitle.Render(strings.TrimSpace(titlePrefix)) + "  "
-	s += tabBar(m.pageLabels(), int(m.page), m.width-1-len(titlePrefix)) + styleDim.Render("   "+m.client.Org)
+	s += tabBar(m.pageLabels(), int(m.page), m.width-len(titlePrefix)) + styleDim.Render("   "+m.client.Org)
 	if m.me.DisplayName != "" {
 		s += styleDim.Render(" · " + m.me.DisplayName)
 	}
@@ -173,7 +173,7 @@ func (m Model) titleLine() string {
 		if m.projects.loading {
 			s += styleYellow.Render("  refreshing…")
 		}
-		return truncate(s+m.updateNote(), m.width-1)
+		return truncate(s+m.updateNote(), m.width)
 	}
 	switch {
 	case m.loading:
@@ -181,7 +181,7 @@ func (m Model) titleLine() string {
 	case !m.fetchedAt.IsZero():
 		s += styleDim.Render("  updated " + m.fetchedAt.Format("15:04:05"))
 	}
-	return truncate(s+m.updateNote(), m.width-1)
+	return truncate(s+m.updateNote(), m.width)
 }
 
 func (m Model) statusLine() string {

@@ -412,7 +412,7 @@ func (d *detailModel) treeWidth() int {
 
 // diffWidth is the diff's width inside its frame.
 func (d *detailModel) diffWidth() int {
-	return max(20, d.width-1-d.treeWidth()-2)
+	return max(20, d.width-d.treeWidth()-2)
 }
 
 func (d *detailModel) isSideBySide() bool {

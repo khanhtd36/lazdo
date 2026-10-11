@@ -53,7 +53,7 @@ func TestFilesRendersThreadAndFits(t *testing.T) {
 			t.Fatalf("width %d: inline thread missing:\n%s", width, ansi.Strip(view))
 		}
 		for _, line := range strings.Split(view, "\n") {
-			if w := ansi.StringWidth(line); w >= width {
+			if w := ansi.StringWidth(line); w > width {
 				t.Errorf("width %d: line %d wide: %q", width, w, ansi.Strip(line))
 			}
 		}
@@ -265,7 +265,7 @@ func TestDiffOfFileWithBOMFitsTheScreen(t *testing.T) {
 		if strings.Contains(line, bom) {
 			t.Fatalf("a byte order mark reached the screen: %q", ansi.Strip(line))
 		}
-		if w := ansi.StringWidth(line); w >= 120 {
+		if w := ansi.StringWidth(line); w > 120 {
 			t.Fatalf("line %d wide: %q", w, ansi.Strip(line))
 		}
 	}

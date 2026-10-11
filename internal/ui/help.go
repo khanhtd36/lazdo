@@ -243,5 +243,5 @@ func (h *helpModal) renderRow(r helpRow, selected bool) string {
 
 // place centers the help popup over a screen of the given size.
 func (h *helpModal) place(width, height int) string {
-	return lipgloss.Place(width-1, height, lipgloss.Center, lipgloss.Center, h.view())
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, h.view())
 }

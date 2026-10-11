@@ -25,7 +25,7 @@ func (d *detailModel) view() string {
 
 	body := d.body()
 	if d.modal != nil {
-		body = lipgloss.Place(d.width-1, d.bodyHeight(), lipgloss.Center, lipgloss.Center, d.modal.view(d.width))
+		body = lipgloss.Place(d.width, d.bodyHeight(), lipgloss.Center, lipgloss.Center, d.modal.view(d.width))
 	}
 	lines := strings.Split(body, "\n")
 	for i := range d.bodyHeight() {
@@ -33,10 +33,10 @@ func (d *detailModel) view() string {
 		if i < len(lines) {
 			line = lines[i]
 		}
-		b.WriteString(truncate(line, d.width-1) + "\n")
+		b.WriteString(truncate(line, d.width) + "\n")
 	}
 	b.WriteString(d.statusLine() + "\n")
-	b.WriteString(styleDim.Render(truncate(d.help(), d.width-1)))
+	b.WriteString(styleDim.Render(truncate(d.help(), d.width)))
 	return b.String()
 }
 
@@ -68,13 +68,13 @@ func (d *detailModel) titleButtons() (vote, complete string, voteX, completeX in
 	}
 	vote = styleButton.Render("v " + voteLabel + " ▾")
 	complete = styleButtonCTA.Render("m " + completeLabel + " ▾")
-	voteX = d.width - 1 - ansi.StringWidth(vote) - 1 - ansi.StringWidth(complete)
+	voteX = d.width - ansi.StringWidth(vote) - 1 - ansi.StringWidth(complete)
 	return vote, complete, voteX, voteX + ansi.StringWidth(vote) + 1
 }
 
 func (d *detailModel) titleLine() string {
 	if d.standalone {
-		return truncate(styleTitle.Render(d.pr.Title), d.width-1)
+		return truncate(styleTitle.Render(d.pr.Title), d.width)
 	}
 	vote, complete, voteX, _ := d.titleButtons()
 	title := styleTitle.Render(d.pr.Title)
@@ -87,7 +87,7 @@ func (d *detailModel) titleLine() string {
 
 func (d *detailModel) subtitleLine() string {
 	if d.standalone {
-		return truncate(styleDim.Render(d.repo.Project.Name+" › "+d.repo.Name), d.width-1)
+		return truncate(styleDim.Render(d.repo.Project.Name+" › "+d.repo.Name), d.width)
 	}
 	badge := styleBadge.Render("Active")
 	if d.pr.IsDraft {
@@ -99,22 +99,22 @@ func (d *detailModel) subtitleLine() string {
 		tail += styleYellow.Render("  refreshing…")
 	}
 	// A long source branch gives way first, so the target stays in view.
-	room := d.width - 1 - ansi.StringWidth(head) - ansi.StringWidth(tail)
+	room := d.width - ansi.StringWidth(head) - ansi.StringWidth(tail)
 	source := styleAccent.Render(truncate(d.pr.SourceBranch(), max(12, room)))
-	return truncate(head+source+tail, d.width-1)
+	return truncate(head+source+tail, d.width)
 }
 
 // tabAt returns the tab covering column x of the tabs line.
 func (d *detailModel) tabAt(x int) (detailTab, bool) {
-	t, ok := tabAt(d.tabLabels(), x, d.width-1)
+	t, ok := tabAt(d.tabLabels(), x, d.width)
 	return detailTab(t), ok
 }
 
 func (d *detailModel) tabsLine() string {
 	if d.standalone {
-		return tabBar([]string{fmt.Sprintf("Files (%d)", len(d.files.changes))}, 0, d.width-1)
+		return tabBar([]string{fmt.Sprintf("Files (%d)", len(d.files.changes))}, 0, d.width)
 	}
-	return tabBar(d.tabLabels(), int(d.tab), d.width-1)
+	return tabBar(d.tabLabels(), int(d.tab), d.width)
 }
 
 func (d *detailModel) tabLabels() []string {
@@ -143,7 +143,7 @@ func (d *detailModel) tabLabels() []string {
 
 func (d *detailModel) statusLine() string {
 	if s, ok := d.find.status(); ok && d.tab == tabOverview {
-		return truncate(s, d.width-1)
+		return truncate(s, d.width)
 	}
 	if (d.tab == tabCommits || d.tab == tabConflicts) && d.status == "" {
 		if hint, ok := d.lists[d.tab].filterHint(); ok {
@@ -152,11 +152,11 @@ func (d *detailModel) statusLine() string {
 	}
 	switch {
 	case d.status != "" && strings.HasPrefix(d.status, "error"):
-		return styleRed.Render(truncate(d.status, d.width-1))
+		return styleRed.Render(truncate(d.status, d.width))
 	case d.status != "":
-		return truncate(d.status, d.width-1)
+		return truncate(d.status, d.width)
 	case d.err != nil && d.data != nil:
-		return styleRed.Render(truncate("error: "+d.err.Error(), d.width-1))
+		return styleRed.Render(truncate("error: "+d.err.Error(), d.width))
 	}
 	return ""
 }

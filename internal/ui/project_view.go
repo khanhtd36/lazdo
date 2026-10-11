@@ -13,10 +13,10 @@ func (m *projectModel) bodyTop() int { return 2 }
 
 func (m *projectModel) view() string {
 	var b strings.Builder
-	b.WriteString(truncate(m.titleLine(), m.width-1) + "\n")
-	b.WriteString(truncate(m.tabsLine(), m.width-1) + "\n")
+	b.WriteString(truncate(m.titleLine(), m.width) + "\n")
+	b.WriteString(truncate(m.tabsLine(), m.width) + "\n")
 	for _, line := range m.body() {
-		b.WriteString(truncate(line, m.width-1) + "\n")
+		b.WriteString(truncate(line, m.width) + "\n")
 	}
 	status := m.status
 	if m.level == levelRun {
@@ -35,8 +35,8 @@ func (m *projectModel) view() string {
 	case strings.HasPrefix(status, "error"):
 		status = styleRed.Render(status)
 	}
-	b.WriteString(truncate(status, m.width-1) + "\n")
-	b.WriteString(styleDim.Render(truncate(m.help(), m.width-1)))
+	b.WriteString(truncate(status, m.width) + "\n")
+	b.WriteString(styleDim.Render(truncate(m.help(), m.width)))
 	return b.String()
 }
 
@@ -87,18 +87,18 @@ func (m *projectModel) tabLabels() []string {
 
 func (m *projectModel) tabsLine() string {
 	if m.level == levelRepo {
-		return m.browser.tabsLine(m.width - 1)
+		return m.browser.tabsLine(m.width)
 	}
-	return tabBar(m.tabLabels(), int(m.tab), m.width-1)
+	return tabBar(m.tabLabels(), int(m.tab), m.width)
 }
 
 func (m *projectModel) tabAt(x int) (projectTab, bool) {
-	t, ok := tabAt(m.tabLabels(), x, m.width-1)
+	t, ok := tabAt(m.tabLabels(), x, m.width)
 	return projectTab(t), ok
 }
 
 func (m *projectModel) body() []string {
-	h, w := m.bodyHeight(), m.width-1
+	h, w := m.bodyHeight(), m.width
 	switch m.level {
 	case levelRepo:
 		if m.browser.branch == "" {
@@ -168,7 +168,7 @@ func (m *projectModel) typing() bool {
 
 func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 	if isClick(msg) && msg.Y == 1 && m.level == levelRepo {
-		if t, ok := m.browser.tabAt(msg.X, m.width-1); ok {
+		if t, ok := m.browser.tabAt(msg.X, m.width); ok {
 			m.browser.tab, m.browser.pane = t, paneFiles
 			return m.browser.ensureHistory()
 		}
@@ -187,9 +187,9 @@ func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 	}
 	switch m.level {
 	case levelRun:
-		return m.run.onMouse(msg, by, m.width-1, m.bodyHeight())
+		return m.run.onMouse(msg, by, m.width, m.bodyHeight())
 	case levelRepo:
-		return m.browser.onMouse(msg, by, m.width-1, m.browserHeight())
+		return m.browser.onMouse(msg, by, m.width, m.browserHeight())
 	case levelTabs, levelRuns:
 	}
 	l := m.currentList()

@@ -330,9 +330,9 @@ func (d *detailModel) sideBySide() bool { return d.width >= twoColumnsWidth }
 // overviewWidth is the Overview pane's width, frame included.
 func (d *detailModel) overviewWidth() int {
 	if d.sideBySide() {
-		return d.width - 1 - sidebarWidth - 2
+		return d.width - sidebarWidth - 2
 	}
-	return d.width - 1
+	return d.width
 }
 
 // renderOverviewPanes frames the Overview, its selected activity entry's
