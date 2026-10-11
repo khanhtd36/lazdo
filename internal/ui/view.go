@@ -232,7 +232,7 @@ func (m Model) dashboardLine(rows []row, l dashLine, cursor, focused bool) strin
 	if focused {
 		edge, title = styleAccent, styleCursor
 	}
-	inner := max(1, m.width-3)
+	inner := max(1, m.width-2)
 	switch {
 	case l.bottom:
 		pos := ""
@@ -300,9 +300,8 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	}
 	right := strings.Join(shown, " ")
 
-	// 2 frame + 1 cursor + 1 indent + 1 gap before right + 1 spare so the
-	// line never wraps.
-	titleWidth := m.width - 6 - ansi.StringWidth(right) - ansi.StringWidth(badgeText)
+	// 2 frame + 1 cursor + 1 indent + 1 gap before right.
+	titleWidth := m.width - 5 - ansi.StringWidth(right) - ansi.StringWidth(badgeText)
 	if badgeText != "" {
 		titleWidth--
 	}
