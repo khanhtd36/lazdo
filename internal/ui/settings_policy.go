@@ -135,7 +135,7 @@ func (s *settingsView) policyForm(p *ado.PolicyConfig, typeID string) *formModal
 	case policyTypeRequiredReviewer:
 		fields = append(fields,
 			formText("reviewers", "Reviewers", strings.Join(s.reviewerNames(st), ", "), "names or emails, comma separated"),
-			formText("paths", "Path filter", joinPatterns(st), "e.g. /DAS/*; empty for all files"),
+			formText("paths", "Path filter", joinPatterns(st), "e.g. /api/*; empty for all files"),
 			formText("message", "Activity feed message", str("message"), ""))
 	case ado.PolicyTypeBuild:
 		names := make([]string, 0, 1+len(s.data.AllPipelines))
@@ -292,7 +292,7 @@ func (s *settingsView) policyFromForm(f *formModal, p ado.PolicyConfig) (_ ado.P
 	return p, reviewers, ""
 }
 
-// resolvePeople turns "Hung Nguyen, an@arbin.com" into identity IDs; a name
+// resolvePeople turns "Sam Rivera, jo@contoso.com" into identity IDs; a name
 // that matches nobody, or several people, is refused with who it matched.
 func resolvePeople(ctx context.Context, client *ado.Client, names string) ([]string, error) {
 	var ids []string

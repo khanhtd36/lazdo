@@ -14,16 +14,16 @@ import (
 )
 
 func fakeProjectsPage() projectsPage {
-	mits := ado.ProjectInfo{ID: "p1", Name: "MITS11", Description: "DAS, WebConsole"}
-	dw := ado.ProjectInfo{ID: "p2", Name: "DataWatcher_Git"}
+	demo := ado.ProjectInfo{ID: "p1", Name: "Demo", Description: "API, web app"}
+	dw := ado.ProjectInfo{ID: "p2", Name: "Analytics"}
 	old := ado.ProjectInfo{ID: "p3", Name: "Archive"}
 	p := projectsPage{}
 	p.onLoaded(projectsLoadedMsg{
-		projects: []ado.ProjectInfo{old, dw, mits},
+		projects: []ado.ProjectInfo{old, dw, demo},
 		recent:   []string{"p1"},
 		repos: []ado.Repo{
-			{ID: "r1", Name: "MITS11", Project: ado.Project{ID: "p1", Name: "MITS11"}, DefaultBranch: "refs/heads/develop"},
-			{ID: "r2", Name: "dev-tools", Project: ado.Project{ID: "p1", Name: "MITS11"}, DefaultBranch: "refs/heads/develop"},
+			{ID: "r1", Name: "Demo", Project: ado.Project{ID: "p1", Name: "Demo"}, DefaultBranch: "refs/heads/develop"},
+			{ID: "r2", Name: "dev-tools", Project: ado.Project{ID: "p1", Name: "Demo"}, DefaultBranch: "refs/heads/develop"},
 		},
 		prs: []ado.PullRequest{
 			{ID: 1, Repository: ado.Repository{Project: ado.Project{ID: "p2"}}},
@@ -47,7 +47,7 @@ func TestProjectsPageGroups(t *testing.T) {
 	if strings.Contains(text, "dev-tools") {
 		t.Fatal("repos should only show while searching")
 	}
-	if it, _ := p.list.selected(); it.value.(ado.ProjectInfo).Name != "MITS11" {
+	if it, _ := p.list.selected(); it.value.(ado.ProjectInfo).Name != "Demo" {
 		t.Fatal("cursor should start on the first project, not a header")
 	}
 }
@@ -69,19 +69,19 @@ func TestProjectsSearchFindsRepoAndOpensBranches(t *testing.T) {
 
 func TestProjectMainRepoFirst(t *testing.T) {
 	p := fakeProjectsPage()
-	m := p.newProject(ado.NewClient("org"), ado.ProjectInfo{ID: "p1", Name: "MITS11"})
-	if m.repos[0].Name != "MITS11" || m.repos[1].Name != "dev-tools" {
+	m := p.newProject(ado.NewClient("org"), ado.ProjectInfo{ID: "p1", Name: "Demo"})
+	if m.repos[0].Name != "Demo" || m.repos[1].Name != "dev-tools" {
 		t.Fatalf("main repo first, then A-Z: %s, %s", m.repos[0].Name, m.repos[1].Name)
 	}
 }
 
 func TestRankFuzzyMatchesPRNumbersLiterally(t *testing.T) {
 	texts := []string{
-		"fix(export): keep large exports from stalling Nhan Nguyen !15018 fix/QA-11278-export",
-		"feat(download): stream exported large test data Nhan Nguyen !15050 feat/download-15",
-		"chore: bump 1 5 0 5 0 deps Khanh Truong !14001 chore/deps",
+		"fix(export): keep large exports from stalling Sam Rivera !12018 fix/1278-export",
+		"feat(download): stream exported large test data Sam Rivera !12050 feat/download-15",
+		"chore: bump 1 2 0 5 0 deps Alex Kim !14001 chore/deps",
 	}
-	for q, want := range map[string][]int{"15050": {1}, "!15050": {1}, "!150": {0, 1}, "1501": {0}} {
+	for q, want := range map[string][]int{"12050": {1}, "!12050": {1}, "!120": {0, 1}, "1201": {0}} {
 		var got []int
 		for _, m := range rankFuzzy(q, texts) {
 			got = append(got, m.Index)
@@ -119,7 +119,7 @@ func TestPagesSwitchAndProjectEsc(t *testing.T) {
 	m.projects = fakeProjectsPage()
 	next, _ = m.Update(keyMsg("enter"))
 	m = next.(Model)
-	if m.project == nil || m.project.project.Name != "MITS11" {
+	if m.project == nil || m.project.project.Name != "Demo" {
 		t.Fatal("enter should open the selected project")
 	}
 	// / then 1 types into the filter instead of switching pages.
@@ -139,7 +139,7 @@ func TestProjectTabKeysLeavePipelineRuns(t *testing.T) {
 	p := fakeProjectsPage()
 	client := ado.NewClient("org")
 	for _, level := range []projectLevel{levelRuns, levelRun} {
-		m := p.newProject(client, ado.ProjectInfo{ID: "p1", Name: "MITS11"})
+		m := p.newProject(client, ado.ProjectInfo{ID: "p1", Name: "Demo"})
 		m.width, m.height = 120, 20
 		m.tab, m.level = projTabPipelines, level
 		if level == levelRun {
@@ -180,23 +180,23 @@ func TestRunTreeJumpsBetweenJobs(t *testing.T) {
 		{ID: "j1", Type: "Job", Name: "Setup", Order: 1},
 		{ID: "a", ParentID: "j1", Type: "Task", Name: "Init", Order: 1},
 		{ID: "b", ParentID: "j1", Type: "Task", Name: "Checkout", Order: 2},
-		{ID: "j2", Type: "Job", Name: "Build WebConsole", Order: 2},
+		{ID: "j2", Type: "Job", Name: "Build web", Order: 2},
 		{ID: "c", ParentID: "j2", Type: "Task", Name: "Install", Order: 1},
-		{ID: "j3", Type: "Job", Name: "Build DAS", Order: 3},
+		{ID: "j3", Type: "Job", Name: "Build api", Order: 3},
 	}})
 	name := func() string {
 		it, _ := v.tree.selected()
 		return it.value.(ado.TimelineRecord).Name
 	}
 	v.tree.cursor = 0
-	for _, want := range []string{"Build WebConsole", "Build DAS"} {
+	for _, want := range []string{"Build web", "Build api"} {
 		v.tree.key(keyMsg("J"), 20)
 		if name() != want {
 			t.Fatalf("J should jump to the next job %q, got %q", want, name())
 		}
 	}
-	v.tree.move(-1) // Install, inside Build WebConsole
-	for _, want := range []string{"Build WebConsole", "Setup"} {
+	v.tree.move(-1) // Install, inside Build web
+	for _, want := range []string{"Build web", "Setup"} {
 		v.tree.key(keyMsg("K"), 20)
 		if name() != want {
 			t.Fatalf("K should go to %q, got %q", want, name())
@@ -214,11 +214,11 @@ func TestPolicySentences(t *testing.T) {
 	}
 	cases := map[string]string{
 		`{"isEnabled":true,"isBlocking":true,"type":{"id":"fa4e907d-c16b-4a4c-9dfa-4906e5d171dd"},"settings":{"minimumApproverCount":2,"resetOnSourcePush":true}}`: "✓ At least 2 reviewers must approve, reset on new pushes · blocking",
-		`{"isEnabled":true,"isBlocking":true,"type":{"id":"0609b952-1397-4640-95ec-e00a01b2c241"},"settings":{"buildDefinitionId":7,"validDuration":720}}`:         "✓ Build BE validation on PR must pass, expires after 12h · blocking",
-		`{"isEnabled":false,"isBlocking":false,"type":{"id":"fd2167ab-b0be-447a-8ec8-39368250530e"},"settings":{"requiredReviewerIds":["ABC"]}}`:                   "○ Required reviewers: Hung Nguyen · optional · off",
+		`{"isEnabled":true,"isBlocking":true,"type":{"id":"0609b952-1397-4640-95ec-e00a01b2c241"},"settings":{"buildDefinitionId":7,"validDuration":720}}`:         "✓ Build API validation on PR must pass, expires after 12h · blocking",
+		`{"isEnabled":false,"isBlocking":false,"type":{"id":"fd2167ab-b0be-447a-8ec8-39368250530e"},"settings":{"requiredReviewerIds":["ABC"]}}`:                   "○ Required reviewers: Jo Tanaka · optional · off",
 		`{"isEnabled":true,"isBlocking":true,"type":{"id":"fa4e907d-c16b-4a4c-9dfa-4916e5d171ab"},"settings":{"allowSquash":true,"allowRebase":true}}`:             "✓ Merge types: rebase, squash · blocking",
 	}
-	names, pipelines := map[string]string{"abc": "Hung Nguyen"}, map[int]string{7: "Build BE validation on PR"}
+	names, pipelines := map[string]string{"abc": "Jo Tanaka"}, map[int]string{7: "Build API validation on PR"}
 	for raw, want := range cases {
 		if got := ansi.Strip(policySentence(cfg(raw), names, pipelines)); got != want {
 			t.Errorf("got  %q\nwant %q", got, want)
@@ -242,7 +242,7 @@ func TestGroupSIDMatchesPermissions(t *testing.T) {
 // minimum-reviewers policy on develop.
 func fakeSettings(t *testing.T) *settingsView {
 	t.Helper()
-	s := newSettingsView(ado.NewClient("org"), ado.ProjectInfo{ID: "p1", Name: "MITS11"})
+	s := newSettingsView(ado.NewClient("org"), ado.ProjectInfo{ID: "p1", Name: "Demo"})
 	var minRev ado.PolicyConfig
 	raw := `{"id":170,"isEnabled":true,"isBlocking":true,"type":{"id":"fa4e907d-c16b-4a4c-9dfa-4906e5d171dd","displayName":"Minimum number of reviewers"},
 		"settings":{"minimumApproverCount":1,"blockLastPusherVote":true,"scope":[{"refName":"refs/heads/develop","matchKind":"Exact","repositoryId":null}]}}`
@@ -250,8 +250,8 @@ func fakeSettings(t *testing.T) *settingsView {
 		t.Fatal(err)
 	}
 	s.update(settingsLoadedMsg{projectID: "p1", data: &ado.ProjectSettings{
-		Repos:        []ado.Repo{{ID: "r1", Name: "MITS11"}},
-		AllPipelines: []ado.Pipeline{{ID: 7, Name: "Build BE validation on PR"}},
+		Repos:        []ado.Repo{{ID: "r1", Name: "Demo"}},
+		AllPipelines: []ado.Pipeline{{ID: 7, Name: "Build API validation on PR"}},
 		Policies:     []ado.PolicyConfig{minRev},
 		Names:        map[string]string{},
 		Errs:         map[string]error{},
@@ -265,7 +265,7 @@ func TestPolicyFormEditsAndKeepsOtherSettings(t *testing.T) {
 	f := s.policyForm(&p, p.Type.ID)
 	f.get("count").input.SetValue("2")
 	f.get("branch").input.SetValue("stable/*")
-	f.get("repo").choice = 1 // MITS11
+	f.get("repo").choice = 1 // Demo
 	if ch := f.changes(); len(ch) != 3 {
 		t.Fatalf("three changes expected, got %q", ch)
 	}
@@ -309,7 +309,7 @@ func TestPolicyFormRefusesBadInput(t *testing.T) {
 
 func TestVariableFormRules(t *testing.T) {
 	s := fakeSettings(t)
-	g := ado.VariableGroup{ID: 3, Name: "ArbinCloud", Variables: []ado.Variable{{Name: "GITHUB_ACTOR", Value: "x"}, {Name: "GITHUB_TOKEN", Secret: true}}}
+	g := ado.VariableGroup{ID: 3, Name: "CloudDeploy", Variables: []ado.Variable{{Name: "GITHUB_ACTOR", Value: "x"}, {Name: "GITHUB_TOKEN", Secret: true}}}
 	s.data.VarGroups = []ado.VariableGroup{g}
 	submit := func(f *formModal) string {
 		_, why := f.save(f)
@@ -336,14 +336,14 @@ func TestVariableFormRules(t *testing.T) {
 }
 
 func TestDeleteRepoNeedsItsName(t *testing.T) {
-	c := newNameConfirm("Delete?", "MITS11", func() tea.Msg { return nil })
-	for _, r := range "MITS1" {
+	c := newNameConfirm("Delete?", "Demo", func() tea.Msg { return nil })
+	for _, r := range "Dem" {
 		c.update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 	if m, _ := c.update(tea.KeyMsg{Type: tea.KeyEnter}); m == nil {
 		t.Fatal("a wrong name must not confirm")
 	}
-	c.update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	c.update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
 	if m, cmd := c.update(tea.KeyMsg{Type: tea.KeyEnter}); m != nil || cmd == nil {
 		t.Fatal("the exact name should confirm")
 	}

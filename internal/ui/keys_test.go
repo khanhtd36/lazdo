@@ -59,18 +59,18 @@ func views(t *testing.T) map[string]Model {
 
 	pp := fakeProjectsPage()
 	proj := base()
-	proj.project = pp.newProject(proj.client, ado.ProjectInfo{ID: "p1", Name: "MITS11"})
+	proj.project = pp.newProject(proj.client, ado.ProjectInfo{ID: "p1", Name: "Demo"})
 	proj.project.width, proj.project.height = 160, 30
 	out["project"] = proj
 
 	repo := base()
-	repo.project = pp.newProject(repo.client, ado.ProjectInfo{ID: "p1", Name: "MITS11"})
+	repo.project = pp.newProject(repo.client, ado.ProjectInfo{ID: "p1", Name: "Demo"})
 	repo.project.width, repo.project.height = 160, 30
 	repo.project.level, repo.project.browser = levelRepo, fakeBrowser(t)
 	out["repo browser"] = repo
 
 	run := base()
-	run.project = pp.newProject(run.client, ado.ProjectInfo{ID: "p1", Name: "MITS11"})
+	run.project = pp.newProject(run.client, ado.ProjectInfo{ID: "p1", Name: "Demo"})
 	run.project.width, run.project.height = 160, 30
 	run.project.level, run.project.run = levelRun, newRunView(run.client, ado.ProjectInfo{}, ado.Run{ID: 1, Status: "completed"})
 	out["run"] = run

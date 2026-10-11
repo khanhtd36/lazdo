@@ -33,7 +33,7 @@ func rankFuzzy(query string, texts []string) []fuzzy.Match {
 	return matches
 }
 
-// isNumberQuery reports a PR number, like "15050" or "!15050": digits
+// isNumberQuery reports a PR number, like "1204" or "!1204": digits
 // scattered through titles and branches would fuzzy-match it, so it is
 // matched as written instead.
 func isNumberQuery(query string) bool {

@@ -41,18 +41,18 @@ func TestCompleteDir(t *testing.T) {
 }
 
 func TestCloneURL(t *testing.T) {
-	if got := CloneURL("arbinSW", "MITS 11", "Repo"); got != "https://arbinSW@dev.azure.com/arbinSW/MITS%2011/_git/Repo" {
+	if got := CloneURL("Contoso", "Demo App", "Repo"); got != "https://Contoso@dev.azure.com/Contoso/Demo%20App/_git/Repo" {
 		t.Errorf("got %q", got)
 	}
 }
 
 func TestRemoteRepoKey(t *testing.T) {
-	want := "arbinsw/mits 11/repo"
+	want := "contoso/demo app/repo"
 	for _, remote := range []string{
-		"https://arbinSW@dev.azure.com/arbinSW/MITS%2011/_git/Repo",
-		"https://dev.azure.com/arbinSW/MITS%2011/_git/Repo.git",
-		"https://arbinsw.visualstudio.com/MITS%2011/_git/Repo",
-		"git@ssh.dev.azure.com:v3/arbinSW/MITS%2011/Repo\n",
+		"https://Contoso@dev.azure.com/Contoso/Demo%20App/_git/Repo",
+		"https://dev.azure.com/Contoso/Demo%20App/_git/Repo.git",
+		"https://contoso.visualstudio.com/Demo%20App/_git/Repo",
+		"git@ssh.dev.azure.com:v3/Contoso/Demo%20App/Repo\n",
 	} {
 		got, ok := RemoteRepoKey(remote)
 		if !ok || got != want {

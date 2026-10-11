@@ -151,7 +151,7 @@ func (d *detailModel) appendTree(lines *[]listLine, node *fileNode, depth int) {
 			})
 			continue
 		}
-		// Collapse single-folder chains: "Common/CSupperDB".
+		// Collapse single-folder chains: "src/storage".
 		label := child.name
 		for len(child.children) == 1 {
 			var only *fileNode

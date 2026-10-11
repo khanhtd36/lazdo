@@ -534,7 +534,7 @@ func policySentence(p ado.PolicyConfig, names map[string]string, pipelines map[i
 		}
 	case ado.PolicyTypeBuild:
 		// The policy's own name when it has one, else its pipeline's, which
-		// often says "Build" already ("Build BE validation on PR").
+		// often says "Build" already ("Build API validation on PR").
 		name, _ := st["displayName"].(string)
 		if id, ok := st["buildDefinitionId"].(float64); ok && name == "" {
 			name = pipelines[int(id)]

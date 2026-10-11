@@ -193,7 +193,7 @@ func TestTrimStyledRight(t *testing.T) {
 	}
 }
 
-// fakeExternalChecks adds two required Status policies like arbin-ci's: one
+// fakeExternalChecks adds two required Status policies like an outside CI posts: one
 // passed, one running, plus a status no policy asks for.
 func fakeExternalChecks(t *testing.T) *detailModel {
 	t.Helper()
@@ -215,11 +215,11 @@ func fakeExternalChecks(t *testing.T) *detailModel {
 		s.CreationDate = time.Unix(int64(id), 0)
 		return s
 	}
-	d.data.Policies = []ado.Policy{policy("approved", "mits-cloud", 13), policy("running", "mits-cloud-e2e", 14)}
+	d.data.Policies = []ado.Policy{policy("approved", "web", 13), policy("running", "web-e2e", 14)}
 	d.data.Statuses = []ado.Status{
-		status(11, "failed", "github-actions/mits-cloud-e2e", "E2E: failure"),
-		status(13, "succeeded", "github-actions/mits-cloud", "arbin-ci: success"),
-		status(14, "pending", "github-actions/mits-cloud-e2e", "E2E on arbin-ci"),
+		status(11, "failed", "github-actions/web-e2e", "E2E: failure"),
+		status(13, "succeeded", "github-actions/web", "acme-ci: success"),
+		status(14, "pending", "github-actions/web-e2e", "E2E on acme-ci"),
 		status(15, "pending", "lint/style", "Linting"),
 		status(16, "succeeded", "lint/style", "Lint clean"),
 	}
@@ -231,8 +231,8 @@ func TestDetailExternalChecks(t *testing.T) {
 	d := fakeExternalChecks(t)
 	text := ansi.Strip(strings.Join(d.renderChecks(140), "\n"))
 	for _, want := range []string{
-		"✓ arbin-ci: success  external · succeeded",
-		"● E2E on arbin-ci  external · running",
+		"✓ acme-ci: success  external · succeeded",
+		"● E2E on acme-ci  external · running",
 		"Optional checks",
 		"✓ Lint clean  external · succeeded",
 	} {
@@ -255,7 +255,7 @@ func TestDetailExternalChecks(t *testing.T) {
 
 func TestDetailSubtitleKeepsTargetBranch(t *testing.T) {
 	d := fakeDetail(t, 100)
-	d.pr.SourceRefName = "refs/heads/QA-11284-workflow-worker-is-orphaned-when-the-main-das-process-is-killed-the-next-start"
+	d.pr.SourceRefName = "refs/heads/feat/1234-retry-the-export-worker-when-the-main-api-process-is-killed-mid-run-and-restarts"
 	line := ansi.Strip(d.subtitleLine())
 	if !strings.HasSuffix(line, "… into develop") || ansi.StringWidth(line) > 100 {
 		t.Fatalf("a long source branch should be cut so the target shows: %q", line)

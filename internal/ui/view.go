@@ -427,7 +427,7 @@ func relTime(d time.Duration, t time.Time) string {
 }
 
 // initials turns "Truong Duy Khanh" into "TK"; a single word gives its first
-// two letters. Group names like "[MITS11]\Reviewers" lose their brackets.
+// two letters. Group names like "[Demo]\Reviewers" lose their brackets.
 func initials(name string) string {
 	words := strings.FieldsFunc(name, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)

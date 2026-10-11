@@ -21,7 +21,7 @@ import (
 const adoResourceID = "499b84ac-1321-427f-aa17-267ca6975798"
 
 type Client struct {
-	Org  string // organization name, e.g. "arbinSW"
+	Org  string // organization name, e.g. "contoso"
 	http *http.Client
 
 	mu          sync.Mutex

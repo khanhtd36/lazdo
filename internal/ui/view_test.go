@@ -18,19 +18,19 @@ import (
 
 func TestViewFitsWidth(t *testing.T) {
 	pr := ado.PullRequest{
-		ID:            15074,
+		ID:            12074,
 		Title:         strings.Repeat("very long title ", 20),
 		IsDraft:       true,
-		CreatedBy:     ado.Identity{DisplayName: "Nam X. Duong"},
+		CreatedBy:     ado.Identity{DisplayName: "Priya X. Shah"},
 		CreationDate:  time.Now().Add(-3 * time.Hour),
 		TargetRefName: "refs/heads/stable/8.0",
-		Repository:    ado.Repository{Name: "MITS11"},
+		Repository:    ado.Repository{Name: "Demo"},
 		Reviewers: []ado.Reviewer{
 			{Identity: ado.Identity{ID: "me", DisplayName: "Truong Duy Khanh"}, Vote: ado.VoteWaitingForAuthor, IsRequired: true},
-			{Identity: ado.Identity{DisplayName: "[MITS11]\\Reviewers"}, Vote: ado.VoteApproved},
+			{Identity: ado.Identity{DisplayName: "[Demo]\\Reviewers"}, Vote: ado.VoteApproved},
 		},
 	}
-	m := New(ado.NewClient("arbinSW"), time.Minute)
+	m := New(ado.NewClient("contoso"), time.Minute)
 	m.me = ado.Identity{ID: "me"}
 	m.loading = false
 	m.sections = ado.Classify("me", []ado.PullRequest{pr}, nil)
@@ -41,7 +41,7 @@ func TestViewFitsWidth(t *testing.T) {
 		next, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 20})
 		view := next.View()
 		// Narrow terminals clip the right-hand columns first.
-		if width >= 120 && !strings.Contains(view, "!15074") {
+		if width >= 120 && !strings.Contains(view, "!12074") {
 			t.Fatalf("width %d: PR row missing:\n%s", width, view)
 		}
 		for line := range strings.SplitSeq(view, "\n") {
@@ -57,19 +57,19 @@ func TestDashboardCompactLayout(t *testing.T) {
 	mk := func(id int, title, author string, draft bool) ado.PullRequest {
 		return ado.PullRequest{
 			ID: id, Title: title, IsDraft: draft, CreatedBy: ado.Identity{DisplayName: author},
-			Repository: ado.Repository{Name: "MITS11"}, TargetRefName: "refs/heads/develop",
+			Repository: ado.Repository{Name: "Demo"}, TargetRefName: "refs/heads/develop",
 			Reviewers: []ado.Reviewer{{Identity: me, IsRequired: true}},
 		}
 	}
 	prs := []ado.PullRequest{
-		mk(15069, "fix(mdbi): upgrade master, info and data databases", "Truong Duy Khanh", false),
-		mk(14736, "feat(das): add --verify-iv, the firmware wire contract", "Nam X. Duong", true),
+		mk(12069, "fix(db): upgrade master, info and data databases", "Truong Duy Khanh", false),
+		mk(12736, "feat(cli): add --verify-sig, the plugin wire contract", "Priya X. Shah", true),
 	}
 	for _, width := range []int{100, 130, 200} {
 		m := New(ado.NewClient("org"), time.Minute)
 		m.me, m.loading = me, false
 		m.sections = ado.Classify("me", prs, nil)
-		m.stats = map[int]ado.Stats{14736: {Visited: true, NewPushes: 8}}
+		m.stats = map[int]ado.Stats{12736: {Visited: true, NewPushes: 8}}
 		next, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 20})
 		view := ansi.Strip(next.View())
 
@@ -88,7 +88,7 @@ func TestDashboardCompactLayout(t *testing.T) {
 		for _, line := range strings.Split(view, "\n") {
 			if i := strings.Index(line, "!1"); i >= 0 {
 				idCols[ansi.StringWidth(line[:i])] = true
-				if !strings.Contains(line, "fix(mdbi): upgrade") && !strings.Contains(line, "feat(das): add --ver") {
+				if !strings.Contains(line, "fix(db): upgrade") && !strings.Contains(line, "feat(cli): add --ver") {
 					t.Errorf("width %d: title squeezed: %q", width, line)
 				}
 			}
@@ -101,11 +101,11 @@ func TestDashboardCompactLayout(t *testing.T) {
 
 func TestInitials(t *testing.T) {
 	for in, want := range map[string]string{
-		"Truong Duy Khanh":    "TK",
-		"Nam X. Duong":        "ND",
-		"[MITS11]\\Reviewers": "MR",
-		"nhan":                "NH",
-		"":                    "?",
+		"Truong Duy Khanh":  "TK",
+		"Priya X. Shah":     "PS",
+		"[Demo]\\Reviewers": "DR",
+		"sam":               "SA",
+		"":                  "?",
 	} {
 		if got := initials(in); got != want {
 			t.Errorf("initials(%q) = %q, want %q", in, got, want)

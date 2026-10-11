@@ -272,16 +272,16 @@ func TestDiffOfFileWithBOMFitsTheScreen(t *testing.T) {
 }
 
 func TestSubmoduleParsing(t *testing.T) {
-	gm := "[submodule \"unit-sim/external/MITS11\"]\n\tpath = unit-sim/external/MITS11\n\turl = https://arbinSW@dev.azure.com/arbinSW/MITS11/_git/MITS11\n" +
+	gm := "[submodule \"sim/external/core\"]\n\tpath = sim/external/core\n\turl = https://contoso@dev.azure.com/contoso/Demo/_git/Demo\n" +
 		"[submodule \"x\"]\n\turl = ../tools\n\tpath = vendor/tools/\n"
 	m := parseGitmodules(gm)
-	if m["unit-sim/external/MITS11"] != "https://arbinSW@dev.azure.com/arbinSW/MITS11/_git/MITS11" || m["vendor/tools"] != "../tools" {
+	if m["sim/external/core"] != "https://contoso@dev.azure.com/contoso/Demo/_git/Demo" || m["vendor/tools"] != "../tools" {
 		t.Fatalf("parsed %v", m)
 	}
 	for url, want := range map[string][2]string{
-		"https://arbinSW@dev.azure.com/arbinSW/MITS11/_git/MITS11": {"MITS11", "MITS11"},
-		"https://arbinsw.visualstudio.com/Other/_git/lib.git":      {"Other", "lib"},
-		"git@ssh.dev.azure.com:v3/arbinSW/MITS11/dev-tools":        {"MITS11", "dev-tools"},
+		"https://contoso@dev.azure.com/contoso/Demo/_git/Demo": {"Demo", "Demo"},
+		"https://contoso.visualstudio.com/Other/_git/lib.git":  {"Other", "lib"},
+		"git@ssh.dev.azure.com:v3/contoso/Demo/dev-tools":      {"Demo", "dev-tools"},
 		"../tools": {"", "tools"},
 	} {
 		if p, n := submoduleRepo(url); p != want[0] || n != want[1] {
@@ -290,12 +290,12 @@ func TestSubmoduleParsing(t *testing.T) {
 	}
 	repos := []ado.Repo{
 		{Name: "tools", Project: ado.Project{Name: "Elsewhere"}},
-		{Name: "tools", Project: ado.Project{Name: "MITS11"}},
+		{Name: "tools", Project: ado.Project{Name: "Demo"}},
 	}
-	if r := findRepo(repos, "", "tools", "MITS11"); r == nil || r.Project.Name != "MITS11" {
+	if r := findRepo(repos, "", "tools", "Demo"); r == nil || r.Project.Name != "Demo" {
 		t.Fatalf("a relative URL should prefer the PR's own project: %+v", r)
 	}
-	if r := findRepo(repos, "Elsewhere", "tools", "MITS11"); r == nil || r.Project.Name != "Elsewhere" {
+	if r := findRepo(repos, "Elsewhere", "tools", "Demo"); r == nil || r.Project.Name != "Elsewhere" {
 		t.Fatalf("a URL naming its project should get that one: %+v", r)
 	}
 }

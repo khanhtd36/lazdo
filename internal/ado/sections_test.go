@@ -51,9 +51,9 @@ func TestParseLooseTime(t *testing.T) {
 
 func TestOrgName(t *testing.T) {
 	for in, want := range map[string]string{
-		"arbinSW":                        "arbinSW",
-		"https://dev.azure.com/arbinSW/": "arbinSW",
-		"https://dev.azure.com/arbinSW":  "arbinSW",
+		"Contoso":                        "Contoso",
+		"https://dev.azure.com/Contoso/": "Contoso",
+		"https://dev.azure.com/Contoso":  "Contoso",
 	} {
 		if got := OrgName(in); got != want {
 			t.Errorf("OrgName(%q) = %q, want %q", in, got, want)
