@@ -53,7 +53,7 @@ func (s *settingsView) policyKey(k string) (bool, tea.Cmd) {
 	it, ok := s.content.selected()
 	p, isPolicy := it.value.(ado.PolicyConfig)
 	switch k {
-	case "n":
+	case "a":
 		return true, showModal(s.policyTypeMenu())
 	case "e":
 		if ok && isPolicy {

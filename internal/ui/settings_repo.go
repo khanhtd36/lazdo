@@ -64,7 +64,7 @@ func (s *settingsView) repoKey(k string) (bool, tea.Cmd) {
 	r, isRepo := it.value.(ado.Repo)
 	client, project := s.client, s.project
 	switch k {
-	case "n":
+	case "a":
 		f := newForm("New repository", []*formField{formText("name", "Name", "", "")}, func(f *formModal) (tea.Cmd, string) {
 			name := f.get("name").value()
 			if name == "" {
@@ -162,9 +162,9 @@ func (s *settingsView) varKey(k string) (bool, tea.Cmd) {
 		ok = false
 	}
 	switch k {
-	case "N":
+	case "A":
 		return true, showModal(s.varGroupForm(nil))
-	case "n":
+	case "a":
 		if ok {
 			return true, showModal(s.variableForm(group, nil))
 		}

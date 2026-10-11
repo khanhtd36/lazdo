@@ -103,6 +103,7 @@ lists everything available where you are.
 | `J` / `K` | next / previous group (section, activity entry, push) |
 | `/` | filter a list, or find text in a reading pane |
 | `n` / `N` (or `p`) | next / previous match (in a diff: change; past the file's last or first change, pressing again opens the next or previous file) |
+| `a` | add to the list you are looking at: a comment, branch policy, repository, team, group, variable, member or user (`A`: a variable group) |
 | `y` | copy menu for the selection (URLs, names, paths, IDs) |
 | `o` | open in the browser |
 | `r` | refresh |
@@ -238,10 +239,11 @@ Inside a project:
   team or group lists its members, and in Permissions shows the group's
   project-level permissions. Editable so far: branch policies,
   repositories, variable groups, teams and security groups. `e` edits,
-  `n` creates, `d` deletes (a repository or group only after its name is
+  `a` adds, `d` deletes (a repository or group only after its name is
   typed; repositories go to the recycle bin), `space` turns a policy on or
-  off, `N` adds a variable group, and in a member list `a` adds people or
-  groups by name or email and `d` removes one. Forms list what will change
+  off, `A` adds a variable group (`a` a variable to the selected one),
+  and in a member list `a` adds people or groups by name or email and `d`
+  removes one. Forms list what will change
   before `ctrl+s` saves. A secret's value is never shown; left empty, the
   stored secret is kept. In a group's permissions, `space` cycles one
   through not set, allow and deny; changes wait until `ctrl+s`, which

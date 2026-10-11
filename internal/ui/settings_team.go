@@ -29,7 +29,7 @@ func (s *settingsView) teamKey(k string) (bool, tea.Cmd) {
 	t, isTeam := it.value.(ado.Team)
 	client, project := s.client, s.project.ID
 	switch k {
-	case "n":
+	case "a":
 		return true, showModal(nameDescForm("New team", "", "", func(name, desc string) tea.Cmd {
 			return s.write("created team "+name, func(ctx context.Context) error { return client.CreateTeam(ctx, project, name, desc) })
 		}))
@@ -56,7 +56,7 @@ func (s *settingsView) groupKey(k string) (bool, tea.Cmd) {
 	g, isGroup := it.value.(ado.Group)
 	client, project := s.client, s.project.ID
 	switch k {
-	case "n":
+	case "a":
 		return true, showModal(nameDescForm("New security group", "", "", func(name, desc string) tea.Cmd {
 			return s.write("created group "+name, func(ctx context.Context) error { return client.CreateGroup(ctx, project, name, desc) })
 		}))
