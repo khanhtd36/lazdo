@@ -185,10 +185,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastCheckout[msg.repoKey] = msg.path
 		}
 		return m.Update(resultMsg(msg.err, msg.text))
-	case detailLoadedMsg, visitMsg, editorDoneMsg, filesLoadedMsg, fileDiffMsg:
+	case detailLoadedMsg, visitMsg, editorDoneMsg, filesLoadedMsg, fileDiffMsg, targetBranchesMsg:
 		if m.detail != nil {
 			return m, m.detail.update(msg)
 		}
+	case targetChangedMsg:
+		// The pull request's row shows the target too.
+		cmds := []tea.Cmd{}
+		if m.detail != nil {
+			cmds = append(cmds, m.detail.update(msg))
+		}
+		if msg.err == nil {
+			cmds = append(cmds, m.refresh())
+		}
+		return m, tea.Batch(cmds...)
 	case actionDoneMsg:
 		if m.detail == nil {
 			return m, nil

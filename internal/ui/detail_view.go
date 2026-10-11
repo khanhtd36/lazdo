@@ -104,6 +104,17 @@ func (d *detailModel) subtitleLine() string {
 	return truncate(head+source+tail, d.width)
 }
 
+// onTarget reports whether column x of the subtitle is on the target branch.
+func (d *detailModel) onTarget(x int) bool {
+	line, into := ansi.Strip(d.subtitleLine()), " into "+d.pr.TargetBranch()
+	at := strings.LastIndex(line, into)
+	if d.standalone || at < 0 {
+		return false
+	}
+	start := ansi.StringWidth(line[:at]) + len(" into ")
+	return x >= start && x < start+ansi.StringWidth(d.pr.TargetBranch())
+}
+
 // tabAt returns the tab covering column x of the tabs line.
 func (d *detailModel) tabAt(x int) (detailTab, bool) {
 	t, ok := tabAt(d.tabLabels(), x, d.width)

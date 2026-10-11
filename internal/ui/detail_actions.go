@@ -75,6 +75,7 @@ func (d *detailModel) completeMenu() modal {
 				return d.client.SetDraft(ctx, d.pr, !pr.IsDraft)
 			})
 		}},
+		menuItem{label: "Change target branch…", run: d.openTargetPicker},
 		menuItem{label: "Abandon", run: func() (modal, tea.Cmd) {
 			return newConfirm(fmt.Sprintf("Abandon !%d %s?", d.pr.ID, d.pr.Title), d.act("abandoned", true, func(ctx context.Context) error {
 				return d.client.Abandon(ctx, d.pr)

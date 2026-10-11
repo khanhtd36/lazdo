@@ -206,6 +206,12 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		}
 		d.prevVisit = msg.prev
 		d.rebuildOverview()
+	case targetBranchesMsg:
+		if p, ok := d.modal.(*targetPicker); ok && msg.prID == d.pr.ID {
+			return p.onBranches(msg)
+		}
+	case targetChangedMsg:
+		return d.onTargetChanged(msg)
 	case actionDoneMsg:
 		if msg.err != nil {
 			d.status = "error: " + msg.err.Error()

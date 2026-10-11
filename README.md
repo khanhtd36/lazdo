@@ -176,7 +176,7 @@ Keys specific to a pull request (on top of the ones above):
 | Key | Action |
 | --- | --- |
 | `v` | vote: approve, approve with suggestions, wait for author, reject, reset |
-| `m` | complete, set/cancel auto-complete, mark as draft/publish, abandon |
+| `m` | complete, set/cancel auto-complete, mark as draft/publish, change target branch, abandon (click the target branch in the subtitle to change it) |
 | `E` | edit the title and description (`ctrl+e` in `$EDITOR`: title, blank line, description) |
 | `a` | add a comment (Overview: on the PR · diff: on the line or `V` range) |
 | `R` / `s` / `e` / `d` | reply / status / edit / delete on the selected thread |

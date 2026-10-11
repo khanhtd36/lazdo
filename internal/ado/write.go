@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // MergeType is how Complete merges the source branch, in the order Azure
@@ -185,6 +186,35 @@ func (c *Client) SetDraft(ctx context.Context, pr PullRequest, draft bool) error
 
 func (c *Client) Abandon(ctx context.Context, pr PullRequest) error {
 	return c.patchPR(ctx, pr, map[string]any{"status": "abandoned"})
+}
+
+// SetTargetBranch changes the branch the pull request merges into.
+func (c *Client) SetTargetBranch(ctx context.Context, pr PullRequest, branch string) error {
+	return c.patchPR(ctx, pr, map[string]any{"targetRefName": "refs/heads/" + branch})
+}
+
+// TargetBranches lists the branches of the PR's repo a pull request can
+// merge into, and the repo's default branch.
+func (c *Client) TargetBranches(ctx context.Context, pr PullRequest) (names []string, defaultBranch string, err error) {
+	var repo Repo
+	if err := c.get(ctx, pr.repoPath(), v71(), &repo); err != nil {
+		return nil, "", err
+	}
+	var resp struct {
+		Value []struct {
+			Name string `json:"name"`
+		} `json:"value"`
+	}
+	q := v71()
+	q.Set("filter", "heads/")
+	q.Set("$top", "10000")
+	if err := c.get(ctx, pr.repoPath()+"/refs", q, &resp); err != nil {
+		return nil, "", err
+	}
+	for _, r := range resp.Value {
+		names = append(names, strings.TrimPrefix(r.Name, "refs/heads/"))
+	}
+	return names, repo.DefaultBranchName(), nil
 }
 
 // ThreadStatuses are the states a human thread can be set to.

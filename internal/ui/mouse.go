@@ -109,6 +109,13 @@ func (d *detailModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 		switch msg.Y {
 		case 0:
 			return d.clickTitle(msg.X)
+		case 1:
+			if d.data != nil && d.onTarget(msg.X) {
+				var cmd tea.Cmd
+				d.modal, cmd = d.openTargetPicker()
+				return cmd
+			}
+			return nil
 		case 2:
 			if t, ok := d.tabAt(msg.X); ok && !d.standalone {
 				d.tab = t

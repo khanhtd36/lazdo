@@ -112,6 +112,10 @@ A pull request not yet ready for review; publishing it makes it active.
 Merging a pull request into its target branch, which closes it.
 _Avoid_: merge (for the whole act), close
 
+**Target branch**:
+The branch a pull request merges into; Me can change it while the pull request is active.
+_Avoid_: base branch, retarget (in on-screen text)
+
 **Auto-complete**:
 A standing request to complete a pull request as soon as its blocking policies pass.
 
