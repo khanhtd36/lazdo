@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -38,5 +39,23 @@ func TestStackedListPanes(t *testing.T) {
 	}
 	if l.stackedClick(3) || l.stackedClick(4) {
 		t.Fatal("edges aren't rows")
+	}
+}
+
+func TestListShowsHeadersAboveTheTopRow(t *testing.T) {
+	head := func(s string) pickItem { return pickItem{header: true, render: func(int) string { return s }} }
+	row := func(s string) pickItem { return pickItem{search: s, render: func(int) string { return s }} }
+	items := []pickItem{head("repo"), head("src")}
+	for i := range 30 {
+		items = append(items, row("file"+strconv.Itoa(i)))
+	}
+	l := &pickList{}
+	l.setItems(items)
+	l.key(keyMsg("G"), 10)
+	_ = l.view(40, 10)
+	l.key(keyMsg("g"), 10)
+	view := ansi.Strip(strings.Join(l.view(40, 10), "\n"))
+	if !strings.HasPrefix(strings.TrimSpace(view), "repo") || !strings.Contains(view, "src") {
+		t.Fatalf("after G then g the folders above the first file should show:\n%s", view)
 	}
 }

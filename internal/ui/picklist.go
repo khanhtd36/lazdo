@@ -326,6 +326,12 @@ func (l *pickList) view(width, height int) []string {
 		l.offset = l.cursor - height + 1
 	}
 	l.offset = max(0, min(l.offset, max(0, len(vis)-height)))
+	// Headers right above the top row belong to it, like a file's folders:
+	// bring them into view while the cursor stays on screen, as the cursor
+	// can't move onto them to scroll them back.
+	for l.offset > 0 && l.items[vis[l.offset-1]].header && l.cursor < l.offset-1+height {
+		l.offset--
+	}
 	for i := l.offset; i < min(len(vis), l.offset+height); i++ {
 		it := l.items[vis[i]]
 		prefix := "  "
