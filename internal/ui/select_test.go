@@ -88,3 +88,18 @@ func TestLogLinesWithTabsFitTheirWidth(t *testing.T) {
 		t.Fatalf("width %d", w)
 	}
 }
+
+func TestTruncateKeepsControlCharactersOffTheScreen(t *testing.T) {
+	styled := styleAccent.Render("Restore\tpackages") + "\r"
+	got := truncate(styled, 40)
+	if strings.ContainsAny(got, "\t\r") {
+		t.Fatalf("a tab or carriage return reached the screen: %q", got)
+	}
+	if ansi.Strip(got) != "Restore    packages?" || !strings.Contains(got, "\x1b[") && styleAccent.Render("x") != "x" {
+		t.Fatalf("got %q", got)
+	}
+	// What a terminal draws is what was counted.
+	if w := ansi.StringWidth(truncate("Sam\tRivera\tproposes to merge", 12)); w != 12 {
+		t.Fatalf("width %d", w)
+	}
+}

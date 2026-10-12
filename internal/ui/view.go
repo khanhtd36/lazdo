@@ -446,9 +446,32 @@ func initials(name string) string {
 func fit(s string, w int) string { return padRight(truncate(s, w), w) }
 
 // fitStyled is fit for strings that already carry ANSI styling.
-func fitStyled(s string, w int) string { return padRight(ansi.Truncate(s, w, "…"), w) }
+func fitStyled(s string, w int) string { return padRight(truncate(s, w), w) }
 
-func truncate(s string, w int) string { return ansi.Truncate(s, w, "…") }
+func truncate(s string, w int) string { return ansi.Truncate(screenSafe(s), w, "…") }
+
+// screenSafe keeps text from Azure DevOps, such as a step name or a log
+// line, from drawing wider than it is counted: ansi counts a tab and other
+// control characters as no width, but a terminal moves on a tab, and a
+// row drawn wider wraps and pushes the whole screen down. Tabs become
+// spaces, other control characters "?"; escape sequences (styling) and
+// newlines stay.
+func screenSafe(s string) string {
+	if !strings.ContainsFunc(s, isUnsafeControl) {
+		return s
+	}
+	s = strings.ReplaceAll(s, "\t", strings.Repeat(" ", tabWidth))
+	return strings.Map(func(r rune) rune {
+		if isUnsafeControl(r) {
+			return '?'
+		}
+		return r
+	}, s)
+}
+
+func isUnsafeControl(r rune) bool {
+	return (r < 0x20 || r == 0x7f) && r != '\n' && r != 0x1b
+}
 
 func padRight(s string, w int) string {
 	if n := ansi.StringWidth(s); n < w {
