@@ -20,6 +20,7 @@ type (
 	}
 	// targetChangedMsg reports a change of target branch.
 	targetChangedMsg struct {
+		prID   int
 		branch string
 		err    error
 	}
@@ -127,7 +128,7 @@ func (d *detailModel) changeTarget(branch string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		return targetChangedMsg{branch: branch, err: client.SetTargetBranch(ctx, pr, branch)}
+		return targetChangedMsg{prID: pr.ID, branch: branch, err: client.SetTargetBranch(ctx, pr, branch)}
 	}
 }
 

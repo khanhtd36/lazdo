@@ -51,7 +51,7 @@ func TestDetailLive(t *testing.T) {
 	}
 	d := newDetail(c, me, *found, width, 50)
 	data, err := c.Detail(ctx, *found)
-	d.update(detailLoadedMsg{d: data, err: err})
+	d.update(detailLoadedMsg{prID: d.pr.ID, d: data, err: err})
 	keys := strings.Fields(os.Getenv("LAZDO_LIVE_KEYS"))
 	if len(keys) == 0 {
 		keys = []string{"1", "2", "j", "l", "n", "|", "S", "|", "3", "j", "enter", "l", "|", "4", "|"}

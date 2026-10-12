@@ -236,7 +236,7 @@ func (m *projectModel) update(msg tea.Msg) tea.Cmd {
 			if msg.err == nil {
 				sort.Slice(msg.prs, func(i, j int) bool { return msg.prs[i].CreationDate.After(msg.prs[j].CreationDate) })
 				m.prs = msg.prs
-				m.lists[projTabPRs].setItems(m.prItems())
+				m.lists[projTabPRs].refreshItems(m.prItems(), samePR)
 			}
 		}
 	case repoPushesMsg:
@@ -615,4 +615,11 @@ func runGlyph(state, result string) string {
 		return styleDim.Render("–")
 	}
 	return styleDim.Render("·")
+}
+
+// samePR is whether two list values are the same pull request.
+func samePR(was, is any) bool {
+	a, ok1 := was.(ado.PullRequest)
+	b, ok2 := is.(ado.PullRequest)
+	return ok1 && ok2 && a.ID == b.ID
 }

@@ -16,6 +16,7 @@ import (
 // too. Every commit picked is the same as All changes.
 
 type parentsMsg struct {
+	prID   int
 	counts map[string]int
 	err    error
 }
@@ -101,7 +102,7 @@ func (d *detailModel) ensureParents() tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		counts, err := client.ParentCounts(ctx, pr, ids)
-		return parentsMsg{counts: counts, err: err}
+		return parentsMsg{prID: pr.ID, counts: counts, err: err}
 	}
 }
 

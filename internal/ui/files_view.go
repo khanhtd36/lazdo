@@ -167,6 +167,7 @@ func newFilesView() filesView {
 
 type (
 	filesLoadedMsg struct {
+		prID                     int
 		key                      string
 		baseCommit, targetCommit string
 		changes                  []ado.Change
@@ -174,6 +175,7 @@ type (
 		err                      error
 	}
 	fileDiffMsg struct {
+		prID int
 		key  string
 		diff *fileDiff
 	}
@@ -218,7 +220,7 @@ func (d *detailModel) ensureFiles() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		msg := filesLoadedMsg{key: cmp.key()}
+		msg := filesLoadedMsg{prID: pr.ID, key: cmp.key()}
 		if cmp.commit != "" && cmp.fromCommit != "" {
 			msg.baseCommit, msg.targetCommit = cmp.fromCommit, cmp.commit
 			msg.changes, msg.err = client.RangeChanges(ctx, pr.AsRepo(), cmp.fromCommit, cmp.commit)
@@ -337,7 +339,7 @@ func (d *detailModel) ensureDiff() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		return fileDiffMsg{key: key, diff: loadFileDiff(ctx, client, pr, change, base, target)}
+		return fileDiffMsg{prID: pr.ID, key: key, diff: loadFileDiff(ctx, client, pr, change, base, target)}
 	}
 }
 

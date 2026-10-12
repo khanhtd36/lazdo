@@ -463,8 +463,8 @@ func (d *detailModel) lineComment() tea.Cmd {
 	}
 	d.modal = newEditor(title, "", d.width, func(content string) tea.Cmd {
 		f.anchor = -1
-		return d.act("comment posted", false, func(ctx context.Context) error {
-			return d.client.NewLineThread(ctx, d.pr, lc, content)
+		return d.act("comment posted", false, func(ctx context.Context, pr ado.PullRequest) error {
+			return d.client.NewLineThread(ctx, pr, lc, content)
 		})
 	})
 	return nil

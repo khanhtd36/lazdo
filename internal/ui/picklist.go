@@ -138,6 +138,24 @@ func (l *pickList) setItems(items []pickItem) {
 	l.clamp(1)
 }
 
+// refreshItems is setItems for a list refreshed in the background: the
+// cursor stays on the same thing (same reports whether two values are),
+// wherever it moved, rather than on the same row number, which may now
+// be something else.
+func (l *pickList) refreshItems(items []pickItem, same func(was, is any) bool) {
+	was, ok := l.selected()
+	l.setItems(items)
+	if !ok {
+		return
+	}
+	for i, idx := range l.visible() {
+		if !l.items[idx].header && same(was.value, l.items[idx].value) {
+			l.cursor = i
+			return
+		}
+	}
+}
+
 // visible returns the indexes of the items to show, in display order.
 func (l *pickList) visible() []int {
 	var out []int

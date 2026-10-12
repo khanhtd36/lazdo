@@ -45,7 +45,7 @@ func fakeDetail(t *testing.T, width int) *detailModel {
 	data.MergeStatus = "succeeded"
 	d := newDetail(ado.NewClient("org"), me, pr, width, 40)
 	d.prevVisit = now.Add(-3 * time.Hour)
-	d.update(detailLoadedMsg{d: data})
+	d.update(detailLoadedMsg{prID: pr.ID, d: data})
 	return d
 }
 

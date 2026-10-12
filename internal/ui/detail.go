@@ -96,15 +96,18 @@ func newRepoDiff(client *ado.Client, r ado.Repo, label, from, commit string, wid
 
 type (
 	detailLoadedMsg struct {
-		d   *ado.PRDetail
-		err error
+		prID int
+		d    *ado.PRDetail
+		err  error
 	}
 	visitMsg struct {
+		prID int
 		prev time.Time
 		err  error
 	}
 	// actionDoneMsg reports a write; leave closes the detail view.
 	actionDoneMsg struct {
+		prID  int
 		text  string
 		err   error
 		leave bool
@@ -132,7 +135,7 @@ func (d *detailModel) init() tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		prev, err := client.RecordVisit(ctx, pr)
-		return visitMsg{prev: prev, err: err}
+		return visitMsg{prID: pr.ID, prev: prev, err: err}
 	}
 	return tea.Batch(d.load(), visit)
 }
@@ -143,7 +146,7 @@ func (d *detailModel) load() tea.Cmd {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		data, err := client.Detail(ctx, pr)
-		return detailLoadedMsg{d: data, err: err}
+		return detailLoadedMsg{prID: pr.ID, d: data, err: err}
 	}
 }
 
@@ -172,6 +175,9 @@ func (d *detailModel) resize(width, height int) {
 }
 
 func (d *detailModel) update(msg tea.Msg) tea.Cmd {
+	if p, ok := msg.(forPR); ok && p.pullRequest() != d.pr.ID {
+		return nil // an answer for a pull request opened before this one
+	}
 	switch msg := msg.(type) {
 	case detailLoadedMsg:
 		d.loading = false
@@ -382,11 +388,14 @@ func (d *detailModel) closeRequested(msg tea.KeyMsg) bool {
 }
 
 // act runs a write and reports it as an actionDoneMsg.
-func (d *detailModel) act(done string, leave bool, f func(ctx context.Context) error) tea.Cmd {
+// act runs a write on the pull request as it is now, when the key is
+// pressed: a reload landing before the request goes out can't change it.
+func (d *detailModel) act(done string, leave bool, f func(ctx context.Context, pr ado.PullRequest) error) tea.Cmd {
+	pr := d.pr
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		return actionDoneMsg{text: done, err: f(ctx), leave: leave}
+		return actionDoneMsg{prID: pr.ID, text: done, err: f(ctx, pr), leave: leave}
 	}
 }
 
@@ -398,3 +407,18 @@ func openURL(u, done string) tea.Cmd {
 func prCheckout(org string, pr ado.PullRequest) tea.Cmd {
 	return requestCheckout(org, pr.Repository.Project.Name, pr.Repository.Name, pr.SourceBranch())
 }
+
+// forPR is a message answering a request about one pull request: the
+// detail view drops it unless that is the pull request it shows, so a slow
+// answer about one opened before can't replace what this one shows, or
+// what its next vote or merge acts on.
+type forPR interface{ pullRequest() int }
+
+func (m detailLoadedMsg) pullRequest() int   { return m.prID }
+func (m visitMsg) pullRequest() int          { return m.prID }
+func (m actionDoneMsg) pullRequest() int     { return m.prID }
+func (m targetBranchesMsg) pullRequest() int { return m.prID }
+func (m targetChangedMsg) pullRequest() int  { return m.prID }
+func (m parentsMsg) pullRequest() int        { return m.prID }
+func (m filesLoadedMsg) pullRequest() int    { return m.prID }
+func (m fileDiffMsg) pullRequest() int       { return m.prID }

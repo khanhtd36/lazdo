@@ -229,7 +229,7 @@ func TestDiffNextFileLandsWhenLoaded(t *testing.T) {
 	if d.selectedChange().Item.Path != "/b.go" || d.files.land != 1 {
 		t.Fatalf("should wait on b.go to land on its first change, land %d", d.files.land)
 	}
-	d.update(fileDiffMsg{key: bKey, diff: twoChangeDiff()})
+	d.update(fileDiffMsg{prID: d.pr.ID, key: bKey, diff: twoChangeDiff()})
 	if want := firstChanged(d.diffLines()); d.files.cursor != want || d.files.land != 0 {
 		t.Fatalf("after loading, cursor should be on the first change %d, got %d", want, d.files.cursor)
 	}

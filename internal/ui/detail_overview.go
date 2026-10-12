@@ -269,8 +269,8 @@ func (d *detailModel) threadKey(key string, t ado.Thread, inThread bool, comment
 		d.modal = d.editCommentEditor(t, cm)
 		return nil
 	}
-	d.modal = newConfirm("Delete this comment?", d.act("comment deleted", false, func(ctx context.Context) error {
-		return d.client.DeleteComment(ctx, d.pr, t, cm)
+	d.modal = newConfirm("Delete this comment?", d.act("comment deleted", false, func(ctx context.Context, pr ado.PullRequest) error {
+		return d.client.DeleteComment(ctx, pr, t, cm)
 	}))
 	return nil
 }

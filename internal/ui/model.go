@@ -212,8 +212,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case actionDoneMsg:
-		if m.detail == nil {
-			return m, nil
+		if m.detail == nil || msg.prID != m.detail.pr.ID {
+			// Its pull request is no longer open: say how it went, naming
+			// it, and touch nothing else.
+			text := msg.text
+			if msg.err != nil {
+				text = "error: " + msg.err.Error()
+			}
+			return m.Update(statusMsg(fmt.Sprintf("!%d: %s", msg.prID, text)))
 		}
 		if msg.leave && msg.err == nil {
 			m.detail = nil
@@ -455,7 +461,9 @@ func (m Model) onList(msg listMsg) (tea.Model, tea.Cmd) {
 	}
 	m.err = nil
 	m.me = msg.me
+	was := m.selectedRow()
 	m.sections = msg.sections
+	m.keepCursorOn(was)
 	m.fetchedAt = time.Now()
 	var all []ado.PullRequest
 	for _, s := range m.sections {
@@ -669,3 +677,52 @@ func (m statsMsg) source() *ado.Client          { return m.from }
 func (m buildMsg) source() *ado.Client          { return m.from }
 func (m tickMsg) source() *ado.Client           { return m.from }
 func (m projectsLoadedMsg) source() *ado.Client { return m.from }
+
+// rowID names a dashboard row across refreshes: its Section, and its pull
+// request's ID (0 on the Section's header).
+type rowID struct {
+	section ado.SectionKind
+	pr      int
+	ok      bool
+}
+
+func (m Model) selectedRow() rowID {
+	rows := m.rows()
+	if m.cursor < 0 || m.cursor >= len(rows) {
+		return rowID{}
+	}
+	r := rows[m.cursor]
+	id := rowID{section: m.sections[r.section].Kind, ok: true}
+	if r.pr != nil {
+		id.pr = r.pr.ID
+	}
+	return id
+}
+
+// keepCursorOn puts the cursor back on the row it was on before a
+// refresh replaced the list, wherever that row moved: on the row number
+// it would land on another pull request, and enter, c or y act on that.
+// A pull request that left its Section is followed to its new one; one
+// that left the list leaves the cursor where it was.
+func (m *Model) keepCursorOn(was rowID) {
+	if !was.ok {
+		return
+	}
+	rows := m.rows()
+	at := -1
+	for i, r := range rows {
+		kind := m.sections[r.section].Kind
+		switch {
+		case was.pr == 0 && r.pr == nil && kind == was.section:
+			at = i
+		case was.pr != 0 && r.pr != nil && r.pr.ID == was.pr && (at < 0 || kind == was.section):
+			at = i
+		}
+		if at == i && kind == was.section {
+			break
+		}
+	}
+	if at >= 0 {
+		m.cursor = at
+	}
+}

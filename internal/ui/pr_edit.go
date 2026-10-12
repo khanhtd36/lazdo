@@ -124,8 +124,8 @@ func (p *prEditor) save() (modal, tea.Cmd) {
 		return nil, statusCmd("nothing changed")
 	}
 	d := p.d
-	return nil, d.act(strings.Join(saved, " and ")+" saved", false, func(ctx context.Context) error {
-		return d.client.EditPR(ctx, d.pr, newTitle, newDesc)
+	return nil, d.act(strings.Join(saved, " and ")+" saved", false, func(ctx context.Context, pr ado.PullRequest) error {
+		return d.client.EditPR(ctx, pr, newTitle, newDesc)
 	})
 }
 

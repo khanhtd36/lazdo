@@ -24,8 +24,8 @@ func (d *detailModel) voteMenu() modal {
 		if vote == current && vote != ado.VoteNone {
 			label += styleDim.Render("  (current)")
 		}
-		cast := d.act("voted: "+strings.ToLower(voteText(vote)), false, func(ctx context.Context) error {
-			return d.client.Vote(ctx, d.pr, d.me.ID, vote)
+		cast := d.act("voted: "+strings.ToLower(voteText(vote)), false, func(ctx context.Context, pr ado.PullRequest) error {
+			return d.client.Vote(ctx, pr, d.me.ID, vote)
 		})
 		return menuItem{label: label, run: func() (modal, tea.Cmd) {
 			if confirm {
@@ -54,8 +54,8 @@ func (d *detailModel) completeMenu() modal {
 	}}
 	if autoSet {
 		items = append(items, menuItem{label: "Cancel auto-complete", run: func() (modal, tea.Cmd) {
-			return nil, d.act("auto-complete cancelled", false, func(ctx context.Context) error {
-				return d.client.CancelAutoComplete(ctx, d.pr)
+			return nil, d.act("auto-complete cancelled", false, func(ctx context.Context, pr ado.PullRequest) error {
+				return d.client.CancelAutoComplete(ctx, pr)
 			})
 		}})
 	} else {
@@ -71,14 +71,14 @@ func (d *detailModel) completeMenu() modal {
 	}
 	items = append(items,
 		menuItem{label: draftLabel, run: func() (modal, tea.Cmd) {
-			return nil, d.act(draftDone, false, func(ctx context.Context) error {
-				return d.client.SetDraft(ctx, d.pr, !pr.IsDraft)
+			return nil, d.act(draftDone, false, func(ctx context.Context, pr ado.PullRequest) error {
+				return d.client.SetDraft(ctx, pr, !pr.IsDraft)
 			})
 		}},
 		menuItem{label: "Change target branch…", run: d.openTargetPicker},
 		menuItem{label: "Abandon", run: func() (modal, tea.Cmd) {
-			return newConfirm(fmt.Sprintf("Abandon !%d %s?", d.pr.ID, d.pr.Title), d.act("abandoned", true, func(ctx context.Context) error {
-				return d.client.Abandon(ctx, d.pr)
+			return newConfirm(fmt.Sprintf("Abandon !%d %s?", d.pr.ID, d.pr.Title), d.act("abandoned", true, func(ctx context.Context, pr ado.PullRequest) error {
+				return d.client.Abandon(ctx, pr)
 			})), nil
 		}},
 	)
@@ -336,15 +336,18 @@ func (c *completeDialog) submit() (modal, tea.Cmd) {
 	d := c.d
 	o := c.options()
 	if c.auto {
-		return nil, d.act("auto-complete set", false, func(ctx context.Context) error {
-			return d.client.SetAutoComplete(ctx, d.pr, d.me.ID, o)
+		return nil, d.act("auto-complete set", false, func(ctx context.Context, pr ado.PullRequest) error {
+			return d.client.SetAutoComplete(ctx, pr, d.me.ID, o)
 		})
 	}
 	if c.override {
 		o.BypassReason = strings.TrimSpace(c.reason.Value())
 	}
-	complete := d.act(fmt.Sprintf("completed !%d", d.pr.ID), true, func(ctx context.Context) error {
-		return d.client.Complete(ctx, d.data, o)
+	// Merge what was confirmed: a reload landing first can't swap the
+	// commit, or the pull request, under it.
+	data := d.data
+	complete := d.act(fmt.Sprintf("completed !%d", data.ID), true, func(ctx context.Context, _ ado.PullRequest) error {
+		return completePR(ctx, d.client, data, o)
 	})
 	if c.override {
 		return newConfirm("Override branch policies and complete?", complete), nil
@@ -427,8 +430,8 @@ func (d *detailModel) threadStatusMenu(t ado.Thread) modal {
 			label += styleDim.Render("  (current)")
 		}
 		items = append(items, menuItem{label: label, run: func() (modal, tea.Cmd) {
-			return nil, d.act("thread set to "+strings.ToLower(ado.ThreadStatusTitle(s)), false, func(ctx context.Context) error {
-				return d.client.SetThreadStatus(ctx, d.pr, t, s)
+			return nil, d.act("thread set to "+strings.ToLower(ado.ThreadStatusTitle(s)), false, func(ctx context.Context, pr ado.PullRequest) error {
+				return d.client.SetThreadStatus(ctx, pr, t, s)
 			})
 		}})
 	}
@@ -437,24 +440,29 @@ func (d *detailModel) threadStatusMenu(t ado.Thread) modal {
 
 func (d *detailModel) newCommentEditor() modal {
 	return newEditor("New comment", "", d.width, func(content string) tea.Cmd {
-		return d.act("comment posted", false, func(ctx context.Context) error {
-			return d.client.NewThread(ctx, d.pr, content)
+		return d.act("comment posted", false, func(ctx context.Context, pr ado.PullRequest) error {
+			return d.client.NewThread(ctx, pr, content)
 		})
 	})
 }
 
 func (d *detailModel) replyEditor(t ado.Thread) modal {
 	return newEditor("Reply", "", d.width, func(content string) tea.Cmd {
-		return d.act("reply posted", false, func(ctx context.Context) error {
-			return d.client.Reply(ctx, d.pr, t, content)
+		return d.act("reply posted", false, func(ctx context.Context, pr ado.PullRequest) error {
+			return d.client.Reply(ctx, pr, t, content)
 		})
 	})
 }
 
 func (d *detailModel) editCommentEditor(t ado.Thread, cm ado.Comment) modal {
 	return newEditor("Edit comment", cm.Content, d.width, func(content string) tea.Cmd {
-		return d.act("comment updated", false, func(ctx context.Context) error {
-			return d.client.EditComment(ctx, d.pr, t, cm, content)
+		return d.act("comment updated", false, func(ctx context.Context, pr ado.PullRequest) error {
+			return d.client.EditComment(ctx, pr, t, cm, content)
 		})
 	})
+}
+
+// completePR merges a pull request; tests replace it.
+var completePR = func(ctx context.Context, c *ado.Client, d *ado.PRDetail, o ado.CompletionOptions) error {
+	return c.Complete(ctx, d, o)
 }
