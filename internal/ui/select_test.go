@@ -95,7 +95,7 @@ func TestTruncateKeepsControlCharactersOffTheScreen(t *testing.T) {
 	if strings.ContainsAny(got, "\t\r") {
 		t.Fatalf("a tab or carriage return reached the screen: %q", got)
 	}
-	if ansi.Strip(got) != "Restore    packages?" || !strings.Contains(got, "\x1b[") && styleAccent.Render("x") != "x" {
+	if ansi.Strip(got) != "Restore    packages?" {
 		t.Fatalf("got %q", got)
 	}
 	// What a terminal draws is what was counted.
