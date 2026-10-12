@@ -364,8 +364,32 @@ func recordRow(r ado.TimelineRecord, depth, width int) string {
 var logTimestamp = regexp.MustCompile(`^\d{4}-\d\d-\d\dT[\d:.]+Z `)
 
 // logLine drops the timestamp and colors Azure Pipelines markers.
+// cleanLog makes a log line safe to draw: without its timestamp and any
+// escape sequences, tabs moved to the next 8-column stop as a terminal
+// would, and other control characters shown as "?". A tab counted as no
+// width, as ansi counts it, made the terminal wrap the row.
+func cleanLog(s string) string {
+	s = ansi.Strip(logTimestamp.ReplaceAllString(strings.TrimRight(s, ""), ""))
+	if strings.Contains(s, "	") {
+		var b strings.Builder
+		col := 0
+		for _, r := range s {
+			if r == '	' {
+				n := 8 - col%8
+				b.WriteString(strings.Repeat(" ", n))
+				col += n
+				continue
+			}
+			b.WriteRune(r)
+			col += ansi.StringWidth(string(r))
+		}
+		s = b.String()
+	}
+	return displayText(s)
+}
+
 func logLine(s string) string {
-	s = logTimestamp.ReplaceAllString(s, "")
+	s = cleanLog(s)
 	switch {
 	case strings.HasPrefix(s, "##[error]"):
 		return styleRed.Render(strings.TrimPrefix(s, "##[error]"))

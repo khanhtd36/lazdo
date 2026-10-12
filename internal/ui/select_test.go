@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/khanhtd36/lazdo/internal/ado"
 )
 
@@ -70,5 +72,19 @@ func TestDiffSelectionCopiesCursorSide(t *testing.T) {
 	text, n = d.diffSelectionText()
 	if n != 1 || text != "func A() {}" {
 		t.Fatalf("old side selection = %q (%d lines)", text, n)
+	}
+}
+
+func TestLogLinesWithTabsFitTheirWidth(t *testing.T) {
+	line := "2026-10-12T03:04:05.1234567Z   adding: release/DAS/\t(in=0) (out=0)\t(stored 0%)\r"
+	got := logLine(line)
+	if strings.ContainsAny(got, "\t\r") {
+		t.Fatalf("tabs and carriage returns must not reach the terminal: %q", got)
+	}
+	if got != "  adding: release/DAS/  (in=0) (out=0)  (stored 0%)" {
+		t.Fatalf("tabs should move to 8-column stops: %q", got)
+	}
+	if w := ansi.StringWidth(truncate(got, 20)); w > 20 {
+		t.Fatalf("width %d", w)
 	}
 }
