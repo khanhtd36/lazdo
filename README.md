@@ -123,6 +123,11 @@ lists everything available where you are.
 | `c` | check out the branch (asks where) |
 | `U` | check for a newer lazdo and install it |
 
+Questions show **Yes** and **No** buttons: `←` / `→` (or `tab`) pick one,
+`enter` or a click presses it, and `y` / `n` answer directly. Yes starts
+focused for what is easily undone (re-queue, change target, save
+permissions, update); No does for anything else, such as abandon or delete.
+
 ### Pull requests page
 
 Your pull requests, across every project of the organization, in four

@@ -104,7 +104,7 @@ func (s *settingsView) permKey(k string) (bool, tea.Cmd) {
 		if len(e.pending) == 0 {
 			return true, statusCmd("nothing changed")
 		}
-		return true, showModal(newConfirm(s.permPrompt(), s.savePermissions()))
+		return true, showModal(newConfirm(s.permPrompt(), s.savePermissions()).focusYes())
 	case "esc", "h", "left":
 		if len(e.pending) > 0 {
 			return true, showModal(&confirmModal{

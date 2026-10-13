@@ -92,30 +92,65 @@ func (m *menuModal) view(int) string {
 
 // --- Confirm ---
 
-// confirmModal asks yes/no; only y confirms, so enter can't do it by habit.
-// No returns to back (nil closes).
+// confirmModal asks yes/no with two buttons; enter presses the focused
+// one. No starts focused, so a habitual enter can't abandon or delete;
+// focusYes is for what is easily undone. No returns to back (nil closes).
 type confirmModal struct {
 	prompt string
 	onYes  tea.Cmd
 	back   modal
+	yes    bool // Yes is focused
 }
 
 func newConfirm(prompt string, onYes tea.Cmd) *confirmModal {
 	return &confirmModal{prompt: prompt, onYes: onYes}
 }
 
-func (c *confirmModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
-	switch msg.String() {
-	case "y", "Y":
+// focusYes starts on Yes, for a question whose yes is safe.
+func (c *confirmModal) focusYes() *confirmModal {
+	c.yes = true
+	return c
+}
+
+func (c *confirmModal) bar() buttonBar {
+	b := buttonBar{labels: []string{"y Yes", "n No"}, focus: 1, center: true}
+	if c.yes {
+		b.focus = 0
+	}
+	return b
+}
+
+func (c *confirmModal) press(i int) (modal, tea.Cmd) {
+	if i == 0 {
 		return nil, c.onYes
+	}
+	return c.back, nil
+}
+
+func (c *confirmModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
+	switch k := msg.String(); k {
+	case "y", "Y":
+		return c.press(0)
 	case "n", "N", "esc":
-		return c.back, nil
+		return c.press(1)
+	case "enter":
+		return c.press(c.bar().focus)
+	default:
+		b := c.bar()
+		if b.move(k) {
+			c.yes = b.focus == 0
+		}
 	}
 	return c, nil
 }
 
 func (c *confirmModal) view(int) string {
-	return styleModal.Render(c.prompt + "\n\n" + styleDim.Render("y yes · n no"))
+	b := c.bar()
+	w := b.width()
+	for l := range strings.SplitSeq(c.prompt, "\n") {
+		w = max(w, lipgloss.Width(l))
+	}
+	return styleModal.Render(c.prompt + "\n\n" + b.render(w))
 }
 
 // --- Editor ---

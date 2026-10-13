@@ -118,7 +118,7 @@ func (p *targetPicker) pick() (modal, tea.Cmd) {
 	if a := d.data.AutoCompleteSetBy; a != nil && a.ID != "" {
 		prompt += "\n" + styleYellow.Render("Auto-complete is set: it will merge into "+branch+".")
 	}
-	c := newConfirm(prompt, d.changeTarget(branch))
+	c := newConfirm(prompt, d.changeTarget(branch)).focusYes()
 	c.back = p
 	return c, nil
 }

@@ -177,20 +177,43 @@ type updateModal struct {
 	exe      string
 	how      update.Method
 	failed   *updateFailure // the last try, when it failed
+	later    bool           // Later is focused
+}
+
+func (u *updateModal) bar() buttonBar {
+	b := buttonBar{labels: []string{"y Update", "n Later"}}
+	if u.later {
+		b.focus = 1
+	}
+	return b
+}
+
+func (u *updateModal) press(i int) (modal, tea.Cmd) {
+	if i == 1 {
+		return nil, nil
+	}
+	if u.how != update.ByScript {
+		return u, nil // installed by a package manager: no button to press
+	}
+	start := updateStartMsg{release: u.releases[0], exe: u.exe}
+	return nil, func() tea.Msg { return start }
 }
 
 const updateChangeRows = 15
 
 func (u *updateModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
-	switch msg.String() {
+	switch k := msg.String(); k {
 	case "esc", "n", "N":
-		return nil, nil
+		return u.press(1)
 	case "y", "Y":
-		if u.how != update.ByScript {
-			return u, nil
+		return u.press(0)
+	case "enter":
+		return u.press(u.bar().focus)
+	default:
+		b := u.bar()
+		if b.move(k) {
+			u.later = b.focus == 1
 		}
-		start := updateStartMsg{release: u.releases[0], exe: u.exe}
-		return nil, func() tea.Msg { return start }
 	}
 	return u, nil
 }
@@ -217,7 +240,7 @@ func (u *updateModal) view(width int) string {
 	if cmd := u.how.Command(); cmd != "" {
 		lines = append(lines, "This copy is managed elsewhere; update it with:", "  "+styleCyan.Render(cmd), "", styleDim.Render("esc close"))
 	} else {
-		lines = append(lines, styleDim.Render("y update · n not now"))
+		lines = append(lines, u.bar().render(0))
 	}
 	return styleModal.Render(strings.Join(lines, "\n"))
 }

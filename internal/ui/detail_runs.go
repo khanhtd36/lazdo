@@ -326,7 +326,7 @@ func (d *detailModel) confirmRequeue(p ado.Policy, back modal) (modal, tea.Cmd) 
 	if p.Status == "running" {
 		return back, statusCmd(name + " is already running")
 	}
-	c := newConfirm("Re-queue "+name+"?", d.requeue(p))
+	c := newConfirm("Re-queue "+name+"?", d.requeue(p)).focusYes()
 	c.back = back
 	return c, nil
 }

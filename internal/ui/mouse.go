@@ -41,6 +41,9 @@ func wheelDelta(msg tea.MouseMsg) int {
 // --- Dashboard ---
 
 func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if m.modal != nil {
+		return m.modalMouse(msg)
+	}
 	if m.detail != nil {
 		return m, m.detail.onMouse(msg)
 	}
@@ -191,12 +194,52 @@ func (d *detailModel) modalMouse(msg tea.MouseMsg) tea.Cmd {
 		}
 		return nil
 	}
+	if b, ok := d.modal.(buttonModal); ok {
+		next, cmd, hit := clickButtons(b, box, msg.X-left, msg.Y-top)
+		if hit {
+			d.modal = next
+		}
+		return cmd
+	}
 	if c, ok := d.modal.(clickableModal); ok {
 		var cmd tea.Cmd
 		d.modal, cmd = c.clickRow(msg.Y - top - 1) // -1 for the border
 		return cmd
 	}
 	return nil
+}
+
+// modalMouse is a click on a dialog over the whole screen; the page under
+// it takes none. Outside, a click closes a menu or a question.
+func (m Model) modalMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	box := m.modal.view(m.width)
+	h, w := strings.Count(box, "\n")+1, ansi.StringWidth(firstLine(box))
+	top, left := max(0, (m.height-h)/2), max(0, (m.width-w)/2)
+	inside := msg.Y >= top && msg.Y < top+h && msg.X >= left && msg.X < left+w
+	if !isClick(msg) {
+		return m, nil
+	}
+	var cmd tea.Cmd
+	switch dm := m.modal.(type) {
+	case buttonModal:
+		if !inside {
+			if _, isConfirm := dm.(*confirmModal); isConfirm {
+				m.modal = nil
+			}
+			return m, nil
+		}
+		next, c, hit := clickButtons(dm, box, msg.X-left, msg.Y-top)
+		if hit {
+			m.modal, cmd = next, c
+		}
+	case *menuModal:
+		if !inside {
+			m.modal = nil
+			return m, nil
+		}
+		m.modal, cmd = dm.clickRow(msg.Y - top - 1)
+	}
+	return m, cmd
 }
 
 // clickRow runs the clicked item; rows 0-1 are the title and a blank line.
