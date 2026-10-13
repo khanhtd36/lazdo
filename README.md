@@ -177,6 +177,13 @@ Checks include external ones, statuses a CI outside Azure DevOps posts
 the web's Checks panel. On Overview, `o` and `y` offer each check's run
 next to the pull request.
 
+**Pipeline runs** open right in the pull request: `b` lists its build
+policies' latest runs, then any other pipeline run on it, and `enter` shows
+one with its steps and log (the only one opens straight away; clicking a
+build check opens its run too). `esc` comes back to the Overview. `Q`
+re-queues a build policy, after asking; from a run, lazdo switches to the
+new run once it starts. A policy still running isn't re-queued.
+
 Files can show a run of commits instead of the whole PR: `enter` on a
 commit, or `u` → Commits… to mark them (`space`; `a` all or none). The
 marked commits and everything between them make one diff, since commits
@@ -195,6 +202,8 @@ Keys specific to a pull request (on top of the ones above):
 | `a` | add a comment (Overview: on the PR · diff: on the line or `V` range) |
 | `R` / `s` / `e` / `d` | reply / status / edit / delete on the selected thread |
 | `f` | Overview: choose the activity filter (each with its count) |
+| `b` | Overview: pipeline runs of the pull request |
+| `Q` | Overview or a run: re-queue a build policy |
 | `S` | Files: side-by-side ⇄ inline (default follows terminal width) |
 | `u` | Files: compare all changes, since my last visit, one update, any two, or commits |
 | `V` | diff: start or clear a line range |

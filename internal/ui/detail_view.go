@@ -41,6 +41,9 @@ func (d *detailModel) view() string {
 }
 
 func (d *detailModel) body() string {
+	if d.run != nil {
+		return strings.Join(d.run.view(d.width, d.bodyHeight()), "\n")
+	}
 	if d.tab == tabOverview {
 		return d.renderOverviewPanes()
 	}
@@ -125,6 +128,9 @@ func (d *detailModel) tabsLine() string {
 	if d.standalone {
 		return tabBar([]string{fmt.Sprintf("Files (%d)", len(d.files.changes))}, 0, d.width)
 	}
+	if d.run != nil {
+		return truncate(d.runCrumbs(), d.width)
+	}
 	return tabBar(d.tabLabels(), int(d.tab), d.width)
 }
 
@@ -153,7 +159,11 @@ func (d *detailModel) tabLabels() []string {
 }
 
 func (d *detailModel) statusLine() string {
-	if s, ok := d.find.status(); ok && d.tab == tabOverview {
+	if d.run != nil {
+		if s, ok := d.run.find.status(); ok {
+			return truncate(s, d.width)
+		}
+	} else if s, ok := d.find.status(); ok && d.tab == tabOverview {
 		return truncate(s, d.width)
 	}
 	if (d.tab == tabCommits || d.tab == tabConflicts) && d.status == "" {

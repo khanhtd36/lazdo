@@ -72,6 +72,8 @@ var (
 		{keys: "a", desc: "add a comment on the pull request", press: "a", hint: "comment"},
 		{keys: "R / s", desc: "reply / status on the selected thread", press: "R"},
 		{keys: "f", desc: "choose the activity filter", press: "f", hint: "filter"},
+		{keys: "b", desc: "pipeline runs: open one (the only one opens straight away)", press: "b", hint: "runs"},
+		{keys: "Q", desc: "re-queue a build policy (asks first)", press: "Q"},
 		{keys: "/", desc: "find text; n / N (or p) next / previous match", press: "/", hint: "find"},
 		{keys: "y", desc: "copy menu: URL, branch, ID, title", press: "y", hint: "copy"},
 	}
@@ -198,7 +200,14 @@ var (
 		{keys: "r", desc: "refresh", press: "r"},
 		{keys: "esc", desc: "log: back to the steps · steps: back to the runs", press: "esc", hint: "back"},
 	}
-	globalKeys = []binding{
+	// prRunKeys are a run opened from a pull request.
+	prRunKeys = append(append([]binding{}, runKeys[:len(runKeys)-1]...),
+		binding{keys: "Q", desc: "re-queue the build policy behind this run (asks first)", press: "Q", hint: "re-queue"},
+		binding{keys: "esc", desc: "log: back to the steps · steps: back to the pull request", press: "esc", hint: "back"},
+	)
+	// prRunPRKeys are the pull request keys that still work over its run.
+	prRunPRKeys = append(append([]binding{}, detailKeys[:5]...), detailKeys[6])
+	globalKeys  = []binding{
 		{keys: "?", desc: "this help", hint: "help"},
 		{keys: "q", desc: "quit (anywhere outside a text box)", hint: "quit"},
 		{keys: "ctrl+c", desc: "quit, even while typing"},
@@ -231,6 +240,9 @@ func (d *detailModel) helpGroups() []bindingGroup {
 			pane = bindingGroup{"Diff", diffKeys}
 		}
 		return withCommon(pane, bindingGroup{"Diff view", diffViewKeys})
+	}
+	if d.run != nil {
+		return withCommon(bindingGroup{"Run", prRunKeys}, bindingGroup{"Pull request", prRunPRKeys})
 	}
 	var groups []bindingGroup
 	switch d.tab {

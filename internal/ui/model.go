@@ -169,7 +169,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case projectsLoadedMsg:
 		m.projects.onLoaded(msg)
-	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg, runLoadedMsg, logMsg, runTickMsg,
+	case runLoadedMsg, logMsg, runTickMsg:
+		// A run opened from a pull request covers the project page.
+		if m.detail != nil && m.detail.run != nil {
+			return m, m.detail.update(msg)
+		}
+		if m.project != nil {
+			return m, m.project.update(msg)
+		}
+	case prRunsMsg, requeuedMsg, runWaitTickMsg, runWaitMsg:
+		if m.detail != nil {
+			return m, m.detail.update(msg)
+		}
+	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg,
 		folderMsg, indexMsg, contentMsg, projectPRsMsg,
 		commitsMsg, releaseMsg, tagsMsg, tagInfoMsg, refsChangedMsg,
 		settingsLoadedMsg, settingsMembersMsg, settingsSavedMsg, settingsReloadMsg, permDiscardMsg:

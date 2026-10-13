@@ -119,6 +119,13 @@ _Avoid_: diff (for the choice of versions), iteration range
 A branch rule a pull request must satisfy to complete, such as a build, minimum reviewers or required reviewers; blocking or optional.
 _Avoid_: check (except in on-screen text copied from Azure DevOps)
 
+**Build policy**:
+A policy needing a successful run of a pipeline on the pull request; its latest run is the one that counts.
+
+**Re-queue**:
+Asking a build policy to run its pipeline again, as Azure DevOps' Queue button does; it starts a new run.
+_Avoid_: rebuild, retry (retrying re-runs the failed stages of the same run)
+
 ### Lifecycle
 
 **Draft**:

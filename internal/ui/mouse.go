@@ -120,7 +120,7 @@ func (d *detailModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 			}
 			return nil
 		case 2:
-			if t, ok := d.tabAt(msg.X); ok && !d.standalone {
+			if t, ok := d.tabAt(msg.X); ok && !d.standalone && d.run == nil {
 				d.tab = t
 				return d.onTabChange()
 			}
@@ -130,6 +130,9 @@ func (d *detailModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 	by := msg.Y - d.bodyTop()
 	if by < 0 || by >= d.bodyHeight() || d.data == nil {
 		return nil
+	}
+	if d.run != nil {
+		return d.run.onMouse(msg, by, d.width, d.bodyHeight())
 	}
 	switch d.tab {
 	case tabOverview:
@@ -222,6 +225,9 @@ func (d *detailModel) overviewMouse(msg tea.MouseMsg, by int) tea.Cmd {
 		return nil // the side panes have nothing to click, nor the frame
 	}
 	line := d.vp.YOffset + by - 1 // below the pane's top edge
+	if p, ok := d.buildLines[line]; ok {
+		return d.openPolicyRun(p)
+	}
 	entry := -1
 	for i, start := range d.entryLines {
 		if line >= start {

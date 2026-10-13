@@ -174,6 +174,10 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		d.scrollToEntry()
 	case "f":
 		d.modal = d.filterMenu()
+	case "b":
+		return d.loadRuns()
+	case "Q":
+		return d.requeueKey()
 	case "enter":
 		if e, ok := d.selectedEntry(); ok && e.isHuman {
 			d.inThread, d.commentSel = true, 0
@@ -317,6 +321,11 @@ func (d *detailModel) renderOverview() string {
 	if !d.sideBySide() {
 		all := append(d.renderSidebar(mainWidth), "")
 		d.entryLines = shift(offsets, len(all)+activityStart)
+		below := make(map[int]ado.Policy, len(d.buildLines))
+		for l, p := range d.buildLines {
+			below[l+len(all)] = p // the side panes lead
+		}
+		d.buildLines = below
 		return strings.Join(append(all, main...), "\n")
 	}
 	d.entryLines = shift(offsets, activityStart)
@@ -400,14 +409,21 @@ func (d *detailModel) renderChecks(width int) []string {
 	default:
 		out = append(out, styleGreen.Render("✓ Required checks succeeded"))
 	}
-	for _, p := range required {
+	d.buildLines = map[int]ado.Policy{}
+	line := func(p ado.Policy) {
+		if p.Configuration.Type.ID == policyTypeBuild {
+			d.buildLines[len(out)] = p
+		}
 		out = append(out, "  "+truncate(d.policyLine(p), width-2))
+	}
+	for _, p := range required {
+		line(p)
 	}
 	unrequired := d.data.UnrequiredStatuses()
 	if len(optional) > 0 || len(unrequired) > 0 {
 		out = append(out, styleDim.Render("Optional checks"))
 		for _, p := range optional {
-			out = append(out, "  "+truncate(d.policyLine(p), width-2))
+			line(p)
 		}
 		for _, s := range unrequired {
 			out = append(out, "  "+truncate(statusIcon(s.State)+" "+statusText(s, s.Key()), width-2))

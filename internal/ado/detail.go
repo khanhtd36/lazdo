@@ -128,6 +128,7 @@ type Label struct {
 }
 
 type Policy struct {
+	EvaluationID  string `json:"evaluationId"`
 	Status        string `json:"status"`
 	Configuration struct {
 		IsBlocking bool `json:"isBlocking"`

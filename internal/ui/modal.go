@@ -32,6 +32,9 @@ type menuModal struct {
 	title  string
 	items  []menuItem
 	cursor int
+	// keys are extra keys acting on the item under the cursor, named in hint.
+	keys map[string]func(i int) (modal, tea.Cmd)
+	hint string
 }
 
 func (m *menuModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
@@ -57,6 +60,10 @@ func (m *menuModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 			return m, statusCmd(it.disabled)
 		}
 		return it.run()
+	default:
+		if f, ok := m.keys[msg.String()]; ok && len(m.items) > 0 {
+			return f(m.cursor)
+		}
 	}
 	return m, nil
 }
@@ -75,7 +82,11 @@ func (m *menuModal) view(int) string {
 		}
 		lines = append(lines, prefix+label)
 	}
-	lines = append(lines, "", styleDim.Render("enter select · esc close"))
+	hint := "enter select · esc close"
+	if m.hint != "" {
+		hint = "enter select · " + m.hint + " · esc close"
+	}
+	lines = append(lines, "", styleDim.Render(hint))
 	return styleModal.Render(strings.Join(lines, "\n"))
 }
 

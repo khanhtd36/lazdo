@@ -76,6 +76,15 @@ type detailModel struct {
 
 	modal modal
 
+	// A pipeline run of the pull request, shown in place of the tabs.
+	run       *runView
+	runName   string      // its pipeline or build policy
+	runPolicy *ado.Policy // the build policy behind it; nil for another pipeline
+	runStart  string      // its state when first loaded, to spot a change
+	wait      *runWait    // a re-queue waiting for its new run
+	// buildLines maps Overview lines to the build policy checks on them.
+	buildLines map[int]ado.Policy
+
 	// standalone is a repo diff (a commit or a tag range) shown with the
 	// Files view alone: no pull request header, tabs, votes or comments.
 	standalone bool
@@ -226,6 +235,16 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		d.status = msg.text
 		d.files.loadedKey = "" // refetch threads so new line comments show
 		return tea.Batch(d.reload(), d.ensureFiles())
+	case prRunsMsg:
+		return d.onRuns(msg)
+	case requeuedMsg:
+		return d.onRequeued(msg)
+	case runWaitTickMsg:
+		return d.onWaitTick(msg)
+	case runWaitMsg:
+		return d.onWait(msg)
+	case runLoadedMsg, logMsg, runTickMsg:
+		return d.onRunMsg(msg)
 	case editorDoneMsg:
 		if e, ok := d.modal.(editorDoner); ok {
 			return e.editorDone(msg)
@@ -244,6 +263,9 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 // typing reports whether a / filter or find box in the current tab is
 // taking keys as text.
 func (d *detailModel) typing() bool {
+	if d.run != nil {
+		return d.run.tree.typing || d.run.find.typing
+	}
 	switch d.tab {
 	case tabOverview:
 		return d.find.typing
@@ -271,6 +293,9 @@ func (d *detailModel) tabKey(msg tea.KeyMsg) tea.Cmd {
 
 func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 	d.status = ""
+	if d.run != nil {
+		return d.runKey(msg)
+	}
 	if d.typing() {
 		return d.tabKey(msg)
 	}
@@ -345,8 +370,8 @@ func (d *detailModel) onTabChange() tea.Cmd {
 // closeRequested reports whether esc should leave the detail view; before
 // that, esc backs out of whatever is open inside it.
 func (d *detailModel) closeRequested(msg tea.KeyMsg) bool {
-	if d.modal != nil || msg.String() != "esc" || d.typing() {
-		return false // a typed filter takes esc itself
+	if d.modal != nil || msg.String() != "esc" || d.typing() || d.run != nil {
+		return false // a typed filter takes esc itself; a run goes back to the Overview
 	}
 	switch d.tab {
 	case tabFiles:

@@ -63,8 +63,11 @@ func TestDetailLive(t *testing.T) {
 			continue
 		}
 		msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
-		if key == "enter" {
+		switch key {
+		case "enter":
 			msg = tea.KeyMsg{Type: tea.KeyEnter}
+		case "esc":
+			msg = tea.KeyMsg{Type: tea.KeyEsc}
 		}
 		drain(d, d.update(msg))
 	}
