@@ -413,9 +413,11 @@ func (c *completeDialog) view(int) string {
 		}
 	}
 	if c.submitBlocked() != "" {
-		button = styleDim.Render(button)
+		button = styleButtonOff.Render(button)
+	} else {
+		button = styleButtonCTA.Render(button)
 	}
-	lines = append(lines, "", row(fieldSubmit, "[ "+button+" ]"), "",
+	lines = append(lines, "", row(fieldSubmit, button), "",
 		styleDim.Render("tab/j/k move · space toggle · ←/→ merge type · ctrl+s submit · esc cancel"))
 	return styleModal.Render(strings.Join(lines, "\n"))
 }

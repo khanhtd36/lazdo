@@ -178,6 +178,20 @@ func TestCompleteDialogBlocksOnPolicies(t *testing.T) {
 	}
 }
 
+func TestCompleteButtonLooksLikeAButton(t *testing.T) {
+	d := fakeDetail(t, 120)
+	c := d.newCompleteDialog(false)
+	if !strings.Contains(c.view(120), styleButtonCTA.Render("Complete merge")) {
+		t.Fatalf("Complete merge should be a blue button:\n%s", c.view(120))
+	}
+	d.data.Policies = []ado.Policy{{Status: "queued"}}
+	d.data.Policies[0].Configuration.IsBlocking = true
+	d.data.Policies[0].Configuration.IsEnabled = true
+	if c := d.newCompleteDialog(false); !strings.Contains(c.view(120), styleButtonOff.Render("Complete merge")) {
+		t.Fatal("a blocked Complete merge should be a grey button")
+	}
+}
+
 func TestMentionsResolved(t *testing.T) {
 	d := fakeDetail(t, 120)
 	d.data.Reviewers = append(d.data.Reviewers, ado.Reviewer{Identity: ado.Identity{ID: "00000000-0000-0000-0000-0000000000AA", DisplayName: "Ann"}})
