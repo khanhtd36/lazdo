@@ -189,6 +189,12 @@ build check opens its run too). `esc` comes back to the Overview. `Q`
 re-queues a build policy, after asking; from a run, lazdo switches to the
 new run once it starts. A policy still running isn't re-queued.
 
+**Reviewers** change from the Overview: `w` (or a click on the Reviewers
+pane) lists them; `a` adds an optional one and `A` a required one, found
+by name or email as you type (groups too); `t` makes the selected one
+required or optional and `d` removes them, after asking. No one's vote
+changes but your own, with `v`.
+
 Files can show a run of commits instead of the whole PR: `enter` on a
 commit, or `u` → Commits… to mark them (`space`; `a` all or none). The
 marked commits and everything between them make one diff, since commits
@@ -209,6 +215,7 @@ Keys specific to a pull request (on top of the ones above):
 | `f` | Overview: choose the activity filter (each with its count) |
 | `b` | Overview: pipeline runs of the pull request |
 | `Q` | Overview or a run: re-queue a build policy |
+| `w` | Overview: reviewers: add, make required/optional, remove |
 | `S` | Files: side-by-side ⇄ inline (default follows terminal width) |
 | `u` | Files: compare all changes, since my last visit, one update, any two, or commits |
 | `V` | diff: start or clear a line range |

@@ -177,7 +177,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.project != nil {
 			return m, m.project.update(msg)
 		}
-	case prRunsMsg, requeuedMsg, runWaitTickMsg, runWaitMsg:
+	case prRunsMsg, requeuedMsg, runWaitTickMsg, runWaitMsg, peopleTickMsg, peopleFoundMsg:
 		if m.detail != nil {
 			return m, m.detail.update(msg)
 		}

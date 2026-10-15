@@ -99,7 +99,8 @@ type confirmModal struct {
 	prompt string
 	onYes  tea.Cmd
 	back   modal
-	yes    bool // Yes is focused
+	then   modal // shown after Yes (nil closes)
+	yes    bool  // Yes is focused
 }
 
 func newConfirm(prompt string, onYes tea.Cmd) *confirmModal {
@@ -122,7 +123,7 @@ func (c *confirmModal) bar() buttonBar {
 
 func (c *confirmModal) press(i int) (modal, tea.Cmd) {
 	if i == 0 {
-		return nil, c.onYes
+		return c.then, c.onYes
 	}
 	return c.back, nil
 }

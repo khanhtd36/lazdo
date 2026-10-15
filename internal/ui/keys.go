@@ -74,6 +74,7 @@ var (
 		{keys: "f", desc: "choose the activity filter", press: "f", hint: "filter"},
 		{keys: "b", desc: "pipeline runs: open one (the only one opens straight away)", press: "b", hint: "runs"},
 		{keys: "Q", desc: "re-queue a build policy (asks first)", press: "Q"},
+		{keys: "w", desc: "reviewers: add (a, or A required), make required/optional (t), remove (d)", press: "w", hint: "reviewers"},
 		{keys: "/", desc: "find text; n / N (or p) next / previous match", press: "/", hint: "find"},
 		{keys: "y", desc: "copy menu: URL, branch, ID, title", press: "y", hint: "copy"},
 	}

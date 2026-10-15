@@ -178,6 +178,8 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		return d.loadRuns()
 	case "Q":
 		return d.requeueKey()
+	case "w":
+		return d.openReviewers()
 	case "enter":
 		if e, ok := d.selectedEntry(); ok && e.isHuman {
 			d.inThread, d.commentSel = true, 0

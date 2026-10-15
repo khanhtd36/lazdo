@@ -227,6 +227,14 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		}
 	case targetChangedMsg:
 		return d.onTargetChanged(msg)
+	case peopleTickMsg:
+		if p, ok := d.modal.(*peoplePicker); ok {
+			return p.onTick(msg)
+		}
+	case peopleFoundMsg:
+		if p, ok := d.modal.(*peoplePicker); ok {
+			p.onFound(msg)
+		}
 	case actionDoneMsg:
 		if msg.err != nil {
 			d.status = "error: " + msg.err.Error()

@@ -264,8 +264,15 @@ func (d *detailModel) overviewMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	if !isClick(msg) {
 		return nil
 	}
-	if msg.X >= d.overviewWidth() || by < 1 {
-		return nil // the side panes have nothing to click, nor the frame
+	if msg.X >= d.overviewWidth() {
+		// The Reviewers pane, atop the side panes, opens the reviewers.
+		if d.sideBySide() && by < len(d.sidebarPanes(sidebarWidth)[0].lines)+2 {
+			return d.openReviewers()
+		}
+		return nil
+	}
+	if by < 1 {
+		return nil // the frame
 	}
 	line := d.vp.YOffset + by - 1 // below the pane's top edge
 	if p, ok := d.buildLines[line]; ok {
