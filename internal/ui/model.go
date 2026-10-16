@@ -64,6 +64,10 @@ type Model struct {
 
 	filter       string // dashboard / filter
 	filterTyping bool
+
+	// covers are what command palette jumps opened on top of, latest last.
+	covers      []covered
+	pendingJump *jump // a jump waiting for the Projects page to load
 }
 
 func New(client *ado.Client, interval time.Duration) Model {
@@ -169,6 +173,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case projectsLoadedMsg:
 		m.projects.onLoaded(msg)
+		if j := m.pendingJump; j != nil {
+			m.pendingJump, m.status = nil, ""
+			return m, m.doJump(*j)
+		}
+	case paletteRunMsg:
+		cmd := msg.run(&m)
+		return m, cmd
 	case runLoadedMsg, logMsg, runTickMsg:
 		// A run opened from a pull request covers the project page.
 		if m.detail != nil && m.detail.run != nil {
@@ -301,6 +312,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help = newHelp(m.helpGroups(), m.width, m.height-2)
 			return m, nil
 		}
+		if msg.String() == ":" && !m.typing() {
+			return m.openPalette()
+		}
 		if m.detail != nil {
 			return m.onDetailKey(msg)
 		}
@@ -342,7 +356,7 @@ func (m Model) inTextInput() bool {
 		return m.help.typing
 	case m.modal != nil:
 		switch m.modal.(type) {
-		case *checkoutModal, *tagDialog, *formModal, *nameConfirm:
+		case *checkoutModal, *tagDialog, *formModal, *nameConfirm, *paletteModal:
 			return true
 		case *orgPicker:
 			return m.modal.(*orgPicker).list.typing
@@ -420,9 +434,19 @@ func (m Model) onProjectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.project.closeRequested(msg) {
 		m.project = nil
+		if len(m.covers) > 0 {
+			m.uncover()
+		}
 		return m, nil
 	}
-	return m, m.project.update(msg)
+	before := m.project.level
+	cmd := m.project.update(msg)
+	// esc out of the repo browser a jump opened returns to where it came from.
+	if n := len(m.covers); n > 0 && msg.String() == "esc" && before == m.covers[n-1].level &&
+		before != levelTabs && m.project.level == levelTabs {
+		m.uncover()
+	}
+	return m, cmd
 }
 
 func (m Model) onHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

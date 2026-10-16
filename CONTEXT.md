@@ -17,6 +17,18 @@ _Avoid_: panel, box, column
 **Focused pane**:
 The pane that takes the keys; its frame is highlighted. While a popup is open, no pane is focused.
 
+**Focused item**:
+The row or line under the cursor of the focused pane: a pull request, file, folder, diff line or range, thread, comment, run, pipeline, branch, tag or settings entry. Its ancestors are what contains it, up to the organization: a comment's thread, file, pull request, repo and project.
+_Avoid_: selection (that is a V range), current item
+
+**Command palette**:
+The list `:` opens of commands for the focused item, its ancestors and a few of its children (a pull request's reviewers and build policies, a thread's comments, a pipeline's latest run), nearest first.
+_Avoid_: command line, menu (a menu is one action's choices)
+
+**Command**:
+A named action on one thing, such as approving a pull request or re-queueing a build policy, run from the command palette as its key or menu would run it.
+_Avoid_: shortcut, binding (those are keys)
+
 **Me**:
 The signed-in Azure DevOps identity whose pull requests the dashboard shows.
 _Avoid_: user, current user

@@ -114,10 +114,7 @@ func (r *reviewersModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 		if why := d.closed(); why != "" {
 			return r, statusCmd(why)
 		}
-		done := rv.DisplayName + " is now " + pick2(rv.IsRequired, "optional", "required")
-		return r, d.act(done, false, func(ctx context.Context, pr ado.PullRequest) error {
-			return setReviewer(ctx, d.client, pr, rv.ID, !rv.IsRequired, rv.Vote)
-		})
+		return r, d.toggleRequired(rv)
 	case "d":
 		rv, ok := r.selected()
 		if !ok {
@@ -126,17 +123,31 @@ func (r *reviewersModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 		if why := d.closed(); why != "" {
 			return r, statusCmd(why)
 		}
-		prompt := fmt.Sprintf("Remove %s from the reviewers?", rv.DisplayName)
-		if rv.Vote != ado.VoteNone {
-			prompt += "\n" + styleYellow.Render("Their vote ("+voteText(rv.Vote)+") goes with them.")
-		}
-		c := newConfirm(prompt, d.act("removed "+rv.DisplayName, false, func(ctx context.Context, pr ado.PullRequest) error {
-			return removeReviewer(ctx, d.client, pr, rv.ID)
-		}))
-		c.back, c.then = r, r
-		return c, nil
+		return d.confirmRemoveReviewer(rv, r), nil
 	}
 	return r, nil
+}
+
+// toggleRequired makes a reviewer required or optional, their vote kept.
+func (d *detailModel) toggleRequired(rv ado.Reviewer) tea.Cmd {
+	done := rv.DisplayName + " is now " + pick2(rv.IsRequired, "optional", "required")
+	return d.act(done, false, func(ctx context.Context, pr ado.PullRequest) error {
+		return setReviewer(ctx, d.client, pr, rv.ID, !rv.IsRequired, rv.Vote)
+	})
+}
+
+// confirmRemoveReviewer asks before removing a reviewer; either answer
+// returns to back.
+func (d *detailModel) confirmRemoveReviewer(rv ado.Reviewer, back modal) modal {
+	prompt := fmt.Sprintf("Remove %s from the reviewers?", rv.DisplayName)
+	if rv.Vote != ado.VoteNone {
+		prompt += "\n" + styleYellow.Render("Their vote ("+voteText(rv.Vote)+") goes with them.")
+	}
+	c := newConfirm(prompt, d.act("removed "+rv.DisplayName, false, func(ctx context.Context, pr ado.PullRequest) error {
+		return removeReviewer(ctx, d.client, pr, rv.ID)
+	}))
+	c.back, c.then = back, back
+	return c
 }
 
 func (r *reviewersModal) view(width int) string {

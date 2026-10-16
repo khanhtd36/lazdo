@@ -84,6 +84,9 @@ type detailModel struct {
 	wait      *runWait    // a re-queue waiting for its new run
 	// buildLines maps Overview lines to the build policy checks on them.
 	buildLines map[int]ado.Policy
+	// pending is a command picked from outside the pull request, run once
+	// it has loaded.
+	pending string
 
 	// standalone is a repo diff (a commit or a tag range) shown with the
 	// Files view alone: no pull request header, tabs, votes or comments.
@@ -197,6 +200,9 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		}
 		d.rebuildOverview()
 		d.rebuildLists()
+		if d.pending != "" && d.data != nil && msg.err == nil {
+			return d.runPending()
+		}
 		if d.tab == tabFiles {
 			return d.ensureFiles()
 		}

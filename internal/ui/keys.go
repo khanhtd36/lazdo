@@ -212,6 +212,7 @@ var (
 	prRunPRKeys = append(append([]binding{}, detailKeys[:5]...), detailKeys[6])
 	globalKeys  = []binding{
 		{keys: "?", desc: "this help", hint: "help"},
+		{keys: ":", desc: "command palette: what you can do to the selected item and what holds it", press: ":", hint: "commands"},
 		{keys: "q", desc: "quit (anywhere outside a text box)", hint: "quit"},
 		{keys: "ctrl+c", desc: "quit, even while typing"},
 		{keys: "mouse", desc: "click selects, click again opens, wheel scrolls"},

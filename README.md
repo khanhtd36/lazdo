@@ -122,6 +122,7 @@ lists everything available where you are.
 | `r` | refresh |
 | `c` | check out the branch (asks where) |
 | `U` | check for a newer lazdo and install it |
+| `:` | command palette: what you can do to the selected item and what holds it |
 
 Questions show **Yes** and **No** buttons: `←` / `→` (or `tab`) pick one,
 `enter` or a click presses it, and `y` / `n` answer directly. Yes starts
@@ -314,6 +315,24 @@ empty folder gets a fresh clone; nothing is ever forced.
 
 `?` lists the shortcuts for where you are, most specific first. `/` filters
 them fuzzily; `enter` runs the selected one.
+
+### Command palette
+
+`:` lists what you can do to the selected item, then to what holds it, up
+to the organization: in a pull request, a thread (reply, set its status,
+edit or delete your comments in it), a file or folder, the line under the
+cursor, then the pull request itself (each vote, complete, draft, target
+branch, abandon, edit, check out, copy…), its reviewers and build
+policies, its repo, its project and the organization. Type to filter
+(`repo clone` finds the repo's clone URLs), `enter` runs; each command
+shows its key when it has one. A command runs just as its key or menu
+would, questions included; one that can't run now is dimmed with the
+reason. From the Pull requests page, a command that needs the pull
+request's details opens it first. Opening the repo, project, pipelines or
+settings from a pull request lays them over it: `esc` comes back.
+
+The palette covers the Pull requests page, the Projects page and pull
+requests; inside a project it offers the organization's commands for now.
 
 ### Copying text
 
