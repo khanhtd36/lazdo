@@ -133,11 +133,12 @@ const (
 	SideLeft              // the original file
 )
 
-// LineComment anchors a new thread to lines of one file in a comparison.
+// LineComment anchors a new thread to lines of one file in a comparison,
+// or to the whole file when StartLine is 0.
 type LineComment struct {
 	Path             string
 	Side             Side
-	StartLine        int
+	StartLine        int // 0: the whole file
 	EndLine          int
 	EndLineLength    int // characters on EndLine, so the comment spans it whole
 	ChangeTrackingID int
@@ -149,9 +150,11 @@ func (c *Client) NewLineThread(ctx context.Context, pr PullRequest, lc LineComme
 	start := map[string]int{"line": lc.StartLine, "offset": 1}
 	end := map[string]int{"line": lc.EndLine, "offset": lc.EndLineLength + 1}
 	tc := map[string]any{"filePath": lc.Path}
-	if lc.Side == SideLeft {
+	switch {
+	case lc.StartLine == 0:
+	case lc.Side == SideLeft:
 		tc["leftFileStart"], tc["leftFileEnd"] = start, end
-	} else {
+	default:
 		tc["rightFileStart"], tc["rightFileEnd"] = start, end
 	}
 	body := map[string]any{

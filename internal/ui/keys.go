@@ -88,6 +88,7 @@ var (
 	treeKeys = []binding{
 		{keys: "enter / l / tab", desc: "focus the diff", press: "enter", hint: "diff"},
 		{keys: "/", desc: "filter files", press: "/", hint: "filter"},
+		{keys: "a", desc: "comment on the whole file", press: "a", hint: "comment"},
 		{keys: "y", desc: "copy menu: path, web URL, name", press: "y", hint: "copy"},
 	}
 	diffKeys = []binding{
@@ -95,7 +96,7 @@ var (
 		{keys: "h / l", desc: "old / new side (side-by-side); h on old goes to the tree", hint: "side"},
 		{keys: "tab", desc: "focus the file tree", press: "tab", hint: "tree"},
 		{keys: "V / drag", desc: "select lines: a comments on them, y copies them", press: "V", hint: "select"},
-		{keys: "a", desc: "comment on the line or range", press: "a", hint: "comment"},
+		{keys: "a", desc: "comment on the line or range (a file with no lines: on the file)", press: "a", hint: "comment"},
 		{keys: "enter", desc: "step into the line's thread", press: "enter", hint: "thread"},
 		{keys: "R / s", desc: "reply / status on the line's thread", press: "R"},
 		{keys: "y", desc: "copy the selected lines (none selected: copy menu)", press: "y", hint: "copy"},

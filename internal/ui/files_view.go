@@ -487,6 +487,23 @@ func (d *detailModel) lineThreads(path string, l diffLine) []*ado.Thread {
 	return d.threadsAt(path, ado.SideLeft, l.left)
 }
 
+// fileThreads are the threads on a whole file, not on lines of it: shown
+// atop its diff, they belong to its first line.
+func (d *detailModel) fileThreads(path string) []*ado.Thread {
+	var out []*ado.Thread
+	for i := range d.files.threads {
+		t := &d.files.threads[i]
+		tc := t.ThreadContext
+		if t.IsHuman() && tc != nil && tc.FilePath == path &&
+			tc.LeftFileStart == nil && tc.LeftFileEnd == nil && tc.RightFileStart == nil && tc.RightFileEnd == nil {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// diffThread is the thread enter steps into: the file's first, from its
+// first line, else the line's first.
 func (d *detailModel) diffThread() (*ado.Thread, bool) {
 	ch, _ := d.currentDiff()
 	lines := d.diffLines()
@@ -494,6 +511,9 @@ func (d *detailModel) diffThread() (*ado.Thread, bool) {
 		return nil, false
 	}
 	ts := d.lineThreads(ch.Item.Path, lines[d.files.cursor])
+	if d.files.cursor == 0 {
+		ts = append(d.fileThreads(ch.Item.Path), ts...)
+	}
 	if len(ts) == 0 {
 		return nil, false
 	}

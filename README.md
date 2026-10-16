@@ -210,7 +210,7 @@ Keys specific to a pull request (on top of the ones above):
 | `v` | vote: approve, approve with suggestions, wait for author, reject, reset |
 | `m` | complete, set/cancel auto-complete, mark as draft/publish, change target branch, abandon (click the target branch in the subtitle to change it) |
 | `E` | edit the title and description (`ctrl+e` in `$EDITOR`: title, blank line, description) |
-| `a` | add a comment (Overview: on the PR · diff: on the line or `V` range) |
+| `a` | add a comment (Overview: on the PR · diff: on the line or `V` range · file tree: on the whole file) |
 | `R` / `s` / `e` / `d` | reply / status / edit / delete on the selected thread |
 | `f` | Overview: choose the activity filter (each with its count) |
 | `b` | Overview: pipeline runs of the pull request |
@@ -224,6 +224,10 @@ Keys specific to a pull request (on top of the ones above):
 `enter` steps into a comment thread (then `j`/`k` picks a comment). Comments
 are typed in a text box: `ctrl+s` posts, `ctrl+e` continues the draft in
 `$EDITOR`, `esc` asks before discarding a changed draft.
+
+A comment on a whole file (`a` in the tree, or in the diff of a file with
+no lines to pick, like a binary one) shows atop that file's diff, as on
+the web; `enter` on the first line steps into it.
 
 ### Projects page
 

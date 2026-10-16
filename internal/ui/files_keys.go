@@ -49,6 +49,9 @@ func (d *detailModel) filesKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	if f.pane == paneTree {
+		if msg.String() == "a" {
+			return d.fileComment()
+		}
 		return d.treeKey(msg)
 	}
 	return d.diffKeyPress(msg)
@@ -416,6 +419,8 @@ func (d *detailModel) openCommitDiff(commit string) tea.Cmd {
 
 // --- Line comments ---
 
+// lineComment comments on the cursor's line or the V range; a file with no
+// lines to pick (binary, too large, unchanged) takes a comment on itself.
 func (d *detailModel) lineComment() tea.Cmd {
 	f := &d.files
 	if f.cmp.commit != "" {
@@ -423,8 +428,11 @@ func (d *detailModel) lineComment() tea.Cmd {
 	}
 	ch, fd := d.currentDiff()
 	lines := d.diffLines()
-	if ch == nil || fd == nil || f.cursor >= len(lines) {
+	if ch == nil {
 		return statusCmd("select a file first")
+	}
+	if fd == nil || f.cursor >= len(lines) {
+		return d.fileComment()
 	}
 	side := d.cursorSide(lines[f.cursor])
 	from, to := f.cursor, f.cursor
@@ -447,16 +455,8 @@ func (d *detailModel) lineComment() tea.Cmd {
 	if side == ado.SideLeft {
 		raw = fd.leftRaw
 	}
-	first := f.cmp.base
-	if first == 0 {
-		first = f.cmp.target
-	}
-	lc := ado.LineComment{
-		Path: ch.Item.Path, Side: side, StartLine: start, EndLine: end,
-		EndLineLength:    len([]rune(raw[end-1])),
-		ChangeTrackingID: ch.ChangeTrackingID,
-		FirstIteration:   first, SecondIteration: f.cmp.target,
-	}
+	lc := d.commentAnchor(ch)
+	lc.Side, lc.StartLine, lc.EndLine, lc.EndLineLength = side, start, end, len([]rune(raw[end-1]))
 	title := fmt.Sprintf("Comment on %s line %d", ch.Item.Path, start)
 	if end != start {
 		title = fmt.Sprintf("Comment on %s lines %d–%d", ch.Item.Path, start, end)
@@ -464,10 +464,47 @@ func (d *detailModel) lineComment() tea.Cmd {
 	d.modal = newEditor(title, "", d.width, func(content string) tea.Cmd {
 		f.anchor = -1
 		return d.act("comment posted", false, func(ctx context.Context, pr ado.PullRequest) error {
-			return d.client.NewLineThread(ctx, pr, lc, content)
+			return newLineThread(ctx, d.client, pr, lc, content)
 		})
 	})
 	return nil
+}
+
+// fileComment comments on the selected file as a whole, as the web's
+// comment button in a file's header does.
+func (d *detailModel) fileComment() tea.Cmd {
+	if d.files.cmp.commit != "" {
+		return statusCmd("comments need a comparison of updates; press u and pick one")
+	}
+	ch := d.selectedChange()
+	if ch == nil {
+		return statusCmd("select a file first")
+	}
+	lc := d.commentAnchor(ch)
+	d.modal = newEditor("Comment on "+ch.Item.Path, "", d.width, func(content string) tea.Cmd {
+		return d.act("comment posted", false, func(ctx context.Context, pr ado.PullRequest) error {
+			return newLineThread(ctx, d.client, pr, lc, content)
+		})
+	})
+	return nil
+}
+
+// commentAnchor places a new thread on a file in the comparison shown.
+func (d *detailModel) commentAnchor(ch *ado.Change) ado.LineComment {
+	f := &d.files
+	first := f.cmp.base
+	if first == 0 {
+		first = f.cmp.target
+	}
+	return ado.LineComment{
+		Path: ch.Item.Path, ChangeTrackingID: ch.ChangeTrackingID,
+		FirstIteration: first, SecondIteration: f.cmp.target,
+	}
+}
+
+// newLineThread posts a line or file comment; tests replace it.
+var newLineThread = func(ctx context.Context, c *ado.Client, pr ado.PullRequest, lc ado.LineComment, content string) error {
+	return c.NewLineThread(ctx, pr, lc, content)
 }
 
 // threadAction runs reply/status/edit/delete on the thread at the cursor.

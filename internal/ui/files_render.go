@@ -189,7 +189,11 @@ func (d *detailModel) lineRowCount(i int) int {
 	if rows == nil {
 		return 1
 	}
-	return len(rows) + len(d.threadRows(ch, i))
+	n := len(rows) + len(d.threadRows(ch, i))
+	if i == 0 {
+		n += len(d.fileThreadRows(ch))
+	}
+	return n
 }
 
 // rowCache is a file's rendered rows; they go with its diff when the diff
@@ -209,25 +213,46 @@ func (d *detailModel) threadRows(ch *ado.Change, i int) []string {
 	if i >= len(lines) {
 		return nil
 	}
-	width := d.diffWidth() - 6
+	// On the first line, a comment on the file comes first.
+	first := i != 0 || len(d.fileThreads(ch.Item.Path)) == 0
 	var out []string
 	for ti, t := range d.lineThreads(ch.Item.Path, lines[i]) {
-		selected := i == d.files.cursor && ti == 0 && d.files.inThread
-		status := styleYellow.Render(ado.ThreadStatusTitle(t.Status))
-		if t.IsResolved() {
-			status = styleGreen.Render(ado.ThreadStatusTitle(t.Status))
+		out = append(out, d.renderDiffThread(t, "", first && ti == 0 && i == d.files.cursor && d.files.inThread)...)
+	}
+	return out
+}
+
+// fileThreadRows are the comments on the whole file, drawn above its
+// first line; enter there steps into the first.
+func (d *detailModel) fileThreadRows(ch *ado.Change) []string {
+	ts := d.fileThreads(ch.Item.Path)
+	out := make([]string, 0, 4*len(ts))
+	for ti, t := range ts {
+		out = append(out, d.renderDiffThread(t, "on this file", ti == 0 && d.files.cursor == 0 && d.files.inThread)...)
+	}
+	return out
+}
+
+func (d *detailModel) renderDiffThread(t *ado.Thread, label string, selected bool) []string {
+	width := d.diffWidth() - 6
+	status := styleYellow.Render(ado.ThreadStatusTitle(t.Status))
+	if t.IsResolved() {
+		status = styleGreen.Render(ado.ThreadStatusTitle(t.Status))
+	}
+	head := "    " + threadMark() + status
+	if label != "" {
+		head += styleDim.Render("  " + label)
+	}
+	out := []string{head}
+	for ci, c := range t.LiveComments() {
+		mark := "      "
+		if selected && ci == d.files.commentSel {
+			mark = "    " + styleSelected.Render("› ")
 		}
-		out = append(out, "    "+threadMark()+status)
-		for ci, c := range t.LiveComments() {
-			mark := "      "
-			if selected && ci == d.files.commentSel {
-				mark = "    " + styleSelected.Render("› ")
-			}
-			out = append(out, mark+styleSection.Render(c.Author.DisplayName)+"  "+
-				styleDim.Render(relTime(time.Since(c.PublishedDate), c.PublishedDate)))
-			for _, l := range strings.Split(d.md.render(d.resolveMentions(c.Content), max(20, width)), "\n") {
-				out = append(out, "      "+l)
-			}
+		out = append(out, mark+styleSection.Render(c.Author.DisplayName)+"  "+
+			styleDim.Render(relTime(time.Since(c.PublishedDate), c.PublishedDate)))
+		for _, l := range strings.Split(d.md.render(d.resolveMentions(c.Content), max(20, width)), "\n") {
+			out = append(out, "      "+l)
 		}
 	}
 	return out
@@ -309,6 +334,14 @@ func (d *detailModel) renderDiffPane(h int) []string {
 	}
 	if msg != "" {
 		out[1] = "  " + styleDim.Render(msg)
+		if ch != nil {
+			// No lines to hang them on: the file's comments follow, to read.
+			for i, tr := range d.fileThreadRows(ch) {
+				if 3+i < h {
+					out[3+i] = truncate(tr, dw)
+				}
+			}
+		}
 		return out
 	}
 
@@ -316,6 +349,14 @@ func (d *detailModel) renderDiffPane(h int) []string {
 	lines := d.diffLines()
 	row := 1
 	for i := f.top; i < len(lines) && row < h; i++ {
+		if i == 0 {
+			for _, tr := range d.fileThreadRows(ch) {
+				if row < h {
+					out[row] = truncate(tr, dw)
+					row++
+				}
+			}
+		}
 		for _, rp := range d.lineRows(fd, cache, i) {
 			if row >= h {
 				break

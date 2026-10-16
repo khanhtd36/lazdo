@@ -342,7 +342,11 @@ func (d *detailModel) filesMouse(msg tea.MouseMsg, by int) tea.Cmd {
 			}
 			// A click on the line's thread, or a second click on the line,
 			// steps into the thread.
-			onThread := by >= row+len(d.lineRows(fd, cache, i))
+			above := 0 // the file's comments, atop its first line
+			if i == 0 {
+				above = len(d.fileThreadRows(ch))
+			}
+			onThread := by < row+above || by >= row+above+len(d.lineRows(fd, cache, i))
 			_, hasThread := d.diffThread()
 			f.inThread = hasThread && (onThread || wasCursor)
 			f.commentSel = 0
