@@ -331,8 +331,11 @@ reason. From the Pull requests page, a command that needs the pull
 request's details opens it first. Opening the repo, project, pipelines or
 settings from a pull request lays them over it: `esc` comes back.
 
-The palette covers the Pull requests page, the Projects page and pull
-requests; inside a project it offers the organization's commands for now.
+Inside a project it works the same way: a repo, pull request or pipeline
+(and its latest run) on the tabs, the settings section's add, edit and
+delete commands, a branch, file, folder, commit or tag in the repo
+browser, or a run, then the repo or pipeline, the project's tabs and the
+organization.
 
 ### Copying text
 

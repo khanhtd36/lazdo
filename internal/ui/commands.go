@@ -20,7 +20,7 @@ func (m Model) commandGroups() []commandGroup {
 			gs = append(gs, m.ancestorCommands(m.detail.pr.Repository)...)
 		}
 	case m.project != nil:
-		// The project's own commands come with the next release.
+		gs = m.projectViewCommands()
 	case m.page == pageProjects:
 		gs = m.projectsPageCommands()
 	default:

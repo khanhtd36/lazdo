@@ -62,6 +62,9 @@ func (d *detailModel) menuCommands(m modal, key, prefix string) []command {
 
 // copyCommands are a Copy menu's choices as commands.
 func copyCommands(c tea.Cmd, key string) []command {
+	if c == nil {
+		return nil
+	}
 	msg, _ := c().(copyMenuMsg)
 	out := make([]command, 0, len(msg.items))
 	for _, it := range msg.items {
