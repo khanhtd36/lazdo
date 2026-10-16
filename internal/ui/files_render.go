@@ -304,8 +304,12 @@ func (d *detailModel) renderDiffPane(h int) []string {
 	if d.runMerge() {
 		header += styleYellow.Render("  includes a merge: " + d.pr.TargetBranch() + " changes appear")
 	}
-	if ch != nil {
+	folder, onFolder := d.selectedFolder()
+	switch {
+	case ch != nil:
 		header += "  " + ch.Item.Path
+	case onFolder:
+		header += "  " + folder
 	}
 	out[0] = truncate(header+"  · "+mode, dw) // the pane's title; S, u and z are in the help
 
@@ -313,6 +317,9 @@ func (d *detailModel) renderDiffPane(h int) []string {
 	switch {
 	case ch == nil && f.loading:
 		msg = "loading…"
+	case onFolder:
+		copy(out[1:], d.folderSummary(folder, h-1, dw-2))
+		return out
 	case ch == nil:
 		msg = "no file selected"
 	case fd == nil:

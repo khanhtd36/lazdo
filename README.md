@@ -229,6 +229,12 @@ A comment on a whole file (`a` in the tree, or in the diff of a file with
 no lines to pick, like a binary one) shows atop that file's diff, as on
 the web; `enter` on the first line steps into it.
 
+The file tree's folders open and close like the repo browser's: `enter`
+switches one, `l` opens, `h` closes (or goes up to the parent folder).
+On a folder the diff pane lists its changed files. `n` past a file's last
+change opens the next file even inside a closed folder, and `/` finds
+files in closed folders too.
+
 ### Projects page
 
 `2` (or `[` / `]`) switches to the Projects page: your recent projects,

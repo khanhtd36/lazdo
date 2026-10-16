@@ -31,6 +31,9 @@ func (d *detailModel) filesKey(msg tea.KeyMsg) tea.Cmd {
 		if ch := d.selectedChange(); ch != nil {
 			return d.copyFile(ch.Item.Path)
 		}
+		if folder, ok := d.selectedFolder(); ok {
+			return copyMenu("folder", copyItem{"Path", folder}, copyItem{"Web URL", d.fileURL(folder)})
+		}
 		return nil
 	case "z":
 		f.hideTree = !f.hideTree
@@ -59,12 +62,23 @@ func (d *detailModel) filesKey(msg tea.KeyMsg) tea.Cmd {
 
 func (d *detailModel) treeKey(msg tea.KeyMsg) tea.Cmd {
 	before := d.selectedChange()
+	if !d.files.tree.typing && d.folderKey(msg.String()) {
+		return d.afterTreeMove(before)
+	}
 	handled, activate := d.files.tree.key(msg, d.bodyHeight()-2) // inside its frame
 	if activate || (!handled && isAnyOf(msg.String(), "l", "right", "tab", "shift+tab")) {
-		if d.selectedChange() != nil {
+		if ch := d.selectedChange(); ch != nil {
 			d.files.pane = paneDiff
+			if activate {
+				d.openFoldersOf(ch.Item.Path) // picked from a filter
+			}
 		}
 	}
+	return d.afterTreeMove(before)
+}
+
+// afterTreeMove shows the newly selected file's diff.
+func (d *detailModel) afterTreeMove(before *ado.Change) tea.Cmd {
 	if d.selectedChange() != before {
 		d.resetDiffCursor()
 		return d.ensureDiff()
@@ -215,26 +229,39 @@ func (d *detailModel) diffKeyPress(msg tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
-// fileStep is the tree index of the next (dir 1) or previous (dir -1) file
 // row, skipping folders; -1 when there is none.
-func (d *detailModel) fileStep(dir int) int {
+// fileStep is the next (dir 1) or previous (dir -1) file in the tree,
+// closed folders included (a filter's matches only, while one is kept).
+func (d *detailModel) fileStep(dir int) *ado.Change {
 	t := &d.files.tree
 	vis := t.visible()
-	for i := t.cursor + dir; i >= 0 && i < len(vis); i += dir {
-		if line, _ := t.items[vis[i]].value.(listLine); line.change != nil {
-			return i
+	if t.cursor < 0 || t.cursor >= len(vis) {
+		return nil
+	}
+	order := vis
+	at := t.cursor
+	if t.filter == "" {
+		order = make([]int, len(t.items))
+		for i := range order {
+			order[i] = i
+		}
+		at = vis[t.cursor]
+	}
+	for i := at + dir; i >= 0 && i < len(order); i += dir {
+		if line, _ := t.items[order[i]].value.(listLine); line.change != nil {
+			return line.change
 		}
 	}
-	return -1
+	return nil
 }
 
 func (d *detailModel) edgeHint(dir int) string {
 	switch {
-	case dir > 0 && d.fileStep(1) < 0:
+	case dir > 0 && d.fileStep(1) == nil:
 		return "last change of the last file"
 	case dir > 0:
 		return "last change in this file · n again for the next file"
-	case d.fileStep(-1) < 0:
+	case d.fileStep(-1) == nil:
 		return "first change of the first file"
 	}
 	return "first change in this file · N again for the previous file"
@@ -243,11 +270,12 @@ func (d *detailModel) edgeHint(dir int) string {
 // jumpFile opens the next or previous file, landing on its first change
 // going forward and its last change going back.
 func (d *detailModel) jumpFile(dir int) tea.Cmd {
-	i := d.fileStep(dir)
-	if i < 0 {
+	ch := d.fileStep(dir)
+	if ch == nil {
 		return statusCmd(d.edgeHint(dir))
 	}
-	d.files.tree.cursor = i
+	d.openFoldersOf(ch.Item.Path)
+	d.selectFile(ch.Item.Path)
 	d.resetDiffCursor()
 	d.files.land = dir
 	d.landCursor()

@@ -86,7 +86,8 @@ var (
 		{keys: "y", desc: "copy the comment text or the whole thread", press: "y", hint: "copy"},
 	}
 	treeKeys = []binding{
-		{keys: "enter / l / tab", desc: "focus the diff", press: "enter", hint: "diff"},
+		{keys: "enter / l / tab", desc: "file: focus the diff", press: "enter", hint: "diff"},
+		{keys: "enter / l / h", desc: "folder: open or close / open / close; h on a file or closed folder goes up", hint: "fold"},
 		{keys: "/", desc: "filter files", press: "/", hint: "filter"},
 		{keys: "a", desc: "comment on the whole file", press: "a", hint: "comment"},
 		{keys: "y", desc: "copy menu: path, web URL, name", press: "y", hint: "copy"},

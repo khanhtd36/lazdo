@@ -323,8 +323,8 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 	case "r":
 		return d.reload()
 	case "o":
-		if ch := d.selectedChange(); d.tab == tabFiles && ch != nil {
-			return openURL(d.fileURL(ch.Item.Path), "opened "+ch.Item.Path)
+		if p := d.selectedPath(); d.tab == tabFiles && p != "" {
+			return openURL(d.fileURL(p), "opened "+p)
 		}
 		if d.tab == tabOverview {
 			return d.openMenu()

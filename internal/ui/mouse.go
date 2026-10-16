@@ -365,7 +365,11 @@ func (d *detailModel) treeMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	} else if isClick(msg) && by > 0 && by < d.bodyHeight()-1 { // inside the frame
 		f.pane = paneTree
 		if f.tree.click(by - 1) {
-			f.pane = paneDiff
+			if folder, ok := d.selectedFolder(); ok {
+				d.setFolder(folder, !f.closed[folder]) // a second click opens or closes it
+			} else {
+				f.pane = paneDiff
+			}
 		}
 	}
 	if d.selectedChange() != before {

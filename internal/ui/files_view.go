@@ -159,10 +159,12 @@ type filesView struct {
 	// land is where to put the cursor once the newly opened file's diff
 	// loads: its first change (1) or last change (-1).
 	land int
+	// closed are the tree's closed folders, kept across comparisons.
+	closed map[string]bool
 }
 
 func newFilesView() filesView {
-	return filesView{diffs: map[string]*fileDiff{}, used: map[string]uint64{}, anchor: -1}
+	return filesView{diffs: map[string]*fileDiff{}, used: map[string]uint64{}, anchor: -1, closed: map[string]bool{}}
 }
 
 type (
@@ -276,8 +278,11 @@ func (d *detailModel) onFilesLoaded(msg filesLoadedMsg) tea.Cmd {
 	f.loadedKey = msg.key
 	f.baseCommit, f.targetCommit = msg.baseCommit, msg.targetCommit
 	f.changes, f.threads = msg.changes, msg.threads
-	// Folders are headers, so the cursor lands on (and stays on) files.
+	fresh := len(f.tree.items) == 0
 	f.tree.setItems(lineItems(d.fileLines(f.changes)))
+	if _, onFolder := d.selectedFolder(); fresh && onFolder {
+		d.firstFile() // open on a file, not the folder above it
+	}
 	return d.ensureDiff()
 }
 

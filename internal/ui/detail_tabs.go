@@ -21,15 +21,19 @@ type listLine struct {
 	change *ado.Change
 	commit string
 	path   string // a conflict's file
+	folder string // a folder of the Files tree
+	hidden bool   // in a closed folder: only a filter finds it
 }
 
-// lineItems turns rows into list items; rows with nothing to open (folders,
-// push groups, notes) become headers the cursor skips.
+// lineItems turns rows into list items; rows with nothing to open (push
+// groups, notes) become headers the cursor skips. Folders are rows a filter
+// passes over.
 func lineItems(lines []listLine) []pickItem {
 	items := make([]pickItem, 0, len(lines))
 	for _, l := range lines {
-		it := pickItem{value: l, render: func(int) string { return l.text }}
+		it := pickItem{value: l, render: func(int) string { return l.text }, searchOnly: l.hidden}
 		switch {
+		case l.folder != "":
 		case l.change != nil:
 			it.search = l.change.Item.Path
 		case l.commit != "" || l.url != "":
@@ -123,11 +127,13 @@ func (d *detailModel) fileLines(changes []ado.Change) []listLine {
 	}
 	lines := []listLine{{text: styleSection.Render(d.pr.Repository.Name) + styleDim.Render(fmt.Sprintf("  %d %s",
 		len(changes), plural(len(changes), "file", "files")))}}
-	d.appendTree(&lines, root, 0)
+	d.appendTree(&lines, root, "", 0, false)
 	return lines
 }
 
-func (d *detailModel) appendTree(lines *[]listLine, node *fileNode, depth int) {
+// appendTree adds node's folders, then files, under dir; hidden is a closed
+// folder above them.
+func (d *detailModel) appendTree(lines *[]listLine, node *fileNode, dir string, depth int, hidden bool) {
 	names := make([]string, 0, len(node.children))
 	for n := range node.children {
 		names = append(names, n)
@@ -148,11 +154,12 @@ func (d *detailModel) appendTree(lines *[]listLine, node *fileNode, depth int) {
 				text:   indent + changeGlyph(child.change.ChangeType) + " " + child.name,
 				url:    d.fileURL(child.change.Item.Path),
 				change: child.change,
+				hidden: hidden,
 			})
 			continue
 		}
-		// Collapse single-folder chains: "src/storage".
-		label := child.name
+		// Join single-folder chains: "src/storage".
+		label, folder := child.name, dir+"/"+child.name
 		for len(child.children) == 1 {
 			var only *fileNode
 			for _, c := range child.children {
@@ -162,10 +169,12 @@ func (d *detailModel) appendTree(lines *[]listLine, node *fileNode, depth int) {
 				break
 			}
 			label += "/" + only.name
+			folder += "/" + only.name
 			child = only
 		}
-		*lines = append(*lines, listLine{text: indent + styleDim.Render("▾ ") + styleHeader.Render(label)})
-		d.appendTree(lines, child, depth+1)
+		closed := d.files.closed[folder]
+		*lines = append(*lines, listLine{text: indent + styleDim.Render(pick2(closed, "▸ ", "▾ ")) + styleHeader.Render(label), folder: folder, hidden: hidden})
+		d.appendTree(lines, child, folder, depth+1, hidden || closed)
 	}
 }
 
