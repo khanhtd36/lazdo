@@ -46,8 +46,10 @@ func groupTitles(p *paletteModal) []string {
 	return out
 }
 
-func onPR(t *testing.T, m Model, id int) Model {
+// onPR puts the dashboard cursor on !7.
+func onPR(t *testing.T, m Model) Model {
 	t.Helper()
+	const id = 7
 	for i, r := range m.rows() {
 		if r.pr != nil && r.pr.ID == id {
 			m.cursor = i
@@ -59,7 +61,7 @@ func onPR(t *testing.T, m Model, id int) Model {
 }
 
 func TestPaletteOnADashboardRow(t *testing.T) {
-	m := onPR(t, dashboardWith(t, 7), 7)
+	m := onPR(t, dashboardWith(t, 7))
 	m, _ = sendKeys(m, ":")
 	got := strings.Join(groupTitles(openedPalette(t, m)), " | ")
 	want := "Pull request !7 pr | Reviewers | Repo  | Project  | Pull requests page | Organization org"
@@ -69,7 +71,7 @@ func TestPaletteOnADashboardRow(t *testing.T) {
 }
 
 func TestPaletteRunsAfterTheDashboardOpensThePR(t *testing.T) {
-	m := onPR(t, dashboardWith(t, 7), 7)
+	m := onPR(t, dashboardWith(t, 7))
 	m, _ = sendKeys(m, ":")
 	m = typeText(m, "approve with")
 	if c, ok := openedPalette(t, m).selected(); !ok || c.id != "Approve with suggestions" {
@@ -91,7 +93,7 @@ func TestPaletteRunsAfterTheDashboardOpensThePR(t *testing.T) {
 }
 
 func TestPaletteIsATextBox(t *testing.T) {
-	m := onPR(t, dashboardWith(t, 7), 7)
+	m := onPR(t, dashboardWith(t, 7))
 	m, _ = sendKeys(m, ":", "q")
 	if p := openedPalette(t, m); p.filter != "q" {
 		t.Fatalf("q types into the filter, got %q", p.filter)
@@ -189,5 +191,26 @@ func TestPaletteOnAFolder(t *testing.T) {
 	m = next.(Model)
 	if !m.detail.files.closed["/src/lib"] {
 		t.Fatal("the command closed the folder")
+	}
+}
+
+func TestPaletteSizeFollowsTheScreenOnly(t *testing.T) {
+	m := onPR(t, dashboardWith(t, 7))
+	m, _ = sendKeys(m, ":")
+	size := func() (int, int) {
+		box := m.modal.view(m.width)
+		return strings.Count(box, "\n") + 1, ansi.StringWidth(firstLine(box))
+	}
+	h, w := size()
+	for _, typed := range []string{"a", "pprove", "zzzz"} {
+		m = typeText(m, typed)
+		if gh, gw := size(); gh != h || gw != w {
+			t.Fatalf("after typing %q the box is %dx%d, was %dx%d", typed, gw, gh, w, h)
+		}
+	}
+	m.width, m.height = 200, 60
+	m, _ = sendKeys(m, "esc", ":")
+	if gh, gw := size(); gh <= h || gw < w {
+		t.Fatalf("a taller screen gets a taller box (width capped): %dx%d, was %dx%d", gw, gh, w, h)
 	}
 }

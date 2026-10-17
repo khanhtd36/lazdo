@@ -54,7 +54,9 @@ func newPalette(groups []commandGroup, width, height int) *paletteModal {
 			kept = append(kept, g)
 		}
 	}
-	p := &paletteModal{groups: kept, width: max(40, min(90, width-6)), height: max(5, height-8)}
+	// The box's size follows the screen only, never what is listed, so it
+	// keeps still while typing filters it.
+	p := &paletteModal{groups: kept, width: max(40, min(90, width*3/4)), height: max(5, min(height-9, height*2/3))}
 	p.clamp(1)
 	return p
 }
@@ -170,21 +172,29 @@ func (p *paletteModal) view(int) string {
 	p.offset = max(0, min(p.offset, max(0, len(rows)-p.height)))
 	w := p.width
 	lines := []string{styleSection.Render("Commands") + "  " + styleSelected.Render(":"+p.filter+"▏"), ""}
+	body := make([]string, 0, p.height)
 	if len(rows) == 0 {
-		lines = append(lines, styleDim.Render("  no command matches"))
+		body = append(body, styleDim.Render("  no command matches"))
 	}
 	for i := p.offset; i < len(rows) && i < p.offset+p.height; i++ {
 		r := rows[i]
 		if r.cmd == nil {
-			lines = append(lines, styleHeader.Render(truncate(r.group, w)))
+			body = append(body, styleHeader.Render(truncate(r.group, w)))
 			continue
 		}
-		lines = append(lines, p.commandLine(r, i == p.cursor, w))
+		body = append(body, p.commandLine(r, i == p.cursor, w))
 	}
+	for len(body) < p.height {
+		body = append(body, "")
+	}
+	where := ""
 	if n := len(rows); n > p.height {
-		lines = append(lines, styleDim.Render(fmt.Sprintf("  %d–%d of %d", p.offset+1, min(n, p.offset+p.height), n)))
+		where = styleDim.Render(fmt.Sprintf("  %d–%d of %d", p.offset+1, min(n, p.offset+p.height), n))
 	}
-	lines = append(lines, "", styleDim.Render("type to filter · enter run · ↑/↓ move · esc close"))
+	lines = append(append(lines, body...), where, styleDim.Render("type to filter · enter run · ↑/↓ move · esc close"))
+	for i, l := range lines {
+		lines[i] = fitStyled(l, w)
+	}
 	return styleModal.Render(strings.Join(lines, "\n"))
 }
 
