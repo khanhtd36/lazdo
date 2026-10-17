@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -121,5 +122,35 @@ func TestRefreshCooldown(t *testing.T) {
 	}
 	if rs, err := Check(offline, "0.2.17"); err != nil || len(rs) != 1 {
 		t.Fatalf("the daily check still uses a 3-minute-old answer: %v %v", rs, err)
+	}
+}
+
+func TestReplaceWhenOldIsStuck(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("the .old dance is Windows only")
+	}
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "lazdo.exe")
+	if err := os.WriteFile(exe, []byte("v2"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A .old that can't be removed, as when an older copy still runs.
+	stuck := exe + ".old"
+	if err := os.MkdirAll(filepath.Join(stuck, "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := replace(exe, []byte("v3")); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(exe); string(b) != "v3" {
+		t.Errorf("exe holds %q", b)
+	}
+	parked, _ := filepath.Glob(exe + ".old-*")
+	if len(parked) != 1 {
+		t.Fatalf("parked %v", parked)
+	}
+	Cleanup(exe)
+	if left, _ := filepath.Glob(exe + ".old-*"); len(left) != 0 {
+		t.Errorf("Cleanup left %v", left)
 	}
 }
