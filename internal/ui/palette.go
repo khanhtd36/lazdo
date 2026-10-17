@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 
@@ -24,6 +25,7 @@ type command struct {
 // it, or an ancestor, titled by what it is.
 type commandGroup struct {
 	title    string
+	short    string // the title beside each match while filtering; title if empty
 	commands []command
 }
 
@@ -33,6 +35,7 @@ type paletteRunMsg struct{ run func(m *Model) tea.Cmd }
 // paletteRow is a group title or a command.
 type paletteRow struct {
 	group string
+	short string   // the group's name beside a match
 	cmd   *command // nil for a group title
 }
 
@@ -77,7 +80,7 @@ func (p *paletteModal) rows() []paletteRow {
 	for _, g := range p.groups {
 		for i := range g.commands {
 			c := &g.commands[i]
-			all = append(all, paletteRow{group: g.title, cmd: c})
+			all = append(all, paletteRow{group: g.title, short: cmp.Or(g.short, g.title), cmd: c})
 			texts = append(texts, ansi.Strip(c.label)+"  "+ansi.Strip(g.title))
 		}
 	}
@@ -210,13 +213,20 @@ func (p *paletteModal) commandLine(r paletteRow, selected bool, w int) string {
 	if c.disabled != "" {
 		label = styleDim.Render(ansi.Strip(c.label) + " · " + c.disabled)
 	}
+	// The command comes first: its key always shows, and the group's name
+	// only in the room left over.
+	avail := w - 2
+	label = truncate(label, max(10, avail-ansi.StringWidth(c.key)-2))
 	right := c.key
-	if p.filter != "" {
-		right = strings.TrimSpace(ansi.Strip(r.group) + "  " + c.key)
+	if room := avail - ansi.StringWidth(label) - 2; p.filter != "" && r.short != "" {
+		if c.key != "" {
+			room -= ansi.StringWidth(c.key) + 2
+		}
+		if room >= 8 {
+			right = strings.TrimSpace(truncate(ansi.Strip(r.short), room) + "  " + c.key)
+		}
 	}
-	room := w - 2 - ansi.StringWidth(right) - 2
-	label = truncate(label, max(10, room))
-	gap := max(2, w-2-ansi.StringWidth(label)-ansi.StringWidth(right))
+	gap := max(2, avail-ansi.StringWidth(label)-ansi.StringWidth(right))
 	return prefix + label + strings.Repeat(" ", gap) + styleDim.Render(right)
 }
 

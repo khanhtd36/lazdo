@@ -344,7 +344,7 @@ func (m Model) commitCommands(c ado.RepoCommit) commandGroup {
 	}, copyCommands(copyMenu("commit "+short,
 		copyItem{"Web URL", m.client.CommitURL(b.repo, c.ID)}, copyItem{"Commit ID", c.ID},
 		copyItem{"Short ID", short}, copyItem{"Message", firstLine(c.Comment)}), "y")...)
-	return commandGroup{title: "Commit " + short + " " + firstLine(c.Comment), commands: cmds}
+	return commandGroup{title: "Commit " + short + " " + firstLine(c.Comment), short: "Commit " + short, commands: cmds}
 }
 
 func (m Model) tagCommands(t ado.Tag) commandGroup {

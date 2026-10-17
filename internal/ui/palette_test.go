@@ -214,3 +214,19 @@ func TestPaletteSizeFollowsTheScreenOnly(t *testing.T) {
 		t.Fatalf("a taller screen gets a taller box (width capped): %dx%d, was %dx%d", gw, gh, w, h)
 	}
 }
+
+func TestPaletteCommandTextComesFirst(t *testing.T) {
+	m := dashboardWith(t, 7)
+	m.detail = fakeDetail(t, 140)
+	m.detail.pr.Title = strings.Repeat("a very long pull request title ", 5)
+	m.detail.data.PullRequest = m.detail.pr
+	m, _ = sendKeys(m, ":")
+	m = typeText(m, "approve with")
+	view := ansi.Strip(m.modal.view(m.width))
+	if !strings.Contains(view, "Approve with suggestions") {
+		t.Fatalf("the command shows whole, the group gives way:\n%s", view)
+	}
+	if !strings.Contains(view, "Pull request !7  v") || strings.Contains(view, "very long") {
+		t.Fatalf("beside a match, the pull request's short name and the key:\n%s", view)
+	}
+}

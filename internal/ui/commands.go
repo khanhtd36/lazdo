@@ -77,7 +77,7 @@ func (m Model) prCommandsFor(pr ado.PullRequest) []commandGroup {
 			}
 			cmds = append(cmds, c)
 		}
-		gs = append(gs, commandGroup{title: g.title, commands: cmds})
+		gs = append(gs, commandGroup{title: g.title, short: g.short, commands: cmds})
 	}
 	return gs
 }

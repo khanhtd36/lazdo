@@ -167,7 +167,7 @@ func (d *detailModel) prCommands() commandGroup {
 		}
 	}
 	cmds = append(cmds, command{id: "Refresh", label: "Refresh", key: "r", run: onDetail(d.reload)})
-	return commandGroup{title: fmt.Sprintf("Pull request !%d %s", pr.ID, pr.Title), commands: cmds}
+	return commandGroup{title: fmt.Sprintf("Pull request !%d %s", pr.ID, pr.Title), short: fmt.Sprintf("Pull request !%d", pr.ID), commands: cmds}
 }
 
 func (d *detailModel) reviewerCommands() commandGroup {
@@ -341,7 +341,7 @@ func (d *detailModel) listCommands() []commandGroup {
 	case line.commit != "":
 		id := line.commit
 		cmds := []command{{id: "Show diff", label: "Show its diff", key: "enter", run: onDetail(func() tea.Cmd { return d.openCommitDiff(id) })}}
-		return []commandGroup{{title: "Commit " + shortSHA(id) + " " + ansi.Strip(commitSubject(d.data.Commits, id)), commands: append(cmds, copyCommands(d.copyCommit(id), "y")...)}}
+		return []commandGroup{{title: "Commit " + shortSHA(id) + " " + ansi.Strip(commitSubject(d.data.Commits, id)), short: "Commit " + shortSHA(id), commands: append(cmds, copyCommands(d.copyCommit(id), "y")...)}}
 	case line.path != "":
 		cmds := make([]command, 0, 2)
 		if line.url != "" {
