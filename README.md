@@ -74,6 +74,7 @@ None of its own. lazdo borrows the token of the [Azure CLI](https://learn.micros
 
 ```sh
 az login --allow-no-subscriptions
+az extension add --name azure-devops
 az devops configure -d organization=https://dev.azure.com/<org>   # optional, else pass --org
 ```
 
