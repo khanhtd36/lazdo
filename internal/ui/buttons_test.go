@@ -141,11 +141,15 @@ func TestClickingConfirmButtonsOverAPage(t *testing.T) {
 
 func TestUpdateDialogButtons(t *testing.T) {
 	u := &updateModal{releases: []update.Release{{Tag: "v9.9.9"}}, how: update.ByScript}
-	if !strings.Contains(u.view(100), styleButtonCTA.Render("y Update")) {
-		t.Fatalf("Update is focused:\n%s", ansi.Strip(u.view(100)))
+	if !strings.Contains(u.view(100), styleButtonCTA.Render("y Update and restart")) {
+		t.Fatalf("Update and restart is focused:\n%s", ansi.Strip(u.view(100)))
 	}
-	if next, cmd := u.update(key("enter")); next != nil || cmd == nil {
-		t.Fatal("enter starts the update")
+	if next, cmd := u.update(key("enter")); next != nil || cmd == nil || !cmd().(updateStartMsg).restart {
+		t.Fatal("enter updates and restarts")
+	}
+	u.update(key("right"))
+	if next, cmd := u.update(key("enter")); next != nil || cmd == nil || cmd().(updateStartMsg).restart {
+		t.Fatal("Update only updates without restarting")
 	}
 	u.update(key("right"))
 	if next, cmd := u.update(key("enter")); next != nil || cmd != nil {

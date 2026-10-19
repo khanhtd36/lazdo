@@ -360,10 +360,22 @@ func TestUpdateShowsProgressFailureAndInstalled(t *testing.T) {
 		t.Fatal("y should start the update")
 	}
 	step(updateDoneMsg{version: "0.2.14"})
-	if !strings.Contains(title(), "v0.2.14 installed, restart lazdo") {
+	if !strings.Contains(title(), "v0.2.14 installed, U restart") {
 		t.Fatalf("title %q", title())
 	}
-	if msg, ok := step(keyMsg("U"))().(statusMsg); !ok || !strings.Contains(string(msg), "restart lazdo") {
-		t.Fatalf("U once installed: %#v", msg)
+	c, ok := m.modal.(*confirmModal)
+	if !ok || !strings.Contains(c.prompt, "v0.2.14 is installed. Restart lazdo now?") {
+		t.Fatalf("y asked to restart once installed: %T", m.modal)
+	}
+	step(keyMsg("esc")) // not now
+	step(keyMsg("U"))
+	if _, ok := m.modal.(*confirmModal); !ok {
+		t.Fatalf("U once installed offers the restart again, got %T", m.modal)
+	}
+	if _, ok := step(step(keyMsg("enter"))())().(tea.QuitMsg); !ok {
+		t.Fatal("Yes quits to restart")
+	}
+	if state, ok := m.RestartState(); !ok || state != "page=0" {
+		t.Fatalf("restart state %q %v", state, ok)
 	}
 }

@@ -33,10 +33,12 @@ type (
 		manual   bool
 		err      error
 	}
-	// updateStartMsg is y in the update dialog.
+	// updateStartMsg is Update and restart, or Update only, in the
+	// update dialog.
 	updateStartMsg struct {
 		release update.Release
 		exe     string
+		restart bool
 	}
 	// updateTickMsg redraws the title while an update downloads.
 	updateTickMsg struct{}
@@ -83,7 +85,7 @@ func (m Model) updateNote() string {
 	case m.updating != nil:
 		note = "updating v" + m.updating.version + " " + strings.TrimPrefix(m.updating.String(), "downloading ")
 	case m.installed != "":
-		note = "v" + m.installed + " installed, restart lazdo"
+		note = "v" + m.installed + " installed, U restart"
 	case m.updateFailed != nil:
 		return styleRed.Render("  update failed (U)")
 	case len(m.updates) > 0:
@@ -104,7 +106,8 @@ func (m Model) checkUpdatesNow() (tea.Model, tea.Cmd) {
 	case m.updating != nil:
 		return m, statusCmd("already updating to v" + m.updating.version + ": " + m.updating.String())
 	case m.installed != "":
-		return m, statusCmd("v" + m.installed + " is installed, restart lazdo to use it")
+		m.modal = m.restartPrompt()
+		return m, nil
 	}
 	m.checkingUpdates, m.status = true, "checking for updates…"
 	return m, func() tea.Msg {
@@ -150,7 +153,7 @@ func (m Model) startUpdate(msg updateStartMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	run := &updateRun{version: msg.release.Version()}
-	m.updating, m.updateFailed = run, nil
+	m.updating, m.updateFailed, m.updateRestart = run, nil, msg.restart
 	install := func() tea.Msg {
 		err := installUpdate(context.Background(), msg.release, msg.exe, func(s update.Step) { run.step.Store(&s) })
 		return updateDoneMsg{version: run.version, err: err}
@@ -169,7 +172,14 @@ func (m Model) onUpdateDone(msg updateDoneMsg) (tea.Model, tea.Cmd) {
 		return m.Update(resultMsg(fmt.Errorf("update: %w", msg.err), ""))
 	}
 	m.installed, m.updates = msg.version, nil
-	return m.Update(resultMsg(nil, "updated to v"+msg.version+", restart lazdo to use it"))
+	if m.updateRestart {
+		m.updateRestart = false
+		if m.modal == nil {
+			m.modal = m.restartPrompt()
+		}
+		return m.Update(resultMsg(nil, "updated to v"+msg.version))
+	}
+	return m.Update(resultMsg(nil, "updated to v"+msg.version+", U restarts into it"))
 }
 
 type updateModal struct {
@@ -177,25 +187,27 @@ type updateModal struct {
 	exe      string
 	how      update.Method
 	failed   *updateFailure // the last try, when it failed
-	later    bool           // Later is focused
+	focus    int            // the focused button
 }
 
+const (
+	pressRestart = iota
+	pressUpdate
+	pressLater
+)
+
 func (u *updateModal) bar() buttonBar {
-	b := buttonBar{labels: []string{"y Update", "n Later"}}
-	if u.later {
-		b.focus = 1
-	}
-	return b
+	return buttonBar{labels: []string{"y Update and restart", "Update only", "n Later"}, focus: u.focus}
 }
 
 func (u *updateModal) press(i int) (modal, tea.Cmd) {
-	if i == 1 {
+	if i == pressLater {
 		return nil, nil
 	}
 	if u.how != update.ByScript {
 		return u, nil // installed by a package manager: no button to press
 	}
-	start := updateStartMsg{release: u.releases[0], exe: u.exe}
+	start := updateStartMsg{release: u.releases[0], exe: u.exe, restart: i == pressRestart}
 	return nil, func() tea.Msg { return start }
 }
 
@@ -204,15 +216,15 @@ const updateChangeRows = 15
 func (u *updateModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 	switch k := msg.String(); k {
 	case "esc", "n", "N":
-		return u.press(1)
+		return u.press(pressLater)
 	case "y", "Y":
-		return u.press(0)
+		return u.press(pressRestart)
 	case "enter":
-		return u.press(u.bar().focus)
+		return u.press(u.focus)
 	default:
 		b := u.bar()
 		if b.move(k) {
-			u.later = b.focus == 1
+			u.focus = b.focus
 		}
 	}
 	return u, nil

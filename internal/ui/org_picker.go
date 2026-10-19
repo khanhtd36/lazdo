@@ -311,6 +311,7 @@ func (m Model) switchOrg(pair prefs.Pair) (tea.Model, tea.Cmd) {
 	n := New(ado.NewClientAs(pair.Org, ado.AccountDir(pair.Account), pair.Tenant), m.interval)
 	n.width, n.height = m.width, m.height
 	n.updates, n.checkingUpdates, n.updating, n.installed, n.updateFailed = m.updates, m.checkingUpdates, m.updating, m.installed, m.updateFailed
+	n.updateRestart = m.updateRestart
 	n.lastCheckout = m.lastCheckout
 	n.status = "switched to " + pair.Org
 	return n, n.fetchList()

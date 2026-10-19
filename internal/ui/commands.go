@@ -154,7 +154,7 @@ func (m Model) orgCommands() commandGroup {
 			*m = next.(Model)
 			return cmd
 		}},
-		command{id: "Updates", label: "Check for updates", key: "U", run: func(m *Model) tea.Cmd {
+		command{id: "Updates", label: pick2(m.installed != "", "Restart to use v"+m.installed+"…", "Check for updates"), key: "U", run: func(m *Model) tea.Cmd {
 			next, cmd := m.checkUpdatesNow()
 			*m = next.(Model)
 			return cmd

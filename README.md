@@ -49,8 +49,11 @@ The scripts verify the download against the release's `checksums.txt`.
 background, and shows `↑ v0.2.14 (U)` in the title when there is one. `U`
 checks GitHub right away (at most every 2 minutes), then lists what
 changed and installs it, even while lazdo runs. The title follows the
-download (`updating v0.2.14 3.1/8.4 MB`), then says to restart; a slow
-connection is fine, only 30 seconds without data stops it. A failed
+download (`updating v0.2.14 3.1/8.4 MB`); a slow connection is fine, only
+30 seconds without data stops it. **Update and restart** (the default)
+then asks "Restart lazdo now?": Yes restarts into the new version in the
+same terminal, back on the same page and pull request. **Update only**,
+or No, leaves `v0.2.14 installed, U restart` in the title. A failed
 update shows `update failed (U)`, and the next `U` shows why above the
 newest release. `lazdo update` does the same from a shell. Copies installed with
 Homebrew or `go install` show their own update command instead.

@@ -119,3 +119,11 @@ func (c *Client) ActivePRs(ctx context.Context, role, identityID string) ([]Pull
 	}
 	return resp.Value, nil
 }
+
+// PullRequestByID fetches one pull request of the organization by its ID,
+// active or not, so a restarted lazdo can reopen the one it showed.
+func (c *Client) PullRequestByID(ctx context.Context, id int) (PullRequest, error) {
+	var pr PullRequest
+	err := c.get(ctx, fmt.Sprintf("/_apis/git/pullrequests/%d", id), v71(), &pr)
+	return pr, err
+}

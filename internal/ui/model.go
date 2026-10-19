@@ -59,8 +59,12 @@ type Model struct {
 	checkingUpdates bool              // U is asking GitHub
 	updating        *updateRun        // an update downloading, nil otherwise
 	installed       string            // the version an update put in place, to use on restart
-	updateFailed    *updateFailure    // the last update's error, until U shows it
-	manyAccounts    bool              // lazdo has accounts besides az's own: the title names which
+	updateRestart   bool              // restart once the update downloading is installed
+	restartState    string            // set when quitting to restart into the update
+	restorePR       int               // the pull request a restarted lazdo reopens
+	restoreTab      detailTab
+	updateFailed    *updateFailure // the last update's error, until U shows it
+	manyAccounts    bool           // lazdo has accounts besides az's own: the title names which
 
 	filter       string // dashboard / filter
 	filterTyping bool
@@ -105,7 +109,7 @@ type (
 	statusMsg string
 )
 
-func (m Model) Init() tea.Cmd { return tea.Batch(m.fetchList(), checkUpdates()) }
+func (m Model) Init() tea.Cmd { return tea.Batch(m.fetchList(), checkUpdates(), m.reopenPR()) }
 
 func (m Model) fetchList() tea.Cmd {
 	client, me := m.client, m.me
@@ -265,6 +269,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.switchOrg(msg.pair)
 	case updateDoneMsg:
 		return m.onUpdateDone(msg)
+	case restartMsg:
+		return m.onRestart()
+	case restoredPRMsg:
+		return m.onRestoredPR(msg)
 	case listMsg:
 		return m.onList(msg)
 	case statsMsg:

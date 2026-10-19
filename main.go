@@ -47,11 +47,27 @@ func main() {
 	}
 	ui.SetVersion(version)
 	ui.UseSymbols(chooseSymbols(*symbols, *ascii, os.Getenv("LAZDO_SYMBOLS")))
-	if err := run(*org, *interval); err != nil {
-		fmt.Fprintln(os.Stderr, "lazdo:", err)
-		os.Exit(1)
+	restore := os.Getenv(restoreEnv)
+	_ = os.Unsetenv(restoreEnv)
+	for {
+		state, err := run(*org, *interval, restore)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "lazdo:", err)
+			os.Exit(1)
+		}
+		if state == "" {
+			return
+		}
+		// The user restarted into the update just installed.
+		err = restart(exe, append(os.Environ(), restoreEnv+"="+state))
+		fmt.Fprintln(os.Stderr, "lazdo: restart into the update:", err, "(carrying on with this version)")
+		time.Sleep(2 * time.Second)
+		restore = state
 	}
 }
+
+// restoreEnv carries the page and pull request to a restarted lazdo.
+const restoreEnv = "LAZDO_RESTORE"
 
 // selfUpdate is `lazdo update`: it lists what newer releases change and
 // installs the latest, unless Homebrew or go install manage this copy.
@@ -110,14 +126,24 @@ func chooseSymbols(symbols, ascii bool, env string) bool {
 	return ok && w == utf8.RuneCountInString(ui.SymbolSample)
 }
 
-func run(org string, interval time.Duration) error {
+// run shows lazdo, from where restore says, and returns the state to
+// restart with when the user restarts into an installed update.
+func run(org string, interval time.Duration, restore string) (string, error) {
 	pair, err := startPair(org, prefs.Load())
 	if err != nil {
-		return err
+		return "", err
 	}
-	model := ui.New(ado.NewClientAs(pair.Org, ado.AccountDir(pair.Account), pair.Tenant), interval)
-	_, err = tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
-	return err
+	model := ui.New(ado.NewClientAs(pair.Org, ado.AccountDir(pair.Account), pair.Tenant), interval).Restore(restore)
+	final, err := tea.NewProgram(model, tea.WithAltScreen(), tea.WithMouseCellMotion()).Run()
+	if err != nil {
+		return "", err
+	}
+	if m, ok := final.(ui.Model); ok {
+		if state, restart := m.RestartState(); restart {
+			return state, nil
+		}
+	}
+	return "", nil
 }
 
 // startPair is the org to open and its account: --org, else the last one
