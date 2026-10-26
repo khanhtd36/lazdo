@@ -63,8 +63,10 @@ type Model struct {
 	restartState    string            // set when quitting to restart into the update
 	restorePR       int               // the pull request a restarted lazdo reopens
 	restoreTab      detailTab
-	updateFailed    *updateFailure // the last update's error, until U shows it
-	manyAccounts    bool           // lazdo has accounts besides az's own: the title names which
+
+	people       *peopleCache   // the organization's users, for @ mentions
+	updateFailed *updateFailure // the last update's error, until U shows it
+	manyAccounts bool           // lazdo has accounts besides az's own: the title names which
 
 	filter       string // dashboard / filter
 	filterTyping bool
@@ -85,6 +87,7 @@ func New(client *ado.Client, interval time.Duration) Model {
 
 		lastCheckout: map[string]string{},
 		manyAccounts: len(ado.ExtraAccounts()) > 0,
+		people:       &peopleCache{},
 	}
 }
 
@@ -109,7 +112,9 @@ type (
 	statusMsg string
 )
 
-func (m Model) Init() tea.Cmd { return tea.Batch(m.fetchList(), checkUpdates(), m.reopenPR()) }
+func (m Model) Init() tea.Cmd {
+	return tea.Batch(m.fetchList(), checkUpdates(), m.reopenPR(), loadPeople(m.client))
+}
 
 func (m Model) fetchList() tea.Cmd {
 	client, me := m.client, m.me
@@ -271,6 +276,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.onUpdateDone(msg)
 	case restartMsg:
 		return m.onRestart()
+	case orgPeopleMsg:
+		return m.onPeople(msg)
+	case orgPeopleTickMsg:
+		if msg.from == m.client {
+			return m, loadPeople(m.client)
+		}
+		return m, nil
+	case teamsMsg, mentionTickMsg, mentionFoundMsg:
+		if m.detail != nil {
+			return m, m.detail.update(msg)
+		}
+		return m, nil
 	case restoredPRMsg:
 		return m.onRestoredPR(msg)
 	case listMsg:
@@ -493,7 +510,8 @@ func (m *Model) refresh() tea.Cmd {
 
 func (m Model) openDetail(pr *ado.PullRequest) (tea.Model, tea.Cmd) {
 	m.detail = newDetail(m.client, m.me, *pr, m.width, m.height)
-	return m, m.detail.init()
+	m.detail.people = m.people
+	return m, tea.Batch(m.detail.init(), m.detail.loadTeams())
 }
 
 func (m Model) onList(msg listMsg) (tea.Model, tea.Cmd) {

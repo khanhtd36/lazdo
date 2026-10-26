@@ -230,6 +230,15 @@ Keys specific to a pull request (on top of the ones above):
 are typed in a text box: `ctrl+s` posts, `ctrl+e` continues the draft in
 `$EDITOR`, `esc` asks before discarding a changed draft.
 
+**Mentions:** `@` at the start of a word lists people to mention, fuzzy
+over name and email (`@smr` or `@sam.riv` find Sam Rivera): the pull
+request's author, reviewers and commenters first, then the project's
+teams and everyone in the organization (fetched in the background every
+half hour). `↑`/`↓` pick, `tab` or `enter` puts `@Sam Rivera` in the text,
+and posting turns it into a real mention, which emails them. A name typed
+without picking stays plain text. Editing a comment shows its mentions as
+names.
+
 A comment on a whole file (`a` in the tree, or in the diff of a file with
 no lines to pick, like a binary one) shows atop that file's diff, as on
 the web; `enter` on the first line steps into it.

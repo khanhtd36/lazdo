@@ -489,7 +489,7 @@ func (d *detailModel) lineComment() tea.Cmd {
 	if end != start {
 		title = fmt.Sprintf("Comment on %s lines %d–%d", ch.Item.Path, start, end)
 	}
-	d.modal = newEditor(title, "", d.width, func(content string) tea.Cmd {
+	d.modal = d.mentionEditor(title, "", func(content string) tea.Cmd {
 		f.anchor = -1
 		return d.act("comment posted", false, func(ctx context.Context, pr ado.PullRequest) error {
 			return newLineThread(ctx, d.client, pr, lc, content)
@@ -509,7 +509,7 @@ func (d *detailModel) fileComment() tea.Cmd {
 		return statusCmd("select a file first")
 	}
 	lc := d.commentAnchor(ch)
-	d.modal = newEditor("Comment on "+ch.Item.Path, "", d.width, func(content string) tea.Cmd {
+	d.modal = d.mentionEditor("Comment on "+ch.Item.Path, "", func(content string) tea.Cmd {
 		return d.act("comment posted", false, func(ctx context.Context, pr ado.PullRequest) error {
 			return newLineThread(ctx, d.client, pr, lc, content)
 		})

@@ -441,7 +441,7 @@ func (d *detailModel) threadStatusMenu(t ado.Thread) modal {
 }
 
 func (d *detailModel) newCommentEditor() modal {
-	return newEditor("New comment", "", d.width, func(content string) tea.Cmd {
+	return d.mentionEditor("New comment", "", func(content string) tea.Cmd {
 		return d.act("comment posted", false, func(ctx context.Context, pr ado.PullRequest) error {
 			return d.client.NewThread(ctx, pr, content)
 		})
@@ -449,7 +449,7 @@ func (d *detailModel) newCommentEditor() modal {
 }
 
 func (d *detailModel) replyEditor(t ado.Thread) modal {
-	return newEditor("Reply", "", d.width, func(content string) tea.Cmd {
+	return d.mentionEditor("Reply", "", func(content string) tea.Cmd {
 		return d.act("reply posted", false, func(ctx context.Context, pr ado.PullRequest) error {
 			return d.client.Reply(ctx, pr, t, content)
 		})
@@ -457,7 +457,7 @@ func (d *detailModel) replyEditor(t ado.Thread) modal {
 }
 
 func (d *detailModel) editCommentEditor(t ado.Thread, cm ado.Comment) modal {
-	return newEditor("Edit comment", cm.Content, d.width, func(content string) tea.Cmd {
+	return d.mentionEditor("Edit comment", cm.Content, func(content string) tea.Cmd {
 		return d.act("comment updated", false, func(ctx context.Context, pr ado.PullRequest) error {
 			return d.client.EditComment(ctx, pr, t, cm, content)
 		})

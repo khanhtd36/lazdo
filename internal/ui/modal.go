@@ -167,7 +167,8 @@ type editorModal struct {
 	title    string
 	ta       textarea.Model
 	onSubmit func(content string) tea.Cmd
-	initial  string // text the editor opened with; esc only asks if it changed
+	initial  string      // text the editor opened with; esc only asks if it changed
+	mention  *mentionBox // @ lists people to mention; nil where nothing can be
 }
 
 func newEditor(title, initial string, width int, onSubmit func(string) tea.Cmd) *editorModal {
@@ -183,6 +184,9 @@ func newEditor(title, initial string, width int, onSubmit func(string) tea.Cmd) 
 }
 
 func (e *editorModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
+	if e.mentionKey(msg) {
+		return e, nil
+	}
 	switch msg.String() {
 	case "esc":
 		if v := strings.TrimSpace(e.ta.Value()); v != "" && v != strings.TrimSpace(e.initial) {
@@ -200,7 +204,7 @@ func (e *editorModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	e.ta, cmd = e.ta.Update(msg)
-	return e, cmd
+	return e, tea.Batch(cmd, e.afterTyping())
 }
 
 func (e *editorModal) openEditor() tea.Cmd { return editExternally(e.ta.Value()) }
@@ -256,6 +260,13 @@ func editorCommand() (string, []string) {
 }
 
 func (e *editorModal) view(int) string {
-	return styleModal.Render(styleSection.Render(e.title) + "\n\n" + e.ta.View() + "\n\n" +
-		styleDim.Render("ctrl+s post · ctrl+e open in $EDITOR · esc cancel"))
+	hint := "ctrl+s post · ctrl+e open in $EDITOR · esc cancel"
+	if e.mention != nil {
+		hint = "@ mention · " + hint
+		if e.mention.open {
+			hint = "↑/↓ pick · tab or enter insert · esc close the list"
+		}
+	}
+	return styleModal.Render(styleSection.Render(e.title) + "\n\n" + e.ta.View() + e.mentionView(e.ta.Width()) + "\n\n" +
+		styleDim.Render(hint))
 }

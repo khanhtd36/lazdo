@@ -314,7 +314,7 @@ func (m Model) switchOrg(pair prefs.Pair) (tea.Model, tea.Cmd) {
 	n.updateRestart = m.updateRestart
 	n.lastCheckout = m.lastCheckout
 	n.status = "switched to " + pair.Org
-	return n, n.fetchList()
+	return n, tea.Batch(n.fetchList(), loadPeople(n.client))
 }
 
 // onAccountMsg hands the picker its answers; once it is closed they don't

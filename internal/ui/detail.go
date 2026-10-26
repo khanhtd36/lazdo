@@ -87,6 +87,9 @@ type detailModel struct {
 	// pending is a command picked from outside the pull request, run once
 	// it has loaded.
 	pending string
+	// people and teams are who @ in a comment can mention.
+	people *peopleCache
+	teams  []ado.Team
 
 	// standalone is a repo diff (a commit or a tag range) shown with the
 	// Files view alone: no pull request header, tabs, votes or comments.
@@ -233,6 +236,16 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		}
 	case targetChangedMsg:
 		return d.onTargetChanged(msg)
+	case teamsMsg:
+		d.teams = msg.teams
+	case mentionTickMsg:
+		if e, ok := d.modal.(*editorModal); ok {
+			return e.onMentionTick(msg)
+		}
+	case mentionFoundMsg:
+		if e, ok := d.modal.(*editorModal); ok {
+			e.onMentionFound(msg)
+		}
 	case peopleTickMsg:
 		if p, ok := d.modal.(*peoplePicker); ok {
 			return p.onTick(msg)
