@@ -210,3 +210,26 @@ func TestCommitsCursorSkipsPushHeaders(t *testing.T) {
 		press(d, "j")
 	}
 }
+
+func TestEscFromCommitDiffReturnsToCommits(t *testing.T) {
+	d := fakeDetail(t, 160)
+	d.tab = tabCommits
+	for range 5 {
+		press(d, "j")
+		if it, ok := d.lists[tabCommits].selected(); ok && !it.header {
+			break
+		}
+	}
+	press(d, "enter")
+	if d.tab != tabFiles {
+		t.Fatalf("enter on a commit should open its diff, tab=%v", d.tab)
+	}
+	if d.closeRequested(keyMsg("esc")) || d.tab != tabCommits {
+		t.Fatalf("esc should go back to the commit list, tab=%v", d.tab)
+	}
+	d.tab = tabFiles
+	d.backTab = nil
+	if !d.closeRequested(keyMsg("esc")) {
+		t.Error("esc on a Files tab reached by hand leaves the pull request")
+	}
+}

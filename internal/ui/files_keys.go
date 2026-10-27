@@ -441,6 +441,10 @@ func (d *detailModel) openCommitDiff(commit string) tea.Cmd {
 		return nil
 	}
 	d.files.pane = paneTree
+	if d.tab != tabFiles {
+		from := d.tab
+		d.backTab = &from
+	}
 	d.tab = tabFiles
 	return d.showCommits(i, i)
 }

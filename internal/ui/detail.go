@@ -95,6 +95,10 @@ type detailModel struct {
 	// Files view alone: no pull request header, tabs, votes or comments.
 	standalone bool
 	repo       ado.Repo
+
+	// backTab is the tab a commit's diff was opened from; esc on the Files
+	// tab returns there before it leaves the pull request.
+	backTab *detailTab
 }
 
 // newRepoDiff opens the Files view on a commit (from empty: against its
@@ -388,6 +392,7 @@ func (d *detailModel) standaloneKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (d *detailModel) onTabChange() tea.Cmd {
+	d.backTab = nil
 	if d.tab == tabFiles {
 		return d.ensureFiles()
 	}
@@ -416,6 +421,9 @@ func (d *detailModel) closeRequested(msg tea.KeyMsg) bool {
 		case f.tree.filter != "":
 			f.tree.filter = ""
 			f.tree.clamp(1)
+			return false
+		case d.backTab != nil:
+			d.tab, d.backTab = *d.backTab, nil
 			return false
 		}
 	case tabOverview:
