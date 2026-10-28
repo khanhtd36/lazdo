@@ -326,3 +326,15 @@ func TestDiffCacheDropsLeastRecentPastBudget(t *testing.T) {
 		t.Fatal("the diff in use stays, even over budget")
 	}
 }
+
+// A PR with one commit: that commit is All changes, already loaded, so the
+// reset tree must be refilled from what is cached.
+func TestOnlyCommitDiffShowsFiles(t *testing.T) {
+	d := fakeTwoFiles(t)
+	d.data.Commits = []ado.Commit{{ID: "c1", Comment: "one"}}
+	d.parents = map[string]int{"c1": 1}
+	d.openCommitDiff("c1")
+	if ch := d.selectedChange(); ch == nil || ch.Item.Path != "/a.go" {
+		t.Fatalf("the only commit's diff should list its files, got %+v", ch)
+	}
+}

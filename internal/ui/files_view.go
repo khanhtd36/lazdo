@@ -206,7 +206,17 @@ func (d *detailModel) allChanges() comparison {
 // ensureFiles loads the changed files of the current comparison if needed.
 func (d *detailModel) ensureFiles() tea.Cmd {
 	f := &d.files
-	if d.data == nil || f.loading || (f.loadedKey == f.cmp.key() && f.cmp.target != 0) {
+	if d.data == nil || f.loading {
+		return nil
+	}
+	if f.loadedKey == f.cmp.key() && f.cmp.target != 0 {
+		if len(f.tree.items) == 0 && len(f.changes) > 0 {
+			// the tree was reset to the comparison already loaded, e.g. the
+			// only commit of a pull request is the same as All changes
+			f.tree.setItems(lineItems(d.fileLines(f.changes)))
+			d.firstFile()
+			return d.ensureDiff()
+		}
 		return nil
 	}
 	if f.cmp.target == 0 && f.cmp.commit == "" {
