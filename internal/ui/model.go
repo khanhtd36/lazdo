@@ -38,6 +38,7 @@ type Model struct {
 	builds    map[int]buildResult
 	collapsed map[ado.SectionKind]bool
 	loading   bool
+	tickGen   int // which poll chain is current; older tickMsgs are dropped
 	err       error
 	status    string
 	fetchedAt time.Time
@@ -108,7 +109,10 @@ type (
 		id     int
 		result buildResult
 	}
-	tickMsg   struct{ from *ado.Client }
+	tickMsg struct {
+		from *ado.Client
+		gen  int
+	}
 	statusMsg string
 )
 
@@ -163,7 +167,8 @@ func (m Model) fetchBuild(pr ado.PullRequest) tea.Cmd {
 
 func (m Model) tick() tea.Cmd {
 	client := m.client
-	return tea.Tick(m.interval, func(time.Time) tea.Msg { return tickMsg{from: client} })
+	gen := m.tickGen
+	return tea.Tick(m.interval, func(time.Time) tea.Msg { return tickMsg{from: client, gen: gen} })
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -300,6 +305,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case buildMsg:
 		m.builds[msg.id] = msg.result
 	case tickMsg:
+		if msg.gen != m.tickGen {
+			return m, nil // an older chain: a refresh since started the newest
+		}
 		var detailCmd tea.Cmd
 		if m.detail != nil {
 			detailCmd = m.detail.reload()
@@ -516,6 +524,7 @@ func (m Model) openDetail(pr *ado.PullRequest) (tea.Model, tea.Cmd) {
 
 func (m Model) onList(msg listMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
+	m.tickGen++ // every list load restarts the one poll chain, so refreshes never stack extra ones
 	cmds := []tea.Cmd{m.tick()}
 	if msg.err != nil {
 		m.err = msg.err
