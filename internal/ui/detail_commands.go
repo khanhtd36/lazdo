@@ -279,7 +279,7 @@ func (d *detailModel) filesCommands() []commandGroup {
 				return nil
 			})},
 			{id: "Open in browser", label: "Open in browser", key: "o", run: func(*Model) tea.Cmd { return openURL(d.fileURL(folder), "opened "+folder) }},
-		}, copyCommands(copyMenu("folder", copyItem{"Path", folder}, copyItem{"Web URL", d.fileURL(folder)}), "y")...)})
+		}, copyCommands(d.withPRID(copyMenu("folder", copyItem{"Path", folder}, copyItem{"Web URL", d.fileURL(folder)})), "y")...)})
 	}
 	view := []command{
 		{id: "Side by side", label: pick2(d.isSideBySide(), "Show the diff inline", "Show the diff side by side"), key: "S", run: replayKey("S")},
@@ -347,7 +347,7 @@ func (d *detailModel) listCommands() []commandGroup {
 		if line.url != "" {
 			cmds = append(cmds, command{id: "Open in browser", label: "Open in browser", key: "enter", run: func(*Model) tea.Cmd { return openURL(line.url, "opened in browser") }})
 		}
-		return []commandGroup{{title: "Conflict " + line.path, commands: append(cmds, copyCommands(copyMenu("conflict", copyItem{"Path", line.path}), "y")...)}}
+		return []commandGroup{{title: "Conflict " + line.path, commands: append(cmds, copyCommands(d.withPRID(copyMenu("conflict", copyItem{"Path", line.path})), "y")...)}}
 	}
 	return nil
 }
@@ -373,7 +373,7 @@ func (d *detailModel) runCommands() commandGroup {
 		command{id: "Follow", label: "Follow the log", key: "G", run: replayKey("G")},
 		command{id: "Refresh", label: "Refresh the run", key: "r", run: replayKey("r")},
 	)
-	cmds = append(cmds, copyCommands(copyRun(d.client, d.prProject().Name, r), "y")...)
+	cmds = append(cmds, copyCommands(d.withPRID(copyRun(d.client, d.prProject().Name, r)), "y")...)
 	cmds = append(cmds, command{id: "Back", label: "Back to the pull request", run: onDetail(d.closeRun)})
 	return commandGroup{title: fmt.Sprintf("Run %s %s", d.runName, r.BuildNumber), commands: cmds}
 }

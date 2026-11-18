@@ -252,7 +252,7 @@ func (d *detailModel) runKey(msg tea.KeyMsg) tea.Cmd {
 	case "o":
 		return openURL(d.client.RunURL(d.prProject().Name, r.ID), "opened run "+d.runLabel())
 	case "y":
-		return copyRun(d.client, d.prProject().Name, r)
+		return d.withPRID(copyRun(d.client, d.prProject().Name, r))
 	case "r":
 		return d.run.refresh()
 	case "Q":

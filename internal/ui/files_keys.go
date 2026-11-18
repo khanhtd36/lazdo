@@ -32,7 +32,7 @@ func (d *detailModel) filesKey(msg tea.KeyMsg) tea.Cmd {
 			return d.copyFile(ch.Item.Path)
 		}
 		if folder, ok := d.selectedFolder(); ok {
-			return copyMenu("folder", copyItem{"Path", folder}, copyItem{"Web URL", d.fileURL(folder)})
+			return d.withPRID(copyMenu("folder", copyItem{"Path", folder}, copyItem{"Web URL", d.fileURL(folder)}))
 		}
 		return nil
 	case "z":
@@ -129,19 +129,30 @@ func (d *detailModel) copyComment(t ado.Thread, sel int) tea.Cmd {
 	for _, x := range live {
 		all = append(all, x.Author.DisplayName+":\n"+x.Content)
 	}
-	return copyMenu("comment",
+	return d.withPRID(copyMenu("comment",
 		copyItem{"Comment text", c.Content},
 		copyItem{"Whole thread", strings.Join(all, "\n\n")},
 		copyItem{"Web URL", d.pr.WebURL(d.client.Org) + fmt.Sprintf("?discussionId=%d", t.ID)},
-	)
+	))
 }
 
 func (d *detailModel) copyFile(path string) tea.Cmd {
-	return copyMenu("file",
+	return d.withPRID(copyMenu("file",
 		copyItem{"Path", path},
 		copyItem{"Web URL", d.fileURL(path)},
 		copyItem{"File name", pathBase(path)},
-	)
+	))
+}
+
+// withPRID adds the pull request's ID to a copy menu, so y offers it on every
+// tab of the detail page.
+func (d *detailModel) withPRID(c tea.Cmd) tea.Cmd {
+	msg, ok := c().(copyMenuMsg)
+	if !ok {
+		return c
+	}
+	msg.items = append(msg.items, copyItem{"PR ID", fmt.Sprintf("!%d", d.pr.ID)})
+	return func() tea.Msg { return msg }
 }
 
 func pathBase(p string) string {

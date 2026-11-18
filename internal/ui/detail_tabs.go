@@ -72,7 +72,7 @@ func (d *detailModel) listKey(msg tea.KeyMsg) tea.Cmd {
 		if line.commit != "" {
 			return d.copyCommit(line.commit)
 		}
-		return copyMenu("conflict", copyItem{"Path", line.path})
+		return d.withPRID(copyMenu("conflict", copyItem{"Path", line.path}))
 	}
 	return nil
 }
@@ -84,12 +84,12 @@ func (d *detailModel) copyCommit(id string) tea.Cmd {
 			msg = firstLine(c.Comment)
 		}
 	}
-	return copyMenu("commit "+shortSHA(id),
+	return d.withPRID(copyMenu("commit "+shortSHA(id),
 		copyItem{"Commit ID", id},
 		copyItem{"Short ID", shortSHA(id)},
 		copyItem{"Message", msg},
 		copyItem{"Web URL", d.commitURL(id)},
-	)
+	))
 }
 
 func (d *detailModel) renderList() string {
