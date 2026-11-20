@@ -322,6 +322,32 @@ func TestPREditorSendsOnlyChanges(t *testing.T) {
 	}
 }
 
+func TestPREditorEnterSavesFromTitleOnly(t *testing.T) {
+	d := fakeDetail(t, 120)
+	press(d, "E")
+	p := d.modal.(*prEditor)
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+
+	p.title.SetValue("fix: something better")
+	if m, _ := p.update(enter); m != nil {
+		t.Fatalf("enter in the title should save and close, got %T", m)
+	}
+
+	p.title.SetValue("  ")
+	if m, _ := p.update(enter); m != p {
+		t.Fatal("enter in the title with a refused value should keep the editor open")
+	}
+
+	p.title.SetValue("fix: something better")
+	p.onDesc = true
+	p.title.Blur()
+	p.desc.Focus()
+	before := p.desc.Value()
+	if m, _ := p.update(enter); m != p || p.desc.Value() != before+"\n" {
+		t.Fatalf("enter in the description should add a newline, got %q", p.desc.Value())
+	}
+}
+
 func TestEditFormRoundTrip(t *testing.T) {
 	title, desc := splitEditForm(joinEditForm(" fix: x ", "## Problem\n\nIt broke.\n"))
 	if title != "fix: x" || desc != "## Problem\n\nIt broke." {

@@ -65,13 +65,17 @@ func (p *prEditor) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 		return p, nil
 	case "ctrl+s":
 		return p.save()
+	case "enter":
+		if !p.onDesc { // the title is one line, so enter saves; the description keeps its newline
+			return p.save()
+		}
 	case "ctrl+e":
 		return p, editExternally(joinEditForm(p.title.Value(), p.desc.Value()))
 	}
 	var cmd tea.Cmd
 	if p.onDesc {
 		p.desc, cmd = p.desc.Update(msg)
-	} else if msg.String() != "enter" { // the title is one line
+	} else {
 		p.title, cmd = p.title.Update(msg)
 	}
 	return p, cmd
@@ -144,6 +148,10 @@ func (p *prEditor) view(int) string {
 		}
 		return "  " + styleDim.Render(name)
 	}
+	save := "ctrl+s save"
+	if !p.onDesc {
+		save = "enter/ctrl+s save"
+	}
 	return styleModal.Render(strings.Join([]string{
 		styleSection.Render(fmt.Sprintf("Edit !%d", p.d.pr.ID)),
 		"",
@@ -153,7 +161,7 @@ func (p *prEditor) view(int) string {
 		label("Description (markdown)", p.onDesc) + "  " + counter(p.desc.Value(), ado.MaxDescriptionLength),
 		p.desc.View(),
 		"",
-		styleDim.Render("ctrl+s save · tab next field · ctrl+e open in $EDITOR · esc cancel"),
+		styleDim.Render(save + " · tab next field · ctrl+e open in $EDITOR · esc cancel"),
 	}, "\n"))
 }
 
