@@ -3,8 +3,6 @@ package ui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -239,9 +237,4 @@ func (h *helpModal) renderRow(r helpRow, selected bool) string {
 		prefix = styleSelected.Render("› ")
 	}
 	return truncate(prefix+line, h.width-4)
-}
-
-// place centers the help popup over a screen of the given size.
-func (h *helpModal) place(width, height int) string {
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, h.view())
 }

@@ -84,7 +84,7 @@ type detailModel struct {
 	runStart  string      // its state when first loaded, to spot a change
 	wait      *runWait    // a re-queue waiting for its new run
 	// buildLines maps Overview lines to the build policy checks on them;
-	// runLines maps Overview lines to non-policy PR/branch pipeline runs.
+	// runLines maps narrow-mode Overview sidebar lines to CI/CD checks.
 	buildLines map[int]ado.Policy
 	runLines   map[int]ado.CICheck
 	// pending is a command picked from outside the pull request, run once

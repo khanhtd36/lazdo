@@ -554,8 +554,7 @@ func (m *projectModel) projectPRRow(pr ado.PullRequest, width int) string {
 
 	type projPRCol int
 	const (
-		pColStatus projPRCol = iota
-		pColAuthor
+		pColAuthor projPRCol = iota
 		pColID
 		pColRepo
 		pColVotes
@@ -563,12 +562,11 @@ func (m *projectModel) projectPRRow(pr ado.PullRequest, width int) string {
 		pColUpdated
 		pColCount
 	)
-	statusW, buildW := colStatus, colBuild
+	buildW := colBuild
 	if narrow {
-		statusW, buildW = colStatusNarrow, colBuildNarrow
+		buildW = colBuildNarrow
 	}
 	colW := [pColCount]int{
-		pColStatus:  statusW,
 		pColAuthor:  colAuthorCompact,
 		pColID:      colID,
 		pColRepo:    28,
@@ -576,18 +574,19 @@ func (m *projectModel) projectPRRow(pr ado.PullRequest, width int) string {
 		pColBuild:   buildW,
 		pColUpdated: colUpdated,
 	}
-	priority := []projPRCol{pColID, pColStatus, pColBuild, pColRepo, pColAuthor, pColVotes, pColUpdated}
+	priority := []projPRCol{pColID, pColBuild, pColRepo, pColAuthor, pColVotes, pColUpdated}
 	var shown [pColCount]bool
-	room := width - 2 - max(18, width/3)
+	icon := prStatusIcon(pr.IsDraft)
+	iconW := ansi.StringWidth(icon) + 1
+	room := width - 2 - iconW - max(18, width/3)
 	for _, c := range priority {
-		if need := colW[c] + 2; need <= room || c == pColID || c == pColStatus || c == pColBuild {
+		if need := colW[c] + 2; need <= room || c == pColID || c == pColBuild {
 			shown[c] = true
 			room -= need
 		}
 	}
 
 	cells := [pColCount]string{
-		pColStatus:  fitStyled(prStatusCell(pr.IsDraft, narrow), colW[pColStatus]),
 		pColAuthor:  styleDim.Render(fit(nameInitials(pr.CreatedBy.DisplayName), colW[pColAuthor])),
 		pColID:      fit(fmt.Sprintf("!%d", pr.ID), colW[pColID]),
 		pColRepo:    styleDim.Render(fit(pr.Repository.Name+" → "+pr.TargetBranch(), colW[pColRepo])),
@@ -602,12 +601,12 @@ func (m *projectModel) projectPRRow(pr ado.PullRequest, width int) string {
 		}
 	}
 	right := strings.Join(rightParts, "  ")
-	titleWidth := max(10, width-ansi.StringWidth(right)-2)
+	titleWidth := max(10, width-iconW-ansi.StringWidth(right)-2)
 	title := truncate(pr.Title, titleWidth)
 	if pr.IsDraft {
-		title = styleDraftTitle.Render(title)
+		title = styleDraft.Render(title)
 	}
-	return truncate(fitStyled(title, titleWidth)+"  "+right, width)
+	return truncate(icon+" "+fitStyled(title, titleWidth)+"  "+right, width)
 }
 
 func (m *projectModel) repoItems() []pickItem {

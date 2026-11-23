@@ -370,13 +370,18 @@ func (l *pickList) view(width, height int) []string {
 	for i := l.offset; i < min(len(vis), l.offset+height); i++ {
 		it := l.items[vis[i]]
 		prefix := "  "
-		if i == l.cursor && !it.header {
+		selected := i == l.cursor && !it.header
+		if selected {
 			prefix = styleCursor.Render("▌ ")
 			if l.unfocused {
 				prefix = styleDim.Render("▏ ")
 			}
 		}
-		out = append(out, truncate(prefix+it.render(width-2), width))
+		line := truncate(prefix+it.render(width-2), width)
+		if selected && !l.unfocused {
+			line = tint(padRight(line, width), cursorRow)
+		}
+		out = append(out, line)
 	}
 	if len(vis) == 0 {
 		msg := "nothing here"
@@ -497,10 +502,18 @@ func (l *pickList) stackedView(width, height int) []string {
 			out = append(out, edge.Render("┌─")+name+edge.Render(strings.Repeat("─", fill)+"┐"))
 		default:
 			prefix := "  "
-			if sl.vis == l.cursor {
+			selected := sl.vis == l.cursor
+			if selected {
 				prefix = styleCursor.Render("▌ ")
+				if l.unfocused {
+					prefix = styleDim.Render("▏ ")
+				}
 			}
-			out = append(out, edge.Render("│")+padRight(truncate(prefix+it.render(inner-2), inner), inner)+edge.Render("│"))
+			line := padRight(truncate(prefix+it.render(inner-2), inner), inner)
+			if selected && !l.unfocused {
+				line = tint(line, cursorRow)
+			}
+			out = append(out, edge.Render("│")+line+edge.Render("│"))
 		}
 	}
 	for len(out) < height {

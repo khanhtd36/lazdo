@@ -29,7 +29,7 @@ func main() {
 	interval := flag.Duration("interval", 2*time.Minute, "auto-refresh interval")
 	showVersion := flag.Bool("version", false, "print version and exit")
 	symbols := flag.Bool("symbols", false, "draw markers as symbols (↑ “ ★ ● ◌) without checking the terminal")
-	ascii := flag.Bool("ascii", false, "draw markers as words ([+3 pushes] [new] [draft])")
+	ascii := flag.Bool("ascii", false, "draw markers and status as ASCII ([+3 pushes] [new] A/D)")
 	flag.Parse()
 
 	if *showVersion {
@@ -47,6 +47,7 @@ func main() {
 	}
 	ui.SetVersion(version)
 	ui.UseSymbols(chooseSymbols(*symbols, *ascii, os.Getenv("LAZDO_SYMBOLS")))
+	ui.UseASCII(*ascii || os.Getenv("LAZDO_SYMBOLS") == "0")
 	restore := os.Getenv(restoreEnv)
 	_ = os.Unsetenv(restoreEnv)
 	for {

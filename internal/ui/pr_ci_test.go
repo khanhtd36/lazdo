@@ -71,22 +71,27 @@ func TestDashboardStatusAndCIRendering(t *testing.T) {
 
 	m := dashCIModel(t, 160, 20, prs, builds)
 	view := ansi.Strip(m.View())
-	for _, want := range []string{"Active", "Draft", "× err", "● run", "○ queue", "! warn", "✓ pass", "✓ 2/2", "× 1 err"} {
+	for _, want := range []string{"● pr failed", "○ pr queued", "× err", "● run", "○ queue", "! warn", "✓ pass", "✓ 2/2", "× 1 err"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("wide dashboard should contain %q:\n%s", want, view)
+		}
+	}
+	for _, unwanted := range []string{"Active", "Draft", "ACT", "DRF"} {
+		if strings.Contains(view, unwanted) {
+			t.Errorf("wide dashboard should not contain removed status column %q:\n%s", unwanted, view)
 		}
 	}
 
 	narrow := dashCIModel(t, 95, 20, prs[:3], builds)
 	narrowView := ansi.Strip(narrow.View())
-	for _, want := range []string{"ACT", "DRF"} {
+	for _, want := range []string{"● pr failed", "○ pr queued"} {
 		if !strings.Contains(narrowView, want) {
 			t.Errorf("narrow dashboard should contain %q:\n%s", want, narrowView)
 		}
 	}
-	for _, unwanted := range []string{"× err", "● run", "○ queue"} {
+	for _, unwanted := range []string{"Active", "Draft", "ACT", "DRF", "× err", "● run", "○ queue"} {
 		if strings.Contains(narrowView, unwanted) {
-			t.Errorf("narrow dashboard should shrink CI column to single glyph, found %q:\n%s", unwanted, narrowView)
+			t.Errorf("narrow dashboard should omit %q:\n%s", unwanted, narrowView)
 		}
 	}
 }
@@ -532,24 +537,69 @@ func TestDetailAllTabsCIKeysAndStandaloneGuard(t *testing.T) {
 	}
 }
 
-func TestDetailOverviewRendersExtraRunsAndClicksOpenRun(t *testing.T) {
-	prRun := fakeRun(601, 20, "pr-lint", "completed", "failed")
-	brRun := fakeRun(602, 30, "branch-deploy", "inProgress", "")
+func TestDetailOverviewSidebarCICDAndClick(t *testing.T) {
+	// 1. Hidden when PR has no CI/CD checks.
+	dEmpty := fakeDetail(t, 160)
+	emptyPlain := ansi.Strip(dEmpty.view())
+	if strings.Contains(emptyPlain, "CI/CD") {
+		t.Fatalf("Overview sidebar should hide CI/CD box when there are no checks:\n%s", emptyPlain)
+	}
+	for _, want := range []string{"Reviewers", "Tags", "Work items"} {
+		if !strings.Contains(emptyPlain, want) {
+			t.Fatalf("Overview sidebar missing %q when CI/CD is hidden:\n%s", want, emptyPlain)
+		}
+	}
 
-	for _, width := range []int{80, 120, 180} {
-		d := fakeRuns(t)
-		d.resize(width, 40)
+	setupDetail := func(width int) *detailModel {
+		d := fakeDetail(t, width)
+		d.data.Policies = []ado.Policy{
+			buildPolicy(t, "e-web", "approved", "web", 10, 101, true),
+		}
 		d.data.PRRuns = []ado.Run{
 			fakeRun(101, 10, "web", "completed", "succeeded"), // covered by policy
-			prRun,
+			fakeRun(601, 20, "pr-lint", "completed", "failed"),
 		}
-		d.data.BranchRuns = []ado.Run{brRun}
+		d.data.BranchRuns = []ado.Run{
+			fakeRun(602, 30, "branch-deploy", "inProgress", ""),
+		}
+		d.data.Statuses = []ado.Status{
+			{ID: 1, State: "succeeded", Description: "github-ci", TargetURL: "https://example.com/ci/1"},
+		}
 		d.rebuildOverview()
+		return d
+	}
 
+	findSideRow := func(view string, overviewW, totalW int, text string) int {
+		t.Helper()
+		for y, ln := range strings.Split(view, "\n") {
+			if strings.Contains(ansi.Strip(ansi.Cut(ln, overviewW, totalW)), text) {
+				return y
+			}
+		}
+		t.Fatalf("%q not found in right sidebar (x >= %d):\n%s", text, overviewW, ansi.Strip(view))
+		return -1
+	}
+
+	// 2. Wide side-by-side widths (120, 180): Reviewers -> CI/CD (4) -> Tags -> Work items,
+	// no duplicate "Pipeline runs" in the left Overview checks, and every line fits width.
+	for _, width := range []int{120, 180} {
+		d := setupDetail(width)
 		view := d.view()
 		plain := ansi.Strip(view)
-		if !strings.Contains(plain, "Pipeline runs") || !strings.Contains(plain, "pr-lint") || !strings.Contains(plain, "branch-deploy") {
-			t.Fatalf("width %d: Overview should render non-policy PR & branch runs:\n%s", width, plain)
+		for _, want := range []string{"CI/CD (4)", "web", "pr-lint", "branch-deploy", "github-ci", "PR trigger", "source branch"} {
+			if !strings.Contains(plain, want) {
+				t.Fatalf("width %d: Overview sidebar missing %q:\n%s", width, want, plain)
+			}
+		}
+		if strings.Contains(plain, "Pipeline runs") {
+			t.Fatalf("width %d: left Overview should not duplicate Pipeline runs section:\n%s", width, plain)
+		}
+		revY := findSideRow(view, d.overviewWidth(), width, "Reviewers")
+		ciY := findSideRow(view, d.overviewWidth(), width, "CI/CD (4)")
+		tagY := findSideRow(view, d.overviewWidth(), width, "Tags")
+		wiY := findSideRow(view, d.overviewWidth(), width, "Work items")
+		if !(revY < ciY && ciY < tagY && tagY < wiY) {
+			t.Fatalf("width %d: wrong sidebar order: Reviewers=%d CI/CD=%d Tags=%d WorkItems=%d", width, revY, ciY, tagY, wiY)
 		}
 		for _, line := range strings.Split(view, "\n") {
 			if w := ansi.StringWidth(line); w > width {
@@ -558,25 +608,72 @@ func TestDetailOverviewRendersExtraRunsAndClicksOpenRun(t *testing.T) {
 		}
 	}
 
-	// Clicking a non-policy run line in Overview opens its runView.
-	d := fakeRuns(t)
-	d.resize(160, 40)
-	d.data.PRRuns = []ado.Run{prRun}
-	d.data.BranchRuns = []ado.Run{brRun}
-	d.rebuildOverview()
+	// 3. Mouse interactions on wide right sidebar.
+	d := setupDetail(160)
+	view := d.view()
+	sideX := d.overviewWidth() + 3
 
+	// Clicking line 1 and line 2 of pr-lint opens run 601.
+	prLintY := findSideRow(view, d.overviewWidth(), 160, "pr-lint")
+	for offset, label := range []string{"line 1", "line 2"} {
+		d.run, d.modal, d.status = nil, nil, ""
+		d.onMouse(click(sideX, prLintY+offset))
+		if d.run == nil || d.run.run.ID != 601 {
+			t.Fatalf("clicking %s of sidebar pr-lint should open run 601, got %+v", label, d.run)
+		}
+	}
+	d.run, d.modal, d.status = nil, nil, ""
+
+	// Clicking CI/CD (4) header triggers loadRuns (b).
+	ciHeaderY := findSideRow(view, d.overviewWidth(), 160, "CI/CD (4)")
+	d.onMouse(click(sideX, ciHeaderY))
+	if d.status != "loading runs…" {
+		t.Fatalf("clicking CI/CD header should trigger loadRuns, status=%q", d.status)
+	}
+	d.run, d.modal, d.status = nil, nil, ""
+
+	// Clicking Reviewers still opens reviewersModal.
+	revY := findSideRow(view, d.overviewWidth(), 160, "Reviewers")
+	d.onMouse(click(sideX, revY+1))
+	if _, ok := d.modal.(*reviewersModal); !ok {
+		t.Fatalf("clicking Reviewers pane should open reviewersModal, got %T", d.modal)
+	}
+	d.modal, d.status = nil, ""
+
+	// Clicking external check returns openURL cmd instead of "hasn't run yet".
+	ghY := findSideRow(view, d.overviewWidth(), 160, "github-ci")
+	extCmd := d.onMouse(click(sideX, ghY))
+	if d.modal != nil || extCmd == nil || strings.Contains(d.status, "hasn't run") {
+		t.Fatalf("clicking external CI check with URL should return openURL cmd (cmd=%v modal=%T status=%q)", extCmd != nil, d.modal, d.status)
+	}
+
+	// 4. Narrow stacked mode (width 80): renders CI/CD (4) and d.runLines click opens run 601.
+	dNarrow := setupDetail(80)
+	narrowView := dNarrow.view()
+	narrowPlain := ansi.Strip(narrowView)
+	for _, want := range []string{"CI/CD (4)", "pr-lint", "branch-deploy", "github-ci"} {
+		if !strings.Contains(narrowPlain, want) {
+			t.Fatalf("narrow mode missing %q:\n%s", want, narrowPlain)
+		}
+	}
+	for _, line := range strings.Split(narrowView, "\n") {
+		if w := ansi.StringWidth(line); w > 80 {
+			t.Errorf("narrow mode line exceeds width 80 (%d): %q", w, ansi.Strip(line))
+		}
+	}
 	lineIdx := -1
-	for l, c := range d.runLines {
+	for l, c := range dNarrow.runLines {
 		if c.Name == "pr-lint" {
 			lineIdx = l
+			break
 		}
 	}
 	if lineIdx < 0 {
-		t.Fatal("pr-lint missing from d.runLines")
+		t.Fatal("pr-lint missing from narrow dNarrow.runLines")
 	}
-	d.onMouse(click(5, d.bodyTop()+1+lineIdx))
-	if d.run == nil || d.run.run.ID != 601 {
-		t.Fatalf("clicking Overview pipeline run should open run 601, got %+v", d.run)
+	dNarrow.onMouse(click(5, dNarrow.bodyTop()+1+lineIdx))
+	if dNarrow.run == nil || dNarrow.run.run.ID != 601 {
+		t.Fatalf("clicking narrow CI/CD sidebar line should open run 601, got %+v", dNarrow.run)
 	}
 }
 
@@ -679,13 +776,17 @@ func TestProjectPRsTabLazyLoadsAndRendersStatusCIColumnsAndBar(t *testing.T) {
 		if !strings.Contains(plain, "CI !11: ● api-build") {
 			t.Errorf("width %d: missing bottom CI summary bar:\n%s", w, plain)
 		}
-		if w < narrowCIWidth {
-			if !strings.Contains(plain, "ACT") || !strings.Contains(plain, "DRF") {
-				t.Errorf("width %d: expected narrow ACT/DRF status:\n%s", w, plain)
+		if !strings.Contains(plain, "● feat: add api") || !strings.Contains(plain, "○ wip: draft pr") {
+			t.Errorf("width %d: expected leading ● / ○ PR status icons:\n%s", w, plain)
+		}
+		for _, old := range []string{"Active", "Draft", "ACT", "DRF"} {
+			if strings.Contains(plain, old) {
+				t.Errorf("width %d: unexpected status column text %q:\n%s", w, old, plain)
 			}
-		} else {
-			if !strings.Contains(plain, "Active") || !strings.Contains(plain, "Draft") || !strings.Contains(plain, "● run") || !strings.Contains(plain, "× err") {
-				t.Errorf("width %d: expected Active/Draft and CI cells:\n%s", w, plain)
+		}
+		if w >= narrowCIWidth {
+			if !strings.Contains(plain, "● run") || !strings.Contains(plain, "× err") {
+				t.Errorf("width %d: expected CI cells:\n%s", w, plain)
 			}
 		}
 	}

@@ -289,11 +289,7 @@ func (d *detailModel) overviewMouse(msg tea.MouseMsg, by int) tea.Cmd {
 		return nil
 	}
 	if msg.X >= d.overviewWidth() {
-		// The Reviewers pane, atop the side panes, opens the reviewers.
-		if d.sideBySide() && by < len(d.sidebarPanes(sidebarWidth)[0].lines)+2 {
-			return d.openReviewers()
-		}
-		return nil
+		return d.sidebarClick(by)
 	}
 	if by < 1 {
 		return nil // the frame

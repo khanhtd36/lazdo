@@ -167,6 +167,12 @@ func (d *detailModel) onRuns(msg prRunsMsg) tea.Cmd {
 
 func (d *detailModel) openCICheck(c ado.CICheck) tea.Cmd {
 	if !c.HasRun() {
+		if c.Kind == ado.CICheckExternal {
+			if c.ExternalURL != "" {
+				return openURL(c.ExternalURL, "opened "+c.Name)
+			}
+			return statusCmd(c.Name + " has no link")
+		}
 		return statusCmd(c.Name + " hasn't run yet")
 	}
 	d.run = newRunView(d.client, d.prProject(), *c.Run)

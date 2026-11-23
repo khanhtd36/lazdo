@@ -22,10 +22,16 @@ const (
 	symDraft     = "◌"
 )
 
-var useSymbols bool
+var (
+	useSymbols bool
+	useASCII   bool
+)
 
 // UseSymbols switches the markers between symbols and words.
 func UseSymbols(on bool) { useSymbols = on }
+
+// UseASCII switches the PR status marker between icons (●/○) and ASCII letters (A/D).
+func UseASCII(on bool) { useASCII = on }
 
 // sinceLastVisit mirrors the "N new pushes" note of the Azure DevOps list:
 // "↑3 “2 ★1" and "●" for unvisited, or as words "[+3 pushes]" and "[new]",
@@ -85,8 +91,12 @@ func markerLegend() []binding {
 }
 
 func ciLegend() []binding {
+	status := binding{keys: "● / ○", desc: "PR status: active / draft"}
+	if useASCII {
+		status = binding{keys: "A / D", desc: "PR status: active / draft"}
+	}
 	return []binding{
-		{keys: "Active / Draft", desc: "PR status (ACT / DRF when narrow)"},
+		status,
 		{keys: "✓ pass / ✓ 2/2", desc: "all CI/CD checks passed"},
 		{keys: "● run / ● 1 run", desc: "CI/CD pipeline currently running"},
 		{keys: "○ queue / ○ 1 que", desc: "CI/CD pipeline queued or waiting"},

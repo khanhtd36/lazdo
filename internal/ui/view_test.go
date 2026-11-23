@@ -79,10 +79,13 @@ func TestDashboardCompactLayout(t *testing.T) {
 		view := ansi.Strip(next.View())
 
 		compact := width < compactWidth
-		narrowCI := width < narrowCIWidth
-		if narrowCI != (strings.Contains(view, "ACT") && strings.Contains(view, "DRF")) ||
-			narrowCI == (strings.Contains(view, "Active") && strings.Contains(view, "Draft")) {
-			t.Errorf("width %d: narrowCI=%v but status column is wrong:\n%s", width, narrowCI, view)
+		if !strings.Contains(view, "● fix(db): upgrade") || !strings.Contains(view, "○ feat(cli): add") {
+			t.Errorf("width %d: want leading PR status icons before titles:\n%s", width, view)
+		}
+		for _, old := range []string{"Active", "Draft", "ACT", "DRF"} {
+			if strings.Contains(view, old) {
+				t.Errorf("width %d: unexpected status column text %q:\n%s", width, old, view)
+			}
 		}
 		if compact != strings.Contains(view, "[+8p]") {
 			t.Errorf("width %d: compact=%v but badges are wrong:\n%s", width, compact, view)
@@ -141,7 +144,7 @@ func TestDashboardBoldsNewActivity(t *testing.T) {
 	bold := lipgloss.NewStyle().Bold(true)
 	for id, want := range map[int]bool{1: true, 2: true, 3: false, 4: true, 5: false} {
 		title := fmt.Sprintf("title %d", id)
-		got := strings.Contains(m.renderPR(pr(id, title)), bold.Render(title))
+		got := strings.Contains(m.renderPR(pr(id, title), false), bold.Render(title))
 		if got != want {
 			t.Errorf("PR %d: bold title = %v, want %v", id, got, want)
 		}
@@ -183,11 +186,17 @@ func TestDashboardGraysDraftTitles(t *testing.T) {
 	m.stats = map[int]ado.Stats{1: {Visited: true}, 2: {Visited: true, NewPushes: 1}}
 	gray := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	draft := &ado.PullRequest{ID: 1, Title: "wip thing", IsDraft: true, Repository: ado.Repository{Name: "r"}}
-	if !strings.Contains(m.renderPR(draft), gray.Render("wip thing")) {
+	if !strings.Contains(m.renderPR(draft, false), gray.Render("wip thing")) {
 		t.Error("a draft's title should be gray")
 	}
+	// A gray as dark as 240 vanishes on the cursor row's tint; it is still
+	// gray there, just light enough to read.
+	light := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+	if !strings.Contains(m.renderPR(draft, true), light.Render("wip thing")) {
+		t.Error("a selected draft's title should stay gray but readable")
+	}
 	news := &ado.PullRequest{ID: 2, Title: "wip pushed", IsDraft: true, Repository: ado.Repository{Name: "r"}}
-	if !strings.Contains(m.renderPR(news), gray.Bold(true).Render("wip pushed")) {
+	if !strings.Contains(m.renderPR(news, false), gray.Bold(true).Render("wip pushed")) {
 		t.Error("a draft with new pushes should be gray and bold")
 	}
 }
@@ -199,19 +208,128 @@ func TestDashboardNarrowKeepsRepoOverComments(t *testing.T) {
 	if !l.shown[columnRepo] || !l.shown[columnID] || !l.shown[columnBuild] {
 		t.Fatalf("at width 100 the repo → target branch column should stay: %+v", l.shown)
 	}
-	m.width = 90 // room for the repo column or the comments, not both
+	m.width = 86 // room for the repo column or the comments, not both
 	if l := m.rowLayout(); !l.shown[columnRepo] || l.shown[columnComments] {
 		t.Fatalf("when only one fits, the repo column wins over comments: %+v", l.shown)
 	}
-	m.width = 80 // too narrow for the repo column at all: comments may show
+	m.width = 76 // too narrow for the repo column at all: comments may show
 	if l := m.rowLayout(); l.shown[columnRepo] {
-		t.Fatalf("the repo column can't fit at width 80: %+v", l.shown)
+		t.Fatalf("the repo column can't fit at width 76: %+v", l.shown)
 	}
 	m.width = 220
 	for c := range columnCount {
 		if !m.rowLayout().shown[c] {
 			t.Fatalf("a wide screen shows every column, missing %d", c)
 		}
+	}
+}
+
+func TestPRStatusIcons(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+	defer UseASCII(false)
+
+	UseASCII(false)
+	if got := ansi.Strip(prStatusIcon(false)); got != "●" {
+		t.Errorf("active icon: %q", got)
+	}
+	if got := ansi.Strip(prStatusIcon(true)); got != "○" {
+		t.Errorf("draft icon: %q", got)
+	}
+
+	UseASCII(true)
+	if got := ansi.Strip(prStatusIcon(false)); got != "A" {
+		t.Errorf("ascii active icon: %q", got)
+	}
+	if got := ansi.Strip(prStatusIcon(true)); got != "D" {
+		t.Errorf("ascii draft icon: %q", got)
+	}
+}
+
+func TestDashboardTintsCursorRow(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+	bg := "\x1b[48;5;237m" // cursorRow
+
+	// tint resumes bg across \x1b[0m, \x1b[m (truncation reset), and \x1b[49m.
+	tinted := tint("a\x1b[0mb\x1b[mc\x1b[49md", cursorRow)
+	for _, seq := range []string{"\x1b[0m" + bg, "\x1b[m" + bg, "\x1b[49m" + bg} {
+		if !strings.Contains(tinted, seq) {
+			t.Errorf("tint should resume bg after reset (%q): %q", seq, tinted)
+		}
+	}
+
+	// Long styled line truncated via truncate/ansi.Truncate keeps bg past truncation reset.
+	longTrunc := tint(padRight(truncate(styleDraftStatus.Render(strings.Repeat("very long draft title ", 5)), 25), 30), cursorRow)
+	if !strings.Contains(longTrunc, bg+"     \x1b[0m") {
+		t.Errorf("truncated tinted line should keep bg into padding: %q", longTrunc)
+	}
+
+	m := New(ado.NewClient("org"), time.Minute)
+	m.width, m.height, m.loading = 160, 20, false
+	mk := func(id int, title string, draft bool) ado.PullRequest {
+		return ado.PullRequest{
+			ID: id, Title: title, IsDraft: draft,
+			CreatedBy:  ado.Identity{DisplayName: "Sam Rivera"},
+			Repository: ado.Repository{Name: "demo-app"}, TargetRefName: "refs/heads/develop",
+		}
+	}
+	m.sections = ado.Classify("me", []ado.PullRequest{
+		mk(1, "feat: first", false),
+		mk(2, "wip: second", true),
+	}, nil)
+	rows := m.rows()
+	lines := dashLines(rows)
+	for _, l := range lines {
+		if l.bottom {
+			continue
+		}
+		on := m.dashboardLine(rows, l, true, true)
+		if !strings.Contains(on, bg) {
+			t.Errorf("row %d: the cursor's line should be tinted: %q", l.row, ansi.Strip(on))
+		}
+		if !strings.Contains(on, "\x1b[0m"+bg) {
+			t.Errorf("row %d: the tint should resume after a cell's reset", l.row)
+		}
+		if strings.HasPrefix(on, bg) {
+			t.Errorf("row %d: the frame should stay outside the tint: %q", l.row, ansi.Strip(on))
+		}
+		if got := ansi.StringWidth(on); got != m.width {
+			t.Errorf("row %d: tinted line is %d wide, want %d", l.row, got, m.width)
+		}
+		if off := m.dashboardLine(rows, l, false, true); strings.Contains(off, bg) {
+			t.Errorf("row %d: a line without the cursor should not be tinted", l.row)
+		}
+	}
+}
+
+func TestDashboardStatusIcons(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+	defer UseASCII(false)
+
+	m := New(ado.NewClient("org"), time.Minute)
+	m.me, m.loading = ado.Identity{ID: "me"}, false
+	m.sections = ado.Classify("me", []ado.PullRequest{
+		{ID: 1, Title: "feat: first", CreatedBy: ado.Identity{DisplayName: "Sam Rivera"},
+			Repository: ado.Repository{Name: "demo-app"}, TargetRefName: "refs/heads/develop"},
+		{ID: 2, Title: "wip: second", IsDraft: true, CreatedBy: ado.Identity{DisplayName: "Sam Rivera"},
+			Repository: ado.Repository{Name: "demo-app"}, TargetRefName: "refs/heads/develop"},
+	}, nil)
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 20})
+	view := ansi.Strip(next.View())
+	if !strings.Contains(view, "● feat: first") || !strings.Contains(view, "○ wip: second") {
+		t.Fatalf("PR titles should lead with ● / ○ by default:\n%s", view)
+	}
+	if strings.Contains(view, "Active") || strings.Contains(view, "Draft") {
+		t.Errorf("the status column words should not appear:\n%s", view)
+	}
+
+	UseASCII(true)
+	next, _ = m.Update(tea.WindowSizeMsg{Width: 160, Height: 20})
+	asciiView := ansi.Strip(next.View())
+	if !strings.Contains(asciiView, "A feat: first") || !strings.Contains(asciiView, "D wip: second") {
+		t.Fatalf("PR titles should lead with A / D under --ascii:\n%s", asciiView)
 	}
 }
 
@@ -386,5 +504,126 @@ func TestUpdateShowsProgressFailureAndInstalled(t *testing.T) {
 	}
 	if state, ok := m.RestartState(); !ok || state != "page=0" {
 		t.Fatalf("restart state %q %v", state, ok)
+	}
+}
+
+func TestModalOverlayDimsBackdrop(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+	dim := "\x1b[38;5;239m" // styleBackdrop
+
+	// 1. Direct overlayCenter: handles styled base lines, CJK double-width splits, and exact sizing.
+	base := strings.Join([]string{
+		styleGreen.Render("hello world") + " " + styleRed.Render("alert"),
+		"漢字漢字漢字漢字漢字漢字漢字漢字漢字漢字",
+		strings.Repeat("x", 40),
+		strings.Repeat("y", 40),
+		strings.Repeat("z", 40),
+	}, "\n")
+	box := styleModal.Render(styleYellow.Render("POPUP"))
+	got := overlayCenter(base, box, 40, 5)
+	gotLines := strings.Split(got, "\n")
+	if len(gotLines) != 5 {
+		t.Fatalf("overlayCenter lines = %d, want 5", len(gotLines))
+	}
+	for i, ln := range gotLines {
+		if w := ansi.StringWidth(ln); w != 40 {
+			t.Errorf("line %d width = %d, want 40: %q", i, w, ln)
+		}
+	}
+	if !strings.Contains(gotLines[0], dim) || strings.Contains(gotLines[0], "\x1b[92m") || strings.Contains(gotLines[0], "\x1b[38;5;10m") {
+		t.Errorf("top backdrop line should be dimmed and stripped of original green color: %q", gotLines[0])
+	}
+	if !strings.Contains(got, styleYellow.Render("POPUP")) {
+		t.Errorf("centered popup should keep its own ANSI foreground styling: %q", got)
+	}
+
+	// 2. Dashboard + b CI/CD menu shows "Pipeline runs" over a dimmed backdrop of the dashboard.
+	prs := []ado.PullRequest{
+		{
+			ID: 10, Title: "feat: overlay backdrop check",
+			CreatedBy:     ado.Identity{DisplayName: "Sam Rivera"},
+			SourceRefName: "refs/heads/feat/10", TargetRefName: "refs/heads/main",
+			Repository: ado.Repository{ID: "r1", Name: "app", Project: ado.Project{ID: "p1", Name: "Proj"}},
+			Reviewers:  []ado.Reviewer{{Identity: ado.Identity{ID: "me"}}},
+		},
+	}
+	m := New(ado.NewClient("org"), time.Minute)
+	m.me, m.loading = ado.Identity{ID: "me"}, false
+	m.sections = ado.Classify("me", prs, nil)
+	m.builds[10] = buildResult{summary: ado.CISummary{
+		State:  ado.BuildRunning,
+		Passed: 1,
+		Failed: 1,
+		Checks: []ado.CICheck{
+			{Name: "api-build", State: ado.BuildPassed, StatusText: "succeeded", Run: &ado.Run{ID: 1}},
+			{Name: "web-lint", State: ado.BuildFailed, StatusText: "failed", Run: &ado.Run{ID: 2}},
+		},
+	}}
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
+	m = next.(Model)
+	next, _ = m.Update(keyMsg("j"))
+	m = next.(Model)
+	next, _ = m.Update(keyMsg("b"))
+	m = next.(Model)
+	if m.modal == nil {
+		t.Fatal("b should open Pipeline runs modal")
+	}
+	dashView := m.View()
+	dashLines := strings.Split(dashView, "\n")
+	if len(dashLines) != 20 {
+		t.Fatalf("dashboard modal view height = %d, want 20", len(dashLines))
+	}
+	for i, ln := range dashLines {
+		if w := ansi.StringWidth(ln); w > 120 {
+			t.Errorf("dashboard modal line %d width %d > 120", i, w)
+		}
+	}
+	dashPlain := ansi.Strip(dashView)
+	if !strings.Contains(dashPlain, "Pipeline runs") || !strings.Contains(dashPlain, "lazdo") || !strings.Contains(dashView, dim) {
+		t.Fatalf("dashboard modal should composite Pipeline runs over dimmed backdrop:\n%s", dashPlain)
+	}
+
+	// 3. PR Detail Overview + b modal keeps PR title & tabs undimmed while dimming the Overview body.
+	d := fakeDetail(t, 120)
+	d.data.PRRuns = []ado.Run{
+		{ID: 601, BuildNumber: "601", Status: "completed", Result: "failed"},
+		{ID: 602, BuildNumber: "602", Status: "inProgress"},
+	}
+	d.data.Policies = []ado.Policy{
+		buildPolicy(t, "e-web", "approved", "web", 10, 101, true),
+	}
+	d.update(prRunsMsg{prID: d.pr.ID, runs: d.data.PRRuns})
+	if d.modal == nil {
+		t.Fatal("d.modal should open Pipeline runs menu")
+	}
+	detView := d.view()
+	detLines := strings.Split(detView, "\n")
+	if strings.Contains(detLines[0], dim) {
+		t.Errorf("PR Detail title line should stay undimmed: %q", detLines[0])
+	}
+	if strings.Contains(detLines[2], dim) {
+		t.Errorf("PR Detail tabs line should stay undimmed: %q", detLines[2])
+	}
+	detBody := strings.Join(detLines[d.bodyTop():d.bodyTop()+d.bodyHeight()], "\n")
+	if !strings.Contains(detBody, dim) || !strings.Contains(ansi.Strip(detBody), "Pipeline runs") {
+		t.Fatalf("PR Detail body should dim Overview behind Pipeline runs popup:\n%s", ansi.Strip(detBody))
+	}
+
+	// 4. Help popup (?) overlays dimmed dashboard backdrop.
+	next, _ = m.Update(keyMsg("esc"))
+	m = next.(Model)
+	next, _ = m.Update(keyMsg("?"))
+	m = next.(Model)
+	if m.help == nil {
+		t.Fatal("? should open help modal")
+	}
+	helpView := m.View()
+	helpPlain := ansi.Strip(helpView)
+	if !strings.Contains(helpPlain, "Keyboard shortcuts") || !strings.Contains(helpPlain, "pipeline runs") {
+		t.Fatalf("help modal missing expected content:\n%s", helpPlain)
+	}
+	if !strings.Contains(helpView, dim) {
+		t.Fatalf("help popup should render dimmed backdrop:\n%s", helpPlain)
 	}
 }
