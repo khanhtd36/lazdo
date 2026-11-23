@@ -61,9 +61,10 @@ type (
 		err       error
 	}
 	openDashRunMsg struct {
-		from  *ado.Client
-		pr    ado.PullRequest
-		check ado.CICheck
+		from   *ado.Client
+		pr     ado.PullRequest
+		check  ado.CICheck
+		origin string
 	}
 )
 
@@ -654,6 +655,7 @@ type prRunScreen struct {
 	start  string
 	wait   *runWait
 	status string
+	origin string
 }
 
 func newPRRunScreen(client *ado.Client, pr ado.PullRequest, c ado.CICheck) (*prRunScreen, tea.Cmd) {
@@ -674,7 +676,7 @@ func (s *prRunScreen) bodyHeight(height int) int { return max(1, height-4) }
 func (s *prRunScreen) crumbs() string {
 	r := s.run.run
 	crumbs := []string{
-		"Pull requests",
+		cmp.Or(s.origin, "Pull requests"),
 		fmt.Sprintf("!%d", s.pr.ID),
 		"Pipeline runs",
 		styleTitle.Render("run " + runNumLabel(r)),
@@ -782,15 +784,24 @@ func (s *prRunScreen) key(msg tea.KeyMsg, width, height int, cb ciCallbacks) (cl
 
 // ciSummaryLine renders the 1-line CI/CD summary bar at the bottom of the PR list.
 func (m Model) ciSummaryLine() string {
+	var pr *ado.PullRequest
+	if r, ok := m.selected(m.rows()); ok && r.pr != nil {
+		pr = r.pr
+	}
+	var b buildResult
+	var has bool
+	if pr != nil {
+		b, has = m.builds[pr.ID]
+	}
+	return formatCISummaryLine(pr, b, has, m.width)
+}
+
+func formatCISummaryLine(pr *ado.PullRequest, b buildResult, has bool, width int) string {
 	hint := styleDim.Render("b runs · Q rerun · X cancel · t trigger")
-	rows := m.rows()
-	r, ok := m.selected(rows)
-	if !ok || r.pr == nil {
+	if pr == nil {
 		return styleDim.Render("CI: select a pull request · " + ansi.Strip(hint))
 	}
-	pr := r.pr
 	prefix := styleHeader.Render(fmt.Sprintf("CI !%d:", pr.ID)) + " "
-	b, has := m.builds[pr.ID]
 	var body string
 	switch {
 	case !has:
@@ -807,7 +818,7 @@ func (m Model) ciSummaryLine() string {
 		body = strings.Join(parts, styleDim.Render(" · "))
 	}
 	left := prefix + body
-	gap := m.width - ansi.StringWidth(left) - ansi.StringWidth(hint)
+	gap := width - ansi.StringWidth(left) - ansi.StringWidth(hint)
 	if gap >= 3 {
 		return left + strings.Repeat(" ", gap) + hint
 	}

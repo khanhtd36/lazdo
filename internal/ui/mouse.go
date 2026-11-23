@@ -47,15 +47,15 @@ func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.detail != nil {
 		return m, m.detail.onMouse(msg)
 	}
-	if m.project != nil {
-		return m, m.project.onMouse(msg)
-	}
 	if m.dashRun != nil {
 		by := msg.Y - 2
 		if by < 0 || by >= m.dashRun.bodyHeight(m.height) {
 			return m, nil
 		}
 		return m, m.dashRun.run.onMouse(msg, by, m.width, m.dashRun.bodyHeight(m.height))
+	}
+	if m.project != nil {
+		return m, m.project.onMouse(msg)
 	}
 	if isClick(msg) && msg.Y == 0 {
 		if p, ok := m.pageAt(msg.X); ok {
@@ -301,6 +301,9 @@ func (d *detailModel) overviewMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	line := d.vp.YOffset + by - 1 // below the pane's top edge
 	if p, ok := d.buildLines[line]; ok {
 		return d.openPolicyRun(p)
+	}
+	if c, ok := d.runLines[line]; ok {
+		return d.openCICheck(c)
 	}
 	entry := -1
 	for i, start := range d.entryLines {

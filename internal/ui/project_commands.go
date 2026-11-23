@@ -69,6 +69,10 @@ func (m Model) projectTabCommands() []commandGroup {
 		return []commandGroup{m.repoCommands(v, true)}
 	case ado.PullRequest:
 		gs := m.prCommandsFor(v)
+		gs[0] = prCIHeaderOverrides(gs[0], p.builds, v.ID)
+		if b, ok := p.builds[v.ID]; ok && b.err == nil && len(b.summary.Checks) > 0 {
+			gs = append(gs, ciCommandsGroup(m.client, v, b.summary.Checks, p.prCICallbacks(v), p.project.Name+" › Pull requests"))
+		}
 		return append(gs, m.repoCommands(m.fullRepo(v.Repository), false))
 	case ado.Pipeline:
 		gs := []commandGroup{m.pipelineCommands(v)}

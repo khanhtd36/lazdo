@@ -61,12 +61,13 @@ func findLiteral(query string, texts []string) []fuzzy.Match {
 // selected; a groupStart row starts a group itself (a job above its
 // steps); searchOnly rows appear only while a filter is typed.
 type pickItem struct {
-	header     bool
-	groupStart bool
-	searchOnly bool
-	search     string // what / matches against
-	render     func(width int) string
-	value      any
+	header       bool
+	groupStart   bool
+	searchOnly   bool
+	search       string   // what / matches against
+	searchFields []string // optional per-field texts for tight multi-field matching
+	render       func(width int) string
+	value        any
 }
 
 // pickList is a scrollable, selectable list with / fuzzy filtering, shared
@@ -170,13 +171,29 @@ func (l *pickList) visible() []int {
 	var texts []string
 	var idx []int
 	for i, it := range l.items {
-		if !it.header && it.search != "" {
+		if it.header {
+			continue
+		}
+		if len(it.searchFields) > 0 {
+			for _, f := range it.searchFields {
+				if f != "" {
+					texts = append(texts, f)
+					idx = append(idx, i)
+				}
+			}
+		}
+		if it.search != "" {
 			texts = append(texts, it.search)
 			idx = append(idx, i)
 		}
 	}
+	seen := map[int]bool{}
 	for _, m := range rankFuzzy(l.filter, texts) {
-		out = append(out, idx[m.Index])
+		i := idx[m.Index]
+		if !seen[i] {
+			seen[i] = true
+			out = append(out, i)
+		}
 	}
 	return out
 }

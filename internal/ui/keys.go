@@ -67,6 +67,10 @@ var (
 		{keys: "E", desc: "edit the title and description", press: "E"},
 		{keys: "o", desc: "open in the browser (the file, on the Files tab)", press: "o", hint: "browser"},
 		{keys: "c", desc: "check out the source branch (asks where)", press: "c", hint: "checkout"},
+		{keys: "b", desc: "pipeline runs: open one (or trigger if none)", press: "b", hint: "runs"},
+		{keys: "Q", desc: "re-queue / re-run a pipeline (asks first)", press: "Q"},
+		{keys: "X", desc: "cancel a running or queued pipeline (asks first)", press: "X"},
+		{keys: "t", desc: "trigger a pipeline on the PR's source branch", press: "t"},
 		{keys: "r", desc: "refresh", press: "r"},
 		{keys: "esc", desc: "back one level: thread, range, pane, then to the list", press: "esc", hint: "back"},
 	}
@@ -76,10 +80,6 @@ var (
 		{keys: "a", desc: "add a comment on the pull request", press: "a", hint: "comment"},
 		{keys: "R / s", desc: "reply / status on the selected thread", press: "R"},
 		{keys: "f", desc: "choose the activity filter", press: "f", hint: "filter"},
-		{keys: "b", desc: "pipeline runs: open one (or trigger if none)", press: "b", hint: "runs"},
-		{keys: "Q", desc: "re-queue / re-run a pipeline (asks first)", press: "Q"},
-		{keys: "X", desc: "cancel a running or queued pipeline (asks first)", press: "X"},
-		{keys: "t", desc: "trigger a pipeline on the PR's source branch", press: "t"},
 		{keys: "w", desc: "reviewers: add (a, or A required), make required/optional (t), remove (d)", press: "w", hint: "reviewers"},
 		{keys: "/", desc: "find text; n / N (or p) next / previous match", press: "/", hint: "find"},
 		{keys: "y", desc: "copy menu: URL, branch, ID, title", press: "y", hint: "copy"},
@@ -142,6 +142,12 @@ var (
 		{keys: "d", desc: "delete, or remove a member or user (a repository or group asks for its name)", press: "d"},
 		{keys: "/", desc: "filter the list", press: "/", hint: "filter"},
 		{keys: "r", desc: "reload the settings", press: "r", hint: "refresh"},
+	}
+	projectPRCIKeys = []binding{
+		{keys: "b", desc: "pipeline runs: view logs or trigger", press: "b", hint: "runs"},
+		{keys: "Q", desc: "re-queue / re-run a pipeline (asks first)", press: "Q", hint: "rerun"},
+		{keys: "X", desc: "cancel a running or queued pipeline (asks first)", press: "X", hint: "cancel"},
+		{keys: "t", desc: "trigger a pipeline on the PR's source branch", press: "t", hint: "trigger"},
 	}
 	projectKeys = []binding{
 		{keys: "1-4", desc: "Repos, Pull requests, Pipelines, Settings tab", hint: "tabs"},
@@ -237,10 +243,10 @@ func (m Model) helpGroups() []bindingGroup {
 	switch {
 	case m.detail != nil:
 		return m.detail.helpGroups()
-	case m.project != nil:
-		return m.project.helpGroups()
 	case m.dashRun != nil:
 		return withCommon(bindingGroup{"Run", dashRunKeys})
+	case m.project != nil:
+		return m.project.helpGroups()
 	case m.page == pageProjects:
 		return withCommon(bindingGroup{"Projects", projectsPageKeys}, bindingGroup{"Pages", pageKeys})
 	}
@@ -309,6 +315,9 @@ func (m *projectModel) helpGroups() []bindingGroup {
 	}
 	if m.tab == projTabSettings {
 		return withCommon(bindingGroup{"Settings", settingsKeys}, bindingGroup{"Project", projectKeys[:2]})
+	}
+	if m.tab == projTabPRs {
+		return withCommon(bindingGroup{"Pull request CI/CD", projectPRCIKeys}, bindingGroup{"Status & CI", ciLegend()}, bindingGroup{"Project", projectKeys})
 	}
 	return withCommon(bindingGroup{"Project", projectKeys})
 }

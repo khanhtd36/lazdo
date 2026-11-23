@@ -19,10 +19,10 @@ func (m Model) commandGroups() []commandGroup {
 		if !m.detail.standalone {
 			gs = append(gs, m.ancestorCommands(m.detail.pr.Repository)...)
 		}
-	case m.project != nil:
-		gs = m.projectViewCommands()
 	case m.dashRun != nil:
 		gs = append([]commandGroup{m.dashRunCommands()}, m.ancestorCommands(m.dashRun.pr.Repository)...)
+	case m.project != nil:
+		gs = m.projectViewCommands()
 	case m.page == pageProjects:
 		gs = m.projectsPageCommands()
 	default:
@@ -51,15 +51,15 @@ func (m Model) dashboardCommands() []commandGroup {
 	}
 	pr := *r.pr
 	gs := m.prCommandsFor(pr)
-	gs[0] = m.dashPRCommands(pr, gs[0])
+	gs[0] = prCIHeaderOverrides(gs[0], m.builds, pr.ID)
 	if b, ok := m.builds[pr.ID]; ok && b.err == nil && len(b.summary.Checks) > 0 {
-		gs = append(gs, m.dashCICommands(pr, b.summary.Checks))
+		gs = append(gs, ciCommandsGroup(m.client, pr, b.summary.Checks, m.dashCICallbacks(pr), ""))
 	}
 	return append(append(gs, m.ancestorCommands(pr.Repository)...), page)
 }
 
-func (m Model) dashPRCommands(pr ado.PullRequest, g commandGroup) commandGroup {
-	b, hasBuild := m.builds[pr.ID]
+func prCIHeaderOverrides(g commandGroup, builds map[int]buildResult, prID int) commandGroup {
+	b, hasBuild := builds[prID]
 	hasRunnable, hasCancel := false, false
 	if hasBuild && b.err == nil {
 		for _, c := range b.summary.Checks {
@@ -101,8 +101,7 @@ func (m Model) dashPRCommands(pr ado.PullRequest, g commandGroup) commandGroup {
 	return g
 }
 
-func (m Model) dashCICommands(pr ado.PullRequest, checks []ado.CICheck) commandGroup {
-	cb := m.dashCICallbacks(pr)
+func ciCommandsGroup(client *ado.Client, pr ado.PullRequest, checks []ado.CICheck, cb ciCallbacks, origin string) commandGroup {
 	cmds := make([]command, 0, len(checks)*3)
 	for i, c := range checks {
 		c := c
@@ -116,6 +115,7 @@ func (m Model) dashCICommands(pr ado.PullRequest, checks []ado.CICheck) commandG
 					if scr == nil {
 						return cmd
 					}
+					scr.origin = origin
 					m.dashRun = scr
 					return cmd
 				},
@@ -160,7 +160,7 @@ func (m Model) dashCICommands(pr ado.PullRequest, checks []ado.CICheck) commandG
 			cmds = append(cmds, command{
 				id: prefix + "browser", label: "Open " + c.Name + " in browser", local: true,
 				run: func(*Model) tea.Cmd {
-					return openURL(m.client.RunURL(pr.Repository.Project.Name, c.Run.ID), "opened run "+runNumLabel(*c.Run))
+					return openURL(client.RunURL(pr.Repository.Project.Name, c.Run.ID), "opened run "+runNumLabel(*c.Run))
 				},
 			})
 		}
@@ -206,7 +206,7 @@ func (m Model) dashRunCommands() commandGroup {
 		{id: "Refresh", label: "Refresh the run", key: "r", run: replayKey("r")},
 	}
 	cmds = append(cmds, copyCommands(copyRun(m.client, s.pr.Repository.Project.Name, r), "y")...)
-	cmds = append(cmds, command{id: "Back", label: "Back to Pull requests", run: func(m *Model) tea.Cmd {
+	cmds = append(cmds, command{id: "Back", label: pick2(m.project != nil, "Back to the project", "Back to Pull requests"), run: func(m *Model) tea.Cmd {
 		m.dashRun = nil
 		return nil
 	}})

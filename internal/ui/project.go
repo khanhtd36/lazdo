@@ -56,10 +56,16 @@ type projectModel struct {
 	client  *ado.Client
 	project ado.ProjectInfo
 
-	prs   []ado.PullRequest
-	repos []ado.Repo
-	tab   projectTab
-	lists [projTabCount]pickList
+	prs          []ado.PullRequest
+	repos        []ado.Repo
+	tab          projectTab
+	lists        [projTabCount]pickList
+	builds       map[int]buildResult
+	buildsLoaded bool
+	watchCI      map[int]time.Time
+	ciPollGen    int
+	ciPolling    bool
+	sem          chan struct{}
 
 	lastPush map[string]time.Time
 
@@ -112,7 +118,21 @@ type (
 		prs       []ado.PullRequest
 		err       error
 	}
+	projectBuildMsg struct {
+		from      *ado.Client
+		projectID string
+		prID      int
+		result    buildResult
+	}
+	projectCIPollTickMsg struct {
+		from      *ado.Client
+		projectID string
+		gen       int
+	}
 )
+
+func (m projectBuildMsg) source() *ado.Client      { return m.from }
+func (m projectCIPollTickMsg) source() *ado.Client { return m.from }
 
 func newProject(client *ado.Client, p ado.ProjectInfo, prs []ado.PullRequest, repos []ado.Repo) *projectModel {
 	sort.Slice(prs, func(i, j int) bool { return prs[i].CreationDate.After(prs[j].CreationDate) })
@@ -125,7 +145,16 @@ func newProject(client *ado.Client, p ado.ProjectInfo, prs []ado.PullRequest, re
 		}
 		return strings.ToLower(repos[i].Name) < strings.ToLower(repos[j].Name)
 	})
-	m := &projectModel{client: client, project: p, prs: prs, repos: repos, lastPush: map[string]time.Time{}}
+	m := &projectModel{
+		client:   client,
+		project:  p,
+		prs:      prs,
+		repos:    repos,
+		lastPush: map[string]time.Time{},
+		builds:   map[int]buildResult{},
+		watchCI:  map[int]time.Time{},
+		sem:      make(chan struct{}, maxParallelBuilds),
+	}
 	m.settings = newSettingsView(client, p)
 	m.lists[projTabPRs].setItems(m.prItems())
 	m.lists[projTabRepos].setItems(m.repoItems())
@@ -234,10 +263,30 @@ func (m *projectModel) update(msg tea.Msg) tea.Cmd {
 		if msg.projectID == m.project.ID {
 			m.err = msg.err
 			if msg.err == nil {
+				m.ciPolling = false
+				m.ciPollGen++
 				sort.Slice(msg.prs, func(i, j int) bool { return msg.prs[i].CreationDate.After(msg.prs[j].CreationDate) })
 				m.prs = msg.prs
 				m.lists[projTabPRs].refreshItems(m.prItems(), samePR)
+				if m.tab == projTabPRs {
+					m.buildsLoaded = true
+					return m.fetchAllPRBuilds()
+				}
+				m.buildsLoaded = false
 			}
+		}
+	case projectBuildMsg:
+		if msg.projectID == m.project.ID {
+			if m.builds == nil {
+				m.builds = map[int]buildResult{}
+			}
+			m.builds[msg.prID] = msg.result
+			m.lists[projTabPRs].refreshItems(m.prItems(), samePR)
+			return m.ensureCIPoll()
+		}
+	case projectCIPollTickMsg:
+		if msg.projectID == m.project.ID {
+			return m.onCIPollTick(msg)
 		}
 	case repoPushesMsg:
 		if msg.projectID == m.project.ID {
@@ -368,6 +417,22 @@ func (m *projectModel) tabsKey(msg tea.KeyMsg) tea.Cmd {
 			return m.loadPRs()
 		case projTabSettings, projTabCount: // Settings reloads itself on r
 		}
+	case "b":
+		if m.tab == projTabPRs {
+			return m.openSelectedPRRuns()
+		}
+	case "Q":
+		if m.tab == projTabPRs {
+			return m.rerunSelectedPR()
+		}
+	case "X":
+		if m.tab == projTabPRs {
+			return m.cancelSelectedPR()
+		}
+	case "t":
+		if m.tab == projTabPRs {
+			return m.triggerSelectedPR()
+		}
 	case "o":
 		if !ok {
 			return openURL(m.client.ProjectURL(m.project), "opened "+m.project.Name)
@@ -400,6 +465,11 @@ func (m *projectModel) tabsKey(msg tea.KeyMsg) tea.Cmd {
 
 func (m *projectModel) onTabChange() tea.Cmd {
 	switch {
+	case m.tab == projTabPRs && !m.buildsLoaded:
+		m.buildsLoaded = true
+		return m.fetchAllPRBuilds()
+	case m.tab == projTabPRs:
+		return m.ensureCIPoll()
 	case m.tab == projTabPipelines && !m.pipelinesLoaded:
 		return m.loadPipelines()
 	case m.tab == projTabSettings && m.settings.data == nil:
@@ -459,33 +529,85 @@ func (m *projectModel) runsKey(msg tea.KeyMsg) tea.Cmd {
 func (m *projectModel) prItems() []pickItem {
 	items := make([]pickItem, 0, len(m.prs))
 	for _, pr := range m.prs {
+		pr := pr
+		statusWord := "active"
+		if pr.IsDraft {
+			statusWord = "draft"
+		}
+		fields := []string{pr.Title, pr.CreatedBy.DisplayName, fmt.Sprintf("!%d", pr.ID), pr.SourceBranch(), statusWord}
+		if b, ok := m.builds[pr.ID]; ok && b.err == nil {
+			fields = append(fields, ciFilterTokens(b.summary)...)
+		}
 		items = append(items, pickItem{
-			search: fmt.Sprintf("%s %s %s !%d", pr.Title, pr.CreatedBy.DisplayName, pr.SourceBranch(), pr.ID),
-			value:  pr,
-			render: func(width int) string { return projectPRRow(pr, width) },
+			search:       strings.Join(fields, " "),
+			searchFields: fields,
+			value:        pr,
+			render:       func(width int) string { return m.projectPRRow(pr, width) },
 		})
 	}
 	return items
 }
 
-func projectPRRow(pr ado.PullRequest, width int) string {
-	draft := ""
-	if pr.IsDraft {
-		draft = draftBadge(true)
-	}
-	right := joinCols(
-		styleDim.Render(fit(nameInitials(pr.CreatedBy.DisplayName), colAuthorCompact)),
-		fit(fmt.Sprintf("!%d", pr.ID), colID),
-		styleDim.Render(fit(pr.Repository.Name+" → "+pr.TargetBranch(), 28)),
-		fitStyled(votes(pr.Reviewers), 14),
-		styleDim.Render(fit(relTime(time.Since(pr.CreationDate), pr.CreationDate), colUpdated)),
+func (m *projectModel) projectPRRow(pr ado.PullRequest, width int) string {
+	narrow := width < narrowCIWidth
+	b, hasBuild := m.builds[pr.ID]
+
+	type projPRCol int
+	const (
+		pColStatus projPRCol = iota
+		pColAuthor
+		pColID
+		pColRepo
+		pColVotes
+		pColBuild
+		pColUpdated
+		pColCount
 	)
-	left := pr.Title
-	if draft != "" {
-		left += " " + draft
+	statusW, buildW := colStatus, colBuild
+	if narrow {
+		statusW, buildW = colStatusNarrow, colBuildNarrow
 	}
-	titleWidth := max(20, width-ansi.StringWidth(right)-2)
-	return fitStyled(left, titleWidth) + "  " + right
+	colW := [pColCount]int{
+		pColStatus:  statusW,
+		pColAuthor:  colAuthorCompact,
+		pColID:      colID,
+		pColRepo:    28,
+		pColVotes:   14,
+		pColBuild:   buildW,
+		pColUpdated: colUpdated,
+	}
+	priority := []projPRCol{pColID, pColStatus, pColBuild, pColRepo, pColAuthor, pColVotes, pColUpdated}
+	var shown [pColCount]bool
+	room := width - 2 - max(18, width/3)
+	for _, c := range priority {
+		if need := colW[c] + 2; need <= room || c == pColID || c == pColStatus || c == pColBuild {
+			shown[c] = true
+			room -= need
+		}
+	}
+
+	cells := [pColCount]string{
+		pColStatus:  fitStyled(prStatusCell(pr.IsDraft, narrow), colW[pColStatus]),
+		pColAuthor:  styleDim.Render(fit(nameInitials(pr.CreatedBy.DisplayName), colW[pColAuthor])),
+		pColID:      fit(fmt.Sprintf("!%d", pr.ID), colW[pColID]),
+		pColRepo:    styleDim.Render(fit(pr.Repository.Name+" → "+pr.TargetBranch(), colW[pColRepo])),
+		pColVotes:   fitStyled(votes(pr.Reviewers), colW[pColVotes]),
+		pColBuild:   fitStyled(ciCell(b, hasBuild, narrow), colW[pColBuild]),
+		pColUpdated: styleDim.Render(fit(relTime(time.Since(pr.CreationDate), pr.CreationDate), colW[pColUpdated])),
+	}
+	var rightParts []string
+	for c, cell := range cells {
+		if shown[c] {
+			rightParts = append(rightParts, cell)
+		}
+	}
+	right := strings.Join(rightParts, "  ")
+	titleWidth := max(10, width-ansi.StringWidth(right)-2)
+	title := truncate(pr.Title, titleWidth)
+	if pr.IsDraft {
+		title = styleDraftTitle.Render(title)
+	}
+	return truncate(fitStyled(title, titleWidth)+"  "+right, width)
 }
 
 func (m *projectModel) repoItems() []pickItem {
@@ -622,4 +744,225 @@ func samePR(was, is any) bool {
 	a, ok1 := was.(ado.PullRequest)
 	b, ok2 := is.(ado.PullRequest)
 	return ok1 && ok2 && a.ID == b.ID
+}
+
+// --- Pull requests tab CI/CD ---
+
+func (m *projectModel) prByID(id int) (ado.PullRequest, bool) {
+	for _, pr := range m.prs {
+		if pr.ID == id {
+			return pr, true
+		}
+	}
+	return ado.PullRequest{}, false
+}
+
+func (m *projectModel) selectedPR() (ado.PullRequest, bool) {
+	it, ok := m.lists[projTabPRs].selected()
+	if !ok {
+		return ado.PullRequest{}, false
+	}
+	pr, isPR := it.value.(ado.PullRequest)
+	return pr, isPR
+}
+
+func (m *projectModel) fetchPRBuild(pr ado.PullRequest) tea.Cmd {
+	client, projectID, sem := m.client, m.project.ID, m.sem
+	return func() tea.Msg {
+		if sem != nil {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		summary, err := client.PRCI(ctx, pr)
+		return projectBuildMsg{from: client, projectID: projectID, prID: pr.ID, result: buildResult{summary: summary, err: err}}
+	}
+}
+
+func (m *projectModel) fetchAllPRBuilds() tea.Cmd {
+	if len(m.prs) == 0 {
+		return nil
+	}
+	cmds := make([]tea.Cmd, 0, len(m.prs))
+	for _, pr := range m.prs {
+		cmds = append(cmds, m.fetchPRBuild(pr))
+	}
+	return tea.Batch(cmds...)
+}
+
+func (m *projectModel) ciPollTargets(now time.Time) []ado.PullRequest {
+	for id, deadline := range m.watchCI {
+		if !deadline.After(now) {
+			delete(m.watchCI, id)
+		}
+	}
+	var out []ado.PullRequest
+	for _, pr := range m.prs {
+		active := false
+		if b, ok := m.builds[pr.ID]; ok && b.err == nil && b.summary.HasActiveRun() {
+			active = true
+		}
+		if deadline, watched := m.watchCI[pr.ID]; watched && deadline.After(now) {
+			active = true
+		}
+		if active {
+			out = append(out, pr)
+		}
+	}
+	return out
+}
+
+func (m *projectModel) ensureCIPoll() tea.Cmd {
+	if m.level != levelTabs || m.tab != projTabPRs || m.ciPolling || len(m.ciPollTargets(time.Now())) == 0 {
+		return nil
+	}
+	m.ciPolling = true
+	m.ciPollGen++
+	client, projectID, gen := m.client, m.project.ID, m.ciPollGen
+	return tea.Tick(ciPollInterval, func(time.Time) tea.Msg {
+		return projectCIPollTickMsg{from: client, projectID: projectID, gen: gen}
+	})
+}
+
+func (m *projectModel) onCIPollTick(msg projectCIPollTickMsg) tea.Cmd {
+	if msg.gen != m.ciPollGen {
+		return nil
+	}
+	m.ciPolling = false
+	if m.level != levelTabs || m.tab != projTabPRs {
+		return nil
+	}
+	targets := m.ciPollTargets(time.Now())
+	if len(targets) == 0 {
+		return nil
+	}
+	cmds := make([]tea.Cmd, 0, len(targets)+1)
+	for _, pr := range targets {
+		cmds = append(cmds, m.fetchPRBuild(pr))
+	}
+	if pollCmd := m.ensureCIPoll(); pollCmd != nil {
+		cmds = append(cmds, pollCmd)
+	}
+	return tea.Batch(cmds...)
+}
+
+func (m *projectModel) prCICallbacks(pr ado.PullRequest) ciCallbacks {
+	origin := m.project.Name + " › Pull requests"
+	return newCICallbacks(
+		m.client,
+		pr,
+		func(c ado.CICheck) tea.Cmd {
+			client := m.client
+			return func() tea.Msg { return openDashRunMsg{from: client, pr: pr, check: c, origin: origin} }
+		},
+		func(back modal) (modal, tea.Cmd) {
+			return newPipelinePicker(m.client, pr, back, func(pl ado.Pipeline) tea.Cmd {
+				return m.prCICallbacks(pr).execQueue(pl.Name, pl.ID, pr.SourceRefName)
+			})
+		},
+	)
+}
+
+func showModalWithCmd(md modal, cmd tea.Cmd) tea.Cmd {
+	if md == nil {
+		return cmd
+	}
+	show := func() tea.Msg { return showModalMsg{modal: md} }
+	if cmd == nil {
+		return show
+	}
+	return tea.Batch(show, cmd)
+}
+
+func (m *projectModel) openSelectedPRRuns() tea.Cmd {
+	pr, ok := m.selectedPR()
+	if !ok {
+		return nil
+	}
+	b, has := m.builds[pr.ID]
+	if !has {
+		return statusCmd(fmt.Sprintf("loading CI/CD for !%d…", pr.ID))
+	}
+	if b.err != nil {
+		return statusCmd("error: CI/CD: " + b.err.Error())
+	}
+	nextModal, cmd := ciOpenOrMenu(b.summary.Checks, m.prCICallbacks(pr))
+	return showModalWithCmd(nextModal, cmd)
+}
+
+func (m *projectModel) rerunSelectedPR() tea.Cmd {
+	pr, ok := m.selectedPR()
+	if !ok {
+		return nil
+	}
+	b, has := m.builds[pr.ID]
+	if !has {
+		return statusCmd(fmt.Sprintf("loading CI/CD for !%d…", pr.ID))
+	}
+	if b.err != nil {
+		return statusCmd("error: CI/CD: " + b.err.Error())
+	}
+	nextModal, cmd := ciRerunKey(b.summary.Checks, m.prCICallbacks(pr))
+	return showModalWithCmd(nextModal, cmd)
+}
+
+func (m *projectModel) cancelSelectedPR() tea.Cmd {
+	pr, ok := m.selectedPR()
+	if !ok {
+		return nil
+	}
+	b, has := m.builds[pr.ID]
+	if !has {
+		return statusCmd(fmt.Sprintf("loading CI/CD for !%d…", pr.ID))
+	}
+	if b.err != nil {
+		return statusCmd("error: CI/CD: " + b.err.Error())
+	}
+	nextModal, cmd := ciCancelKey(b.summary.Checks, m.prCICallbacks(pr))
+	return showModalWithCmd(nextModal, cmd)
+}
+
+func (m *projectModel) triggerSelectedPR() tea.Cmd {
+	pr, ok := m.selectedPR()
+	if !ok {
+		return nil
+	}
+	picker, loadCmd := newPipelinePicker(m.client, pr, nil, func(pl ado.Pipeline) tea.Cmd {
+		return m.prCICallbacks(pr).execQueue(pl.Name, pl.ID, pr.SourceRefName)
+	})
+	return showModalWithCmd(picker, loadCmd)
+}
+
+func (m *projectModel) onCIAction(msg ciActionMsg) tea.Cmd {
+	if msg.err != nil {
+		m.status = fmt.Sprintf("error: %s %s: %s", ciActionVerb(msg.kind), msg.name, msg.err.Error())
+		return nil
+	}
+	switch msg.kind {
+	case ciActRequeue:
+		m.status = "re-queued " + msg.name
+	case ciActRetry:
+		m.status = "retrying failed jobs of " + msg.name
+	case ciActQueue:
+		if msg.run.ID > 0 {
+			m.status = fmt.Sprintf("queued %s (%s)", msg.name, runNumLabel(msg.run))
+		} else {
+			m.status = "queued " + msg.name
+		}
+	case ciActCancel:
+		m.status = fmt.Sprintf("cancelling %s (%s)", msg.name, runNumLabel(msg.run))
+	}
+	if m.watchCI == nil {
+		m.watchCI = map[int]time.Time{}
+	}
+	m.watchCI[msg.prID] = time.Now().Add(ciWatchDuration)
+	var cmds []tea.Cmd
+	if pr, ok := m.prByID(msg.prID); ok {
+		cmds = append(cmds, m.fetchPRBuild(pr))
+	}
+	if pollCmd := m.ensureCIPoll(); pollCmd != nil {
+		cmds = append(cmds, pollCmd)
+	}
+	return tea.Batch(cmds...)
 }

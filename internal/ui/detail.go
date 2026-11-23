@@ -83,8 +83,10 @@ type detailModel struct {
 	runCheck  ado.CICheck // the CI check behind the open run
 	runStart  string      // its state when first loaded, to spot a change
 	wait      *runWait    // a re-queue waiting for its new run
-	// buildLines maps Overview lines to the build policy checks on them.
+	// buildLines maps Overview lines to the build policy checks on them;
+	// runLines maps Overview lines to non-policy PR/branch pipeline runs.
 	buildLines map[int]ado.Policy
+	runLines   map[int]ado.CICheck
 	// pending is a command picked from outside the pull request, run once
 	// it has loaded.
 	pending string
@@ -375,6 +377,22 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 	case "E":
 		if d.data != nil {
 			d.modal = d.newPREditor()
+		}
+	case "b":
+		if d.data != nil {
+			return d.loadRuns()
+		}
+	case "Q":
+		if d.data != nil {
+			return d.requeueKey()
+		}
+	case "X":
+		if d.data != nil {
+			return d.cancelKey()
+		}
+	case "t":
+		if d.data != nil {
+			return d.triggerKey()
 		}
 	default:
 		return d.tabKey(msg)

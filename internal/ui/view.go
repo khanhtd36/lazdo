@@ -23,6 +23,7 @@ var (
 	styleRed         = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 	styleCyan        = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 	styleDraft       = lipgloss.NewStyle().Foreground(lipgloss.Color("244")) // grayed: a draft isn't asking for review yet
+	styleDraftTitle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	styleActive      = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
 	styleDraftStatus = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
 )
@@ -133,11 +134,11 @@ func (m Model) View() string {
 	if m.detail != nil {
 		return m.detail.view()
 	}
-	if m.project != nil {
-		return m.project.view()
-	}
 	if m.dashRun != nil {
 		return m.dashRun.view(m.width, m.height, m.helpGroups())
+	}
+	if m.project != nil {
+		return m.project.view()
 	}
 	var b strings.Builder
 	b.WriteString(m.titleLine() + "\n")

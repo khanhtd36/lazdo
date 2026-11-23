@@ -461,3 +461,399 @@ func TestDashboardPaletteCIGroupAndLocalExecution(t *testing.T) {
 		t.Fatalf("dashboard palette 'Pipeline runs' should open dashRun locally, detail=%v dashRun=%+v", m.detail, m.dashRun)
 	}
 }
+
+func TestDetailAllTabsCIKeysAndStandaloneGuard(t *testing.T) {
+	savedList := listPipelines
+	defer func() { listPipelines = savedList }()
+	listPipelines = func(_ context.Context, _ *ado.Client, _ string) ([]ado.Pipeline, error) {
+		return []ado.Pipeline{{ID: 1, Name: "ci"}}, nil
+	}
+
+	rRun := fakeRun(501, 11, "api-ci", "inProgress", "")
+	rFail := fakeRun(502, 12, "lint", "completed", "failed")
+
+	for _, tab := range []detailTab{tabFiles, tabCommits, tabConflicts} {
+		d := fakeFiles(t, 160)
+		d.data.PRRuns = []ado.Run{rRun}
+		d.data.BranchRuns = []ado.Run{rFail}
+		d.tab = tab
+		if tab == tabFiles {
+			d.files.pane = paneDiff
+		}
+
+		// b loads runs and opens menu from any tab (not blocked by tab != tabOverview).
+		press(d, "b")
+		if d.status != "loading runs…" {
+			t.Fatalf("tab %v: b should start loading runs, status=%q", tab, d.status)
+		}
+		d.update(prRunsMsg{prID: d.pr.ID, runs: d.data.PRRuns, branchRuns: d.data.BranchRuns})
+		if _, ok := d.modal.(*menuModal); !ok {
+			t.Fatalf("tab %v: b should open runs menu, got %T", tab, d.modal)
+		}
+		press(d, "esc")
+
+		// Q opens Re-run / Re-queue menu from any tab.
+		press(d, "Q")
+		if _, ok := d.modal.(*menuModal); !ok {
+			t.Fatalf("tab %v: Q should open rerun menu, got %T", tab, d.modal)
+		}
+		press(d, "esc")
+
+		// X opens Cancel confirm from any tab.
+		press(d, "X")
+		if cf, ok := d.modal.(*confirmModal); !ok || !strings.Contains(cf.prompt, "Cancel api-ci") {
+			t.Fatalf("tab %v: X should open cancel confirm, got %T", tab, d.modal)
+		}
+		press(d, "esc")
+
+		// t opens pipelinePicker from any tab.
+		press(d, "t")
+		if _, ok := d.modal.(*pipelinePicker); !ok {
+			t.Fatalf("tab %v: t should open pipelinePicker, got %T", tab, d.modal)
+		}
+		press(d, "esc")
+	}
+
+	// Typing in a tab filter must NOT trigger b/Q/X/t.
+	dFilter := fakeDetail(t, 160)
+	dFilter.tab = tabCommits
+	dFilter.data.PRRuns = []ado.Run{rRun}
+	press(dFilter, "/", "b", "Q", "X", "t")
+	if dFilter.modal != nil || dFilter.lists[tabCommits].filter != "bQXt" {
+		t.Fatalf("typing in Commits filter triggered modal=%T filter=%q", dFilter.modal, dFilter.lists[tabCommits].filter)
+	}
+
+	// Standalone repo diff ignores b/Q/X/t.
+	repo := ado.Repo{ID: "r1", Name: "repo", Project: ado.Project{ID: "p1", Name: "Proj"}}
+	standalone, _ := newRepoDiff(ado.NewClient("org"), repo, "commit", "", "abc", 160, 30)
+	press(standalone, "b", "Q", "X", "t")
+	if standalone.modal != nil || standalone.run != nil || standalone.status != "" {
+		t.Fatalf("standalone diff should ignore CI keys: modal=%v run=%v status=%q", standalone.modal, standalone.run, standalone.status)
+	}
+}
+
+func TestDetailOverviewRendersExtraRunsAndClicksOpenRun(t *testing.T) {
+	prRun := fakeRun(601, 20, "pr-lint", "completed", "failed")
+	brRun := fakeRun(602, 30, "branch-deploy", "inProgress", "")
+
+	for _, width := range []int{80, 120, 180} {
+		d := fakeRuns(t)
+		d.resize(width, 40)
+		d.data.PRRuns = []ado.Run{
+			fakeRun(101, 10, "web", "completed", "succeeded"), // covered by policy
+			prRun,
+		}
+		d.data.BranchRuns = []ado.Run{brRun}
+		d.rebuildOverview()
+
+		view := d.view()
+		plain := ansi.Strip(view)
+		if !strings.Contains(plain, "Pipeline runs") || !strings.Contains(plain, "pr-lint") || !strings.Contains(plain, "branch-deploy") {
+			t.Fatalf("width %d: Overview should render non-policy PR & branch runs:\n%s", width, plain)
+		}
+		for _, line := range strings.Split(view, "\n") {
+			if w := ansi.StringWidth(line); w > width {
+				t.Errorf("width %d: line exceeds width (%d): %q", width, w, ansi.Strip(line))
+			}
+		}
+	}
+
+	// Clicking a non-policy run line in Overview opens its runView.
+	d := fakeRuns(t)
+	d.resize(160, 40)
+	d.data.PRRuns = []ado.Run{prRun}
+	d.data.BranchRuns = []ado.Run{brRun}
+	d.rebuildOverview()
+
+	lineIdx := -1
+	for l, c := range d.runLines {
+		if c.Name == "pr-lint" {
+			lineIdx = l
+		}
+	}
+	if lineIdx < 0 {
+		t.Fatal("pr-lint missing from d.runLines")
+	}
+	d.onMouse(click(5, d.bodyTop()+1+lineIdx))
+	if d.run == nil || d.run.run.ID != 601 {
+		t.Fatalf("clicking Overview pipeline run should open run 601, got %+v", d.run)
+	}
+}
+
+func projectPRsModel(t *testing.T, width, height int, prs []ado.PullRequest, builds map[int]buildResult) Model {
+	t.Helper()
+	m := dashCIModel(t, width, height, nil, nil)
+	proj := ado.ProjectInfo{ID: "p1", Name: "Demo"}
+	pm := newProject(m.client, proj, prs, []ado.Repo{{ID: "r1", Name: "app", Project: ado.Project{ID: "p1", Name: "Demo"}}})
+	pm.width, pm.height = width, height
+	pm.tab = projTabPRs
+	pm.buildsLoaded = true
+	if builds != nil {
+		pm.builds = builds
+	}
+	pm.lists[projTabPRs].setItems(pm.prItems())
+	m.project = pm
+	return m
+}
+
+func runProjectBatch(m Model, cmd tea.Cmd, steps int) Model {
+	queue := []tea.Cmd{cmd}
+	for step := 0; step < steps && len(queue) > 0; step++ {
+		var nextQueue []tea.Cmd
+		for _, c := range queue {
+			if c == nil {
+				continue
+			}
+			msg := c()
+			if msg == nil {
+				continue
+			}
+			if batch, ok := msg.(tea.BatchMsg); ok {
+				for _, sub := range batch {
+					if sub == nil {
+						continue
+					}
+					subMsg := sub()
+					if subMsg == nil {
+						continue
+					}
+					next, nextCmd := m.Update(subMsg)
+					m = next.(Model)
+					if nextCmd != nil {
+						nextQueue = append(nextQueue, nextCmd)
+					}
+				}
+				continue
+			}
+			next, nextCmd := m.Update(msg)
+			m = next.(Model)
+			if nextCmd != nil {
+				nextQueue = append(nextQueue, nextCmd)
+			}
+		}
+		queue = nextQueue
+	}
+	return m
+}
+
+func TestProjectPRsTabLazyLoadsAndRendersStatusCIColumnsAndBar(t *testing.T) {
+	prs := []ado.PullRequest{
+		makeDashPR(11, "feat: add api", false),
+		makeDashPR(12, "wip: draft pr", true),
+	}
+	r11 := fakeRun(701, 10, "api-build", "inProgress", "")
+	r12 := fakeRun(702, 20, "e2e-check", "completed", "failed")
+
+	// Switching onto projTabPRs lazily triggers CI loading.
+	m := projectPRsModel(t, 150, 20, prs, nil)
+	m.project.tab = projTabRepos
+	m.project.buildsLoaded = false
+	m, cmd := sendKeys(m, "2")
+	if m.project.tab != projTabPRs || !m.project.buildsLoaded || cmd == nil {
+		t.Fatalf("switching to tab 2 should mark buildsLoaded and trigger fetches (tab=%v loaded=%v cmd=%v)",
+			m.project.tab, m.project.buildsLoaded, cmd != nil)
+	}
+
+	// Populate builds via projectBuildMsg and verify rendering at widths 80, 120, 160.
+	builds := map[int]buildResult{
+		11: {summary: ado.CISummary{State: ado.BuildRunning, Running: 1, Checks: []ado.CICheck{
+			{Kind: ado.CICheckPRRun, Name: "api-build", State: ado.BuildRunning, StatusText: "in progress", Run: &r11, DefinitionID: 10},
+		}}},
+		12: {summary: ado.CISummary{State: ado.BuildFailed, Failed: 1, Checks: []ado.CICheck{
+			{Kind: ado.CICheckPRRun, Name: "e2e-check", State: ado.BuildFailed, StatusText: "failed", Run: &r12, DefinitionID: 20},
+		}}},
+	}
+	for _, w := range []int{80, 120, 160} {
+		mw := projectPRsModel(t, w, 20, prs, builds)
+		view := mw.View()
+		lines := strings.Split(view, "\n")
+		if len(lines) != 20 {
+			t.Errorf("width %d: view height = %d, want 20", w, len(lines))
+		}
+		for _, line := range lines {
+			if lw := ansi.StringWidth(line); lw > w {
+				t.Errorf("width %d: line exceeds width (%d): %q", w, lw, ansi.Strip(line))
+			}
+		}
+		plain := ansi.Strip(view)
+		if !strings.Contains(plain, "CI !11: ● api-build") {
+			t.Errorf("width %d: missing bottom CI summary bar:\n%s", w, plain)
+		}
+		if w < narrowCIWidth {
+			if !strings.Contains(plain, "ACT") || !strings.Contains(plain, "DRF") {
+				t.Errorf("width %d: expected narrow ACT/DRF status:\n%s", w, plain)
+			}
+		} else {
+			if !strings.Contains(plain, "Active") || !strings.Contains(plain, "Draft") || !strings.Contains(plain, "● run") || !strings.Contains(plain, "× err") {
+				t.Errorf("width %d: expected Active/Draft and CI cells:\n%s", w, plain)
+			}
+		}
+	}
+
+	// Clicking bottom CI summary bar opens b.
+	mClick := projectPRsModel(t, 150, 20, prs, builds)
+	_, y := findRow(t, mClick.View(), "CI !11:")
+	next, clickCmd := mClick.Update(click(5, y))
+	mClick = next.(Model)
+	if clickCmd != nil {
+		next, _ = mClick.Update(clickCmd())
+		mClick = next.(Model)
+	}
+	if mClick.dashRun == nil || mClick.dashRun.run.run.ID != 701 {
+		t.Fatalf("clicking bottom CI bar on Project -> PRs should open run 701, got %+v", mClick.dashRun)
+	}
+}
+
+func TestProjectPRsTabCommandsFilterPollingAndPalette(t *testing.T) {
+	savedCancel, savedQueue, savedList := cancelRun, queueRun, listPipelines
+	defer func() { cancelRun, queueRun, listPipelines = savedCancel, savedQueue, savedList }()
+
+	var cancelled []int
+	var queued []string
+	cancelRun = func(_ context.Context, _ *ado.Client, _ string, runID int) error {
+		cancelled = append(cancelled, runID)
+		return nil
+	}
+	queueRun = func(_ context.Context, _ *ado.Client, _ string, defID int, branch string) (ado.Run, error) {
+		queued = append(queued, fmt.Sprintf("%d:%s", defID, branch))
+		return fakeRun(950, defID, "deploy", "notStarted", ""), nil
+	}
+	listPipelines = func(_ context.Context, _ *ado.Client, _ string) ([]ado.Pipeline, error) {
+		return []ado.Pipeline{{ID: 88, Name: "deploy"}}, nil
+	}
+
+	r1 := fakeRun(801, 10, "api-ci", "inProgress", "")
+	r2 := fakeRun(802, 20, "web-lint", "completed", "failed")
+	prs := []ado.PullRequest{
+		makeDashPR(1, "alpha", false),
+		makeDashPR(2, "beta", true),
+	}
+	builds := map[int]buildResult{
+		1: {summary: ado.CISummary{State: ado.BuildRunning, Running: 1, Checks: []ado.CICheck{
+			{Kind: ado.CICheckPRRun, Name: "api-ci", State: ado.BuildRunning, StatusText: "in progress", Run: &r1, DefinitionID: 10},
+		}}},
+		2: {summary: ado.CISummary{State: ado.BuildFailed, Failed: 1, Checks: []ado.CICheck{
+			{Kind: ado.CICheckPRRun, Name: "web-lint", State: ado.BuildFailed, StatusText: "failed", Run: &r2, DefinitionID: 20},
+		}}},
+	}
+
+	m := projectPRsModel(t, 150, 20, prs, builds)
+
+	// 1. b opens dashRun over m.project with project breadcrumb, esc returns directly to m.project.
+	m, cmd := sendKeys(m, "b")
+	m = runProjectBatch(m, cmd, 1)
+	if m.dashRun == nil || m.dashRun.run.run.ID != 801 || m.project == nil {
+		t.Fatalf("b on Project -> PRs should open dashRun over project: dashRun=%+v project=%v", m.dashRun, m.project)
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "Demo › Pull requests") {
+		t.Fatalf("dashRun breadcrumb should show Demo › Pull requests:\n%s", ansi.Strip(m.View()))
+	}
+	m, _ = sendKeys(m, "esc")
+	if m.dashRun != nil || m.project == nil || m.project.tab != projTabPRs {
+		t.Fatalf("esc should return to Project -> PRs tab, dashRun=%v project=%v", m.dashRun, m.project)
+	}
+
+	// 2. X cancels active run over m.project and updates project.watchCI.
+	m, cmd = sendKeys(m, "X")
+	m = runProjectBatch(m, cmd, 1)
+	if cf, ok := m.modal.(*confirmModal); !ok || !strings.Contains(cf.prompt, "Cancel api-ci") {
+		t.Fatalf("expected cancel confirm over project, got %T", m.modal)
+	}
+	m, cmd = sendKeys(m, "y")
+	m = runProjectBatch(m, cmd, 1)
+	if len(cancelled) != 1 || cancelled[0] != 801 {
+		t.Fatalf("cancelled = %v, want [801]", cancelled)
+	}
+	if _, watched := m.project.watchCI[1]; !watched {
+		t.Fatal("ciActionMsg should record PR 1 in m.project.watchCI")
+	}
+
+	// 3. t opens pipelinePicker, confirms, and queues on source branch.
+	m, cmd = sendKeys(m, "t")
+	m = runProjectBatch(m, cmd, 2)
+	if _, ok := m.modal.(*pipelinePicker); !ok {
+		t.Fatalf("t on Project -> PRs should open pipelinePicker, got %T", m.modal)
+	}
+	m, cmd = sendKeys(m, "enter")
+	m, cmd = sendKeys(m, "y")
+	m = runProjectBatch(m, cmd, 1)
+	if strings.Join(queued, ",") != "88:refs/heads/feat/1" {
+		t.Fatalf("queued = %v, want [88:refs/heads/feat/1]", queued)
+	}
+
+	// 4. Q on failed non-policy PR 2 opens Retry/Run-new choice menu.
+	m, cmd = sendKeys(m, "j", "Q")
+	m = runProjectBatch(m, cmd, 1)
+	if m.modal == nil || !strings.Contains(ansi.Strip(m.modal.view(m.width)), "Retry failed jobs") {
+		t.Fatalf("expected Retry/Run-new menu, got %T", m.modal)
+	}
+	m, _ = sendKeys(m, "esc")
+
+	// 5. / filter on Project -> PRs matches draft, err, and pipeline name.
+	for _, tc := range []struct {
+		query string
+		want  int
+	}{
+		{"draft", 2},
+		{"err", 2},
+		{"web-lint", 2},
+		{"api-ci", 1},
+	} {
+		m.project.lists[projTabPRs].filter = tc.query
+		vis := m.project.lists[projTabPRs].visible()
+		if len(vis) != 1 || m.project.lists[projTabPRs].items[vis[0]].value.(ado.PullRequest).ID != tc.want {
+			t.Errorf("Project -> PRs filter %q matched %d items, want PR %d", tc.query, len(vis), tc.want)
+		}
+	}
+	m.project.lists[projTabPRs].filter = ""
+
+	// 6. Adaptive polling on projectModel: starts for active run, ignores manual queued, stops when done or switched away.
+	mp := projectPRsModel(t, 150, 20, prs, map[int]buildResult{})
+	manualPol := ado.Policy{EvaluationID: "e-man", Status: "queued"}
+	manualPol.Configuration.IsEnabled = true
+	manualPol.Configuration.Type.ID = ado.PolicyTypeBuild
+	sumManual := ado.SummarizeCI([]ado.Policy{manualPol}, nil, nil, nil)
+	next, pollCmd := mp.Update(projectBuildMsg{from: mp.client, projectID: "p1", prID: 2, result: buildResult{summary: sumManual}})
+	mp = next.(Model)
+	if mp.project.ciPolling || pollCmd != nil {
+		t.Fatal("manual queued policy must not start polling on projectModel")
+	}
+	next, pollCmd = mp.Update(projectBuildMsg{from: mp.client, projectID: "p1", prID: 1, result: builds[1]})
+	mp = next.(Model)
+	if !mp.project.ciPolling || pollCmd == nil {
+		t.Fatal("active run must start polling on projectModel")
+	}
+	gen := mp.project.ciPollGen
+	// Stale generation dropped.
+	next, stale := mp.Update(projectCIPollTickMsg{from: mp.client, projectID: "p1", gen: gen - 1})
+	if stale != nil {
+		t.Fatal("stale projectCIPollTickMsg should be ignored")
+	}
+	// Switching off projTabPRs stops polling on tick.
+	mp.project.tab = projTabRepos
+	next, offTab := mp.Update(projectCIPollTickMsg{from: mp.client, projectID: "p1", gen: gen})
+	mp = next.(Model)
+	if mp.project.ciPolling || offTab != nil {
+		t.Fatal("polling should stop when user leaves projTabPRs")
+	}
+
+	// 7. Palette : on Project -> PRs shows CI/CD group and executes b locally.
+	mp.project.tab = projTabPRs
+	mp, _ = sendKeys(mp, ":")
+	titles := groupTitles(openedPalette(t, mp))
+	hasCI := false
+	for _, title := range titles {
+		if title == "CI/CD" {
+			hasCI = true
+		}
+	}
+	if !hasCI {
+		t.Fatalf("Project -> PRs palette should include CI/CD group, got %v", titles)
+	}
+	mp = typeText(mp, "pipeline runs")
+	mp, cmd = sendKeys(mp, "enter")
+	mp = runProjectBatch(mp, cmd, 2)
+	if mp.detail != nil || mp.dashRun == nil || mp.dashRun.run.run.ID != 801 {
+		t.Fatalf("Project -> PRs palette 'Pipeline runs' should open dashRun locally: detail=%v dashRun=%+v", mp.detail, mp.dashRun)
+	}
+}

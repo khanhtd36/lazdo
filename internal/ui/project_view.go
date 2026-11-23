@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/khanhtd36/lazdo/internal/ado"
 )
 
 // bodyTop is the first body row, right below the title and tabs: the block
@@ -121,7 +123,28 @@ func (m *projectModel) body() []string {
 		return m.settings.view(w, h)
 	}
 	l := &m.lists[m.tab]
+	if m.showPRCISummary() {
+		lines := framePanes(h-1, listPane(fmt.Sprintf("%s (%d)", m.tab.title(), len(l.items)), l, w, h-1))
+		return append(lines, truncate(m.prCISummaryLine(), w))
+	}
 	return framePanes(h, listPane(fmt.Sprintf("%s (%d)", m.tab.title(), len(l.items)), l, w, h))
+}
+
+func (m *projectModel) showPRCISummary() bool {
+	return m.level == levelTabs && m.tab == projTabPRs && m.bodyHeight() >= 4
+}
+
+func (m *projectModel) prCISummaryLine() string {
+	var pr *ado.PullRequest
+	if sel, ok := m.selectedPR(); ok {
+		pr = &sel
+	}
+	var b buildResult
+	var has bool
+	if pr != nil && m.builds != nil {
+		b, has = m.builds[pr.ID]
+	}
+	return formatCISummaryLine(pr, b, has, m.width)
 }
 
 // messagePane is a lone focused pane holding a line such as "loading…".
@@ -196,6 +219,9 @@ func (m *projectModel) onMouse(msg tea.MouseMsg) tea.Cmd {
 	if d := wheelDelta(msg); d != 0 {
 		l.wheel(d)
 		return nil
+	}
+	if m.showPRCISummary() && isClick(msg) && by == m.bodyHeight()-1 {
+		return m.openSelectedPRRuns()
 	}
 	if isClick(msg) && l.click(by-1) { // below the pane's top edge
 		return m.key(tea.KeyMsg{Type: tea.KeyEnter})

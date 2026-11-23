@@ -260,6 +260,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if scr == nil {
 			return m, cmd
 		}
+		scr.origin = msg.origin
 		m.dashRun = scr
 		return m, cmd
 	case ciActionMsg:
@@ -268,7 +269,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.onDashCIAction(msg)
 	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg,
-		folderMsg, indexMsg, contentMsg, projectPRsMsg,
+		folderMsg, indexMsg, contentMsg, projectPRsMsg, projectBuildMsg, projectCIPollTickMsg,
 		commitsMsg, releaseMsg, tagsMsg, tagInfoMsg, refsChangedMsg,
 		settingsLoadedMsg, settingsMembersMsg, settingsSavedMsg, settingsReloadMsg, permDiscardMsg:
 		if m.project != nil {
@@ -415,11 +416,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.detail != nil {
 			return m.onDetailKey(msg)
 		}
-		if m.project != nil {
-			return m.onProjectKey(msg)
-		}
 		if m.dashRun != nil {
 			return m.onDashRunKey(msg)
+		}
+		if m.project != nil {
+			return m.onProjectKey(msg)
 		}
 		if !m.typing() {
 			if p, ok := m.pageKey(msg.String()); ok {
@@ -484,10 +485,10 @@ func (m Model) typing() bool {
 	switch {
 	case m.detail != nil:
 		return m.detail.modal != nil || m.detail.typing()
-	case m.project != nil:
-		return m.project.typing()
 	case m.dashRun != nil:
 		return m.dashRun.run.tree.typing || m.dashRun.run.find.typing
+	case m.project != nil:
+		return m.project.typing()
 	case m.page == pageProjects:
 		return m.projects.list.typing
 	}
@@ -1013,7 +1014,16 @@ func (m Model) onDashRunKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		pr := m.dashRun.pr
 		m.dashRun = nil
 		if changed {
-			return m, m.fetchBuild(pr)
+			var cmds []tea.Cmd
+			if _, ok := m.prByID(pr.ID); ok {
+				cmds = append(cmds, m.fetchBuild(pr))
+			}
+			if m.project != nil {
+				if _, ok := m.project.prByID(pr.ID); ok {
+					cmds = append(cmds, m.project.fetchPRBuild(pr))
+				}
+			}
+			return m, tea.Batch(cmds...)
 		}
 		return m, nil
 	}
@@ -1029,6 +1039,9 @@ func (m Model) onDashCIAction(msg ciActionMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.detail != nil {
 			return m.Update(statusMsg(fmt.Sprintf("!%d: %s", msg.prID, errText)))
+		}
+		if m.project != nil {
+			return m, m.project.onCIAction(msg)
 		}
 		m.status = errText
 		return m, nil
@@ -1061,6 +1074,15 @@ func (m Model) onDashCIAction(msg ciActionMsg) (tea.Model, tea.Cmd) {
 	if pollCmd := m.ensureCIPoll(); pollCmd != nil {
 		cmds = append(cmds, pollCmd)
 	}
+	projHandled := false
+	if m.project != nil {
+		if _, ok := m.project.prByID(msg.prID); ok {
+			projHandled = true
+			if pcmd := m.project.onCIAction(msg); pcmd != nil {
+				cmds = append(cmds, pcmd)
+			}
+		}
+	}
 
 	switch {
 	case m.dashRun != nil && m.dashRun.pr.ID == msg.prID:
@@ -1082,6 +1104,7 @@ func (m Model) onDashCIAction(msg ciActionMsg) (tea.Model, tea.Cmd) {
 			if msg.run.ID > 0 {
 				scr, cmd := newPRRunScreen(m.client, m.dashRun.pr, ciCheckFromRun(msg.name, nil, msg.run, msg.run.Definition.ID, ado.CICheckBranchRun, false))
 				if scr != nil {
+					scr.origin = m.dashRun.origin
 					scr.status = okText
 					m.dashRun = scr
 					cmds = append(cmds, cmd)
@@ -1097,6 +1120,7 @@ func (m Model) onDashCIAction(msg ciActionMsg) (tea.Model, tea.Cmd) {
 		}
 	case m.detail != nil:
 		cmds = append(cmds, statusCmd(fmt.Sprintf("!%d: %s", msg.prID, okText)))
+	case projHandled:
 	default:
 		m.status = okText
 	}

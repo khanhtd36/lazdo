@@ -174,14 +174,6 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		d.scrollToEntry()
 	case "f":
 		d.modal = d.filterMenu()
-	case "b":
-		return d.loadRuns()
-	case "Q":
-		return d.requeueKey()
-	case "X":
-		return d.cancelKey()
-	case "t":
-		return d.triggerKey()
 	case "w":
 		return d.openReviewers()
 	case "enter":
@@ -332,6 +324,11 @@ func (d *detailModel) renderOverview() string {
 			below[l+len(all)] = p // the side panes lead
 		}
 		d.buildLines = below
+		belowRuns := make(map[int]ado.CICheck, len(d.runLines))
+		for l, c := range d.runLines {
+			belowRuns[l+len(all)] = c
+		}
+		d.runLines = belowRuns
 		return strings.Join(append(all, main...), "\n")
 	}
 	d.entryLines = shift(offsets, activityStart)
@@ -416,6 +413,7 @@ func (d *detailModel) renderChecks(width int) []string {
 		out = append(out, styleGreen.Render("✓ Required checks succeeded"))
 	}
 	d.buildLines = map[int]ado.Policy{}
+	d.runLines = map[int]ado.CICheck{}
 	line := func(p ado.Policy) {
 		if p.Configuration.Type.ID == policyTypeBuild {
 			d.buildLines[len(out)] = p
@@ -433,6 +431,21 @@ func (d *detailModel) renderChecks(width int) []string {
 		}
 		for _, s := range unrequired {
 			out = append(out, "  "+truncate(statusIcon(s.State)+" "+statusText(s, s.Key()), width-2))
+		}
+	}
+	var extraRuns []ado.CICheck
+	for _, c := range d.ciChecks() {
+		if c.Kind == ado.CICheckPRRun || c.Kind == ado.CICheckBranchRun {
+			extraRuns = append(extraRuns, c)
+		}
+	}
+	if len(extraRuns) > 0 {
+		out = append(out, styleDim.Render("Pipeline runs"))
+		for _, c := range extraRuns {
+			d.runLines[len(out)] = c
+			source := pick2(c.Kind == ado.CICheckPRRun, "PR trigger", "source branch")
+			row := ciGlyph(c.State, c.StatusText) + " " + c.Name + styleDim.Render("  "+c.StatusText+" · "+source)
+			out = append(out, "  "+truncate(row, width-2))
 		}
 	}
 	out = append(out, d.mergeLine())

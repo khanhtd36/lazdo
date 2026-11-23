@@ -141,7 +141,7 @@ func (d *detailModel) onRuns(msg prRunsMsg) tea.Cmd {
 	if d.status == "loading runs…" {
 		d.status = ""
 	}
-	if d.modal != nil || d.run != nil || d.tab != tabOverview {
+	if d.modal != nil || d.run != nil {
 		return nil // moved on while they loaded
 	}
 	if msg.err != nil {
@@ -266,7 +266,7 @@ func (d *detailModel) runKey(msg tea.KeyMsg) tea.Cmd {
 func (d *detailModel) runCrumbs() string {
 	r := d.run.run
 	s := strings.Join([]string{
-		"Overview", "Pipeline runs",
+		d.tab.title(), "Pipeline runs",
 		styleTitle.Render("run " + d.runLabel()),
 		runGlyph(r.Status, r.Result) + " " + d.runName,
 	}, styleDim.Render(" › "))
