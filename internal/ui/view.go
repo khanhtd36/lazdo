@@ -14,35 +14,45 @@ import (
 )
 
 var (
-	styleTitle  = lipgloss.NewStyle().Bold(true)
-	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	styleCursor = lipgloss.NewStyle().Bold(true).Foreground(accent)
-	styleDim    = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	styleGreen  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	styleYellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	styleRed    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	styleCyan   = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
-	styleDraft  = lipgloss.NewStyle().Foreground(lipgloss.Color("244")) // grayed: a draft isn't asking for review yet
+	styleTitle       = lipgloss.NewStyle().Bold(true)
+	styleHeader      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	styleCursor      = lipgloss.NewStyle().Bold(true).Foreground(accent)
+	styleDim         = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	styleGreen       = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	styleYellow      = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	styleRed         = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	styleCyan        = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	styleDraft       = lipgloss.NewStyle().Foreground(lipgloss.Color("244")) // grayed: a draft isn't asking for review yet
+	styleActive      = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	styleDraftStatus = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
 )
 
 // Fixed widths of the right-hand columns; the title takes what's left.
 const (
+	colStatus        = 6
+	colStatusNarrow  = 3
 	colAuthor        = 16
 	colAuthorCompact = 4
 	colID            = 7
 	colRepo          = 28
 	colComments      = 6
-	colBuild         = 2
+	colBuild         = 8
+	colBuildNarrow   = 2
 	colUpdated       = 9
 )
 
 // compactWidth is the width below which badges and author names shorten.
-const compactWidth = 150
+// narrowCIWidth is the width below which PR status and CI/CD cells shrink.
+const (
+	compactWidth  = 150
+	narrowCIWidth = 110
+)
 
 type column int
 
 const (
-	columnAuthor column = iota
+	columnStatus column = iota
+	columnAuthor
 	columnID
 	columnRepo
 	columnComments
@@ -54,16 +64,22 @@ const (
 // columnPriority is which columns get room first when the title would
 // otherwise get squeezed; one that doesn't fit gives way to smaller ones
 // after it. The ID always stays.
-var columnPriority = []column{columnID, columnBuild, columnRepo, columnComments, columnAuthor, columnUpdated}
+var columnPriority = []column{columnID, columnStatus, columnBuild, columnRepo, columnComments, columnAuthor, columnUpdated}
 
 // rowLayout is how dashboard rows fit the current width.
 type rowLayout struct {
-	compact bool
-	shown   [columnCount]bool
+	compact  bool
+	narrowCI bool
+	shown    [columnCount]bool
 }
 
 func (l rowLayout) width(c column) int {
 	switch c {
+	case columnStatus:
+		if l.narrowCI {
+			return colStatusNarrow
+		}
+		return colStatus
 	case columnAuthor:
 		if l.compact {
 			return colAuthorCompact
@@ -76,6 +92,9 @@ func (l rowLayout) width(c column) int {
 	case columnComments:
 		return colComments
 	case columnBuild:
+		if l.narrowCI {
+			return colBuildNarrow
+		}
 		return colBuild
 	case columnUpdated:
 		return colUpdated
@@ -85,10 +104,10 @@ func (l rowLayout) width(c column) int {
 }
 
 func (m Model) rowLayout() rowLayout {
-	l := rowLayout{compact: m.width < compactWidth}
-	badges := 22 // room for typical badges like "[draft] [2 new pushes]"
+	l := rowLayout{compact: m.width < compactWidth, narrowCI: m.width < narrowCIWidth}
+	badges := 15 // room for typical badges like "[2 new pushes]"
 	if l.compact {
-		badges = 9 // "[d] [+8p]"
+		badges = 5 // "[+8p]"
 	}
 	// What's left once the title has its third, after cursor, indent, gaps.
 	room := m.width - 6 - badges - max(24, m.width/3)
@@ -117,6 +136,9 @@ func (m Model) View() string {
 	if m.project != nil {
 		return m.project.view()
 	}
+	if m.dashRun != nil {
+		return m.dashRun.view(m.width, m.height, m.helpGroups())
+	}
 	var b strings.Builder
 	b.WriteString(m.titleLine() + "\n")
 	if m.page == pageProjects {
@@ -134,13 +156,17 @@ func (m Model) View() string {
 		focused = rows[m.cursor].section
 	}
 	lines := dashLines(rows)
-	end := min(len(lines), m.offset+m.listHeight())
+	lh := m.prListHeight()
+	end := min(len(lines), m.offset+lh)
 	for i := m.offset; i < end; i++ {
 		l := lines[i]
 		b.WriteString(truncate(m.dashboardLine(rows, l, l.row == m.cursor && !l.bottom, l.section == focused), m.width) + "\n")
 	}
-	for i := end - m.offset; i < m.listHeight(); i++ {
+	for i := end - m.offset; i < lh; i++ {
 		b.WriteString("\n")
+	}
+	if m.height >= 5 {
+		b.WriteString(truncate(m.ciSummaryLine(), m.width) + "\n")
 	}
 	b.WriteString(m.statusLine() + "\n")
 	b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width)))
@@ -272,9 +298,6 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	layout := m.rowLayout()
 
 	var badges []string
-	if pr.IsDraft {
-		badges = append(badges, draftBadge(layout.compact))
-	}
 	if hasStats {
 		badges = append(badges, sinceLastVisit(stats, layout.compact)...)
 	}
@@ -285,11 +308,12 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 		author = nameInitials(author)
 	}
 	cells := [columnCount]string{
+		columnStatus:   fitStyled(prStatusCell(pr.IsDraft, layout.narrowCI), layout.width(columnStatus)),
 		columnAuthor:   styleDim.Render(fit(author, layout.width(columnAuthor))),
 		columnID:       fit(fmt.Sprintf("!%d", pr.ID), colID),
 		columnRepo:     styleDim.Render(fit(pr.Repository.Name+" → "+pr.TargetBranch(), colRepo)),
 		columnComments: fitStyled(m.comments(stats, hasStats), colComments),
-		columnBuild:    fitStyled(build(buildRes, hasBuild), colBuild),
+		columnBuild:    fitStyled(ciCell(buildRes, hasBuild, layout.narrowCI), layout.width(columnBuild)),
 		columnUpdated:  styleDim.Render(fit(updated(stats, pr), colUpdated)),
 	}
 	var shown []string
@@ -386,23 +410,17 @@ func (m Model) comments(s ado.Stats, ok bool) string {
 	return fmt.Sprint(s.Comments)
 }
 
-func build(b buildResult, ok bool) string {
-	switch {
-	case !ok:
-		return styleDim.Render("…")
-	case b.err != nil:
-		return styleRed.Render("?")
+func prStatusCell(draft, narrow bool) string {
+	if draft {
+		if narrow {
+			return styleDraftStatus.Render("DRF")
+		}
+		return styleDraftStatus.Render("Draft")
 	}
-	switch b.state {
-	case ado.BuildPassed:
-		return styleGreen.Render("✓")
-	case ado.BuildFailed:
-		return styleRed.Render("×")
-	case ado.BuildRunning:
-		return styleYellow.Render("●")
-	case ado.BuildNone:
+	if narrow {
+		return styleActive.Render("ACT")
 	}
-	return styleDim.Render("·")
+	return styleActive.Render("Active")
 }
 
 func updated(s ado.Stats, pr *ado.PullRequest) string {

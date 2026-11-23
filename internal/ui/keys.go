@@ -34,8 +34,12 @@ var (
 	}
 	dashboardKeys = []binding{
 		{keys: "enter", desc: "open the pull request, or collapse a section", press: "enter", hint: "open"},
+		{keys: "b", desc: "pipeline runs: view logs or trigger", press: "b", hint: "runs"},
+		{keys: "Q", desc: "re-queue / re-run a pipeline (asks first)", press: "Q", hint: "rerun"},
+		{keys: "X", desc: "cancel a running or queued pipeline (asks first)", press: "X", hint: "cancel"},
+		{keys: "t", desc: "trigger a pipeline on the PR's source branch", press: "t", hint: "trigger"},
 		{keys: "J / K", desc: "next / previous section", press: "J", hint: "section"},
-		{keys: "/", desc: "filter pull requests by title, author, ID or branch", press: "/", hint: "filter"},
+		{keys: "/", desc: "filter pull requests by title, author, ID, branch, status or CI", press: "/", hint: "filter"},
 		{keys: "y", desc: "copy menu: URL, branch, ID, title", press: "y", hint: "copy"},
 		{keys: "o", desc: "open the pull request in the browser", press: "o", hint: "browser"},
 		{keys: "c", desc: "check out the source branch (asks where)", press: "c", hint: "checkout"},
@@ -72,8 +76,10 @@ var (
 		{keys: "a", desc: "add a comment on the pull request", press: "a", hint: "comment"},
 		{keys: "R / s", desc: "reply / status on the selected thread", press: "R"},
 		{keys: "f", desc: "choose the activity filter", press: "f", hint: "filter"},
-		{keys: "b", desc: "pipeline runs: open one (the only one opens straight away)", press: "b", hint: "runs"},
-		{keys: "Q", desc: "re-queue a build policy (asks first)", press: "Q"},
+		{keys: "b", desc: "pipeline runs: open one (or trigger if none)", press: "b", hint: "runs"},
+		{keys: "Q", desc: "re-queue / re-run a pipeline (asks first)", press: "Q"},
+		{keys: "X", desc: "cancel a running or queued pipeline (asks first)", press: "X"},
+		{keys: "t", desc: "trigger a pipeline on the PR's source branch", press: "t"},
 		{keys: "w", desc: "reviewers: add (a, or A required), make required/optional (t), remove (d)", press: "w", hint: "reviewers"},
 		{keys: "/", desc: "find text; n / N (or p) next / previous match", press: "/", hint: "find"},
 		{keys: "y", desc: "copy menu: URL, branch, ID, title", press: "y", hint: "copy"},
@@ -205,8 +211,15 @@ var (
 	}
 	// prRunKeys are a run opened from a pull request.
 	prRunKeys = append(append([]binding{}, runKeys[:len(runKeys)-1]...),
-		binding{keys: "Q", desc: "re-queue the build policy behind this run (asks first)", press: "Q", hint: "re-queue"},
+		binding{keys: "Q", desc: "re-queue / re-run this pipeline (asks first)", press: "Q", hint: "re-queue"},
+		binding{keys: "X", desc: "cancel this running or queued pipeline (asks first)", press: "X", hint: "cancel"},
 		binding{keys: "esc", desc: "log: back to the steps · steps: back to the pull request", press: "esc", hint: "back"},
+	)
+	// dashRunKeys are a run opened directly from the Pull requests dashboard.
+	dashRunKeys = append(append([]binding{}, runKeys[:len(runKeys)-1]...),
+		binding{keys: "Q", desc: "re-queue / re-run this pipeline (asks first)", press: "Q", hint: "re-queue"},
+		binding{keys: "X", desc: "cancel this running or queued pipeline (asks first)", press: "X", hint: "cancel"},
+		binding{keys: "esc", desc: "log: back to the steps · steps: back to the pull requests list", press: "esc", hint: "back"},
 	)
 	// prRunPRKeys are the pull request keys that still work over its run.
 	prRunPRKeys = append(append([]binding{}, detailKeys[:5]...), detailKeys[6])
@@ -226,10 +239,12 @@ func (m Model) helpGroups() []bindingGroup {
 		return m.detail.helpGroups()
 	case m.project != nil:
 		return m.project.helpGroups()
+	case m.dashRun != nil:
+		return withCommon(bindingGroup{"Run", dashRunKeys})
 	case m.page == pageProjects:
 		return withCommon(bindingGroup{"Projects", projectsPageKeys}, bindingGroup{"Pages", pageKeys})
 	}
-	return withCommon(bindingGroup{"Dashboard", dashboardKeys}, bindingGroup{"Markers", markerLegend()}, bindingGroup{"Pages", pageKeys})
+	return withCommon(bindingGroup{"Dashboard", dashboardKeys}, bindingGroup{"Status & CI", ciLegend()}, bindingGroup{"Markers", markerLegend()}, bindingGroup{"Pages", pageKeys})
 }
 
 // withCommon appends the movement and global keys every view shares.

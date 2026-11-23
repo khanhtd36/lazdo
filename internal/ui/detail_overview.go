@@ -178,6 +178,10 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		return d.loadRuns()
 	case "Q":
 		return d.requeueKey()
+	case "X":
+		return d.cancelKey()
+	case "t":
+		return d.triggerKey()
 	case "w":
 		return d.openReviewers()
 	case "enter":

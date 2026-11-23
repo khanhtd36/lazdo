@@ -32,16 +32,17 @@ type menuModal struct {
 	title  string
 	items  []menuItem
 	cursor int
+	back   modal
 	// keys are extra keys acting on the item under the cursor, named in hint.
 	keys map[string]func(i int) (modal, tea.Cmd)
 	hint string
 }
 
 func (m *menuModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
-	last := len(m.items) - 1
+	last := max(0, len(m.items)-1)
 	switch msg.String() {
 	case "esc":
-		return nil, nil
+		return m.back, nil
 	case "j", "down":
 		m.cursor = min(m.cursor+1, last)
 	case "k", "up":
@@ -55,6 +56,9 @@ func (m *menuModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 	case "G", "end":
 		m.cursor = last
 	case "enter":
+		if len(m.items) == 0 {
+			return m, nil
+		}
 		it := m.items[m.cursor]
 		if it.disabled != "" {
 			return m, statusCmd(it.disabled)

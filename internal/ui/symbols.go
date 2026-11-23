@@ -83,3 +83,15 @@ func markerLegend() []binding {
 		{keys: "[draft]", desc: "draft ([d] when narrow)"},
 	}
 }
+
+func ciLegend() []binding {
+	return []binding{
+		{keys: "Active / Draft", desc: "PR status (ACT / DRF when narrow)"},
+		{keys: "✓ pass / ✓ 2/2", desc: "all CI/CD checks passed"},
+		{keys: "● run / ● 1 run", desc: "CI/CD pipeline currently running"},
+		{keys: "○ queue / ○ 1 que", desc: "CI/CD pipeline queued or waiting"},
+		{keys: "! warn / ! 1 wrn", desc: "CI/CD pipeline partially succeeded"},
+		{keys: "× err / × 1 err", desc: "one or more CI/CD checks failed"},
+		{keys: "·", desc: "no CI/CD pipeline or check yet"},
+	}
+}

@@ -80,6 +80,7 @@ type detailModel struct {
 	run       *runView
 	runName   string      // its pipeline or build policy
 	runPolicy *ado.Policy // the build policy behind it; nil for another pipeline
+	runCheck  ado.CICheck // the CI check behind the open run
 	runStart  string      // its state when first loaded, to spot a change
 	wait      *runWait    // a re-queue waiting for its new run
 	// buildLines maps Overview lines to the build policy checks on them.
@@ -270,6 +271,14 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		return d.onRuns(msg)
 	case requeuedMsg:
 		return d.onRequeued(msg)
+	case ciActionMsg:
+		return d.onCIAction(msg)
+	case prPipelinesMsg:
+		if p, ok := d.modal.(*pipelinePicker); ok {
+			var cmd tea.Cmd
+			d.modal, cmd = p.onPipelines(msg)
+			return cmd
+		}
 	case runWaitTickMsg:
 		return d.onWaitTick(msg)
 	case runWaitMsg:

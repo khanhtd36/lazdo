@@ -36,7 +36,11 @@ func TestViewFitsWidth(t *testing.T) {
 	m.loading = false
 	m.sections = ado.Classify("me", []ado.PullRequest{pr}, nil)
 	m.stats = map[int]ado.Stats{pr.ID: {Comments: 2, ActiveComments: 2, Visited: true, NewPushes: 8, NewComments: 1}}
-	m.builds[pr.ID] = buildResult{state: ado.BuildFailed}
+	m.builds[pr.ID] = buildResult{summary: ado.CISummary{
+		State:  ado.BuildFailed,
+		Failed: 1,
+		Checks: []ado.CICheck{{Name: "ci", State: ado.BuildFailed, StatusText: "failed"}},
+	}}
 
 	for _, width := range []int{80, 120, 200} {
 		next, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: 20})
@@ -75,11 +79,16 @@ func TestDashboardCompactLayout(t *testing.T) {
 		view := ansi.Strip(next.View())
 
 		compact := width < compactWidth
-		if compact != strings.Contains(view, "[d]") || compact == strings.Contains(view, "[draft]") {
+		narrowCI := width < narrowCIWidth
+		if narrowCI != (strings.Contains(view, "ACT") && strings.Contains(view, "DRF")) ||
+			narrowCI == (strings.Contains(view, "Active") && strings.Contains(view, "Draft")) {
+			t.Errorf("width %d: narrowCI=%v but status column is wrong:\n%s", width, narrowCI, view)
+		}
+		if compact != strings.Contains(view, "[+8p]") {
 			t.Errorf("width %d: compact=%v but badges are wrong:\n%s", width, compact, view)
 		}
-		if strings.Contains(view, "[r]") || strings.Contains(view, "[required]") {
-			t.Errorf("width %d: no required badge:\n%s", width, view)
+		if strings.Contains(view, "[r]") || strings.Contains(view, "[required]") || strings.Contains(view, "[draft]") || strings.Contains(view, "[d]") {
+			t.Errorf("width %d: unexpected legacy badge:\n%s", width, view)
 		}
 		if compact && (!strings.Contains(view, "TDK") || !strings.Contains(view, "[+8p]")) {
 			t.Errorf("width %d: want initials TDK and [+8p]:\n%s", width, view)
