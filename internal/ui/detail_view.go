@@ -26,7 +26,7 @@ func (d *detailModel) view() string {
 
 	body := d.body()
 	if d.modal != nil {
-		body = lipgloss.Place(d.width, d.bodyHeight(), lipgloss.Center, lipgloss.Center, d.modal.view(d.width))
+		body = overlayCenter(body, d.modal.view(d.width), d.width, d.bodyHeight())
 	}
 	lines := strings.Split(body, "\n")
 	for i := range d.bodyHeight() {

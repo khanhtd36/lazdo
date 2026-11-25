@@ -14,16 +14,22 @@ import (
 )
 
 var (
-	styleTitle  = lipgloss.NewStyle().Bold(true)
-	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
-	styleCursor = lipgloss.NewStyle().Bold(true).Foreground(accent)
-	styleDim    = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	styleGreen  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	styleYellow = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	styleRed    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	styleCyan   = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
-	styleDraft  = lipgloss.NewStyle().Foreground(lipgloss.Color("244")) // grayed: a draft isn't asking for review yet
+	styleTitle       = lipgloss.NewStyle().Bold(true)
+	styleHeader      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	styleCursor      = lipgloss.NewStyle().Bold(true).Foreground(accent)
+	styleDim         = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	styleGreen       = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	styleYellow      = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	styleRed         = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	styleCyan        = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	styleDraft       = lipgloss.NewStyle().Foreground(lipgloss.Color("244")) // grayed: a draft isn't asking for review yet
+	styleActive      = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	styleDraftStatus = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
 )
+
+// cursorRow is the tint behind the row the cursor is on: dark neutral enough
+// that status, icon, and draft colors on top of it still read.
+var cursorRow = lipgloss.Color("237")
 
 // Fixed widths of the right-hand columns; the title takes what's left.
 const (
@@ -32,12 +38,17 @@ const (
 	colID            = 7
 	colRepo          = 28
 	colComments      = 6
-	colBuild         = 2
+	colBuild         = 8
+	colBuildNarrow   = 2
 	colUpdated       = 9
 )
 
 // compactWidth is the width below which badges and author names shorten.
-const compactWidth = 150
+// narrowCIWidth is the width below which CI/CD cells shrink.
+const (
+	compactWidth  = 150
+	narrowCIWidth = 110
+)
 
 type column int
 
@@ -58,8 +69,9 @@ var columnPriority = []column{columnID, columnBuild, columnRepo, columnComments,
 
 // rowLayout is how dashboard rows fit the current width.
 type rowLayout struct {
-	compact bool
-	shown   [columnCount]bool
+	compact  bool
+	narrowCI bool
+	shown    [columnCount]bool
 }
 
 func (l rowLayout) width(c column) int {
@@ -76,6 +88,9 @@ func (l rowLayout) width(c column) int {
 	case columnComments:
 		return colComments
 	case columnBuild:
+		if l.narrowCI {
+			return colBuildNarrow
+		}
 		return colBuild
 	case columnUpdated:
 		return colUpdated
@@ -85,13 +100,13 @@ func (l rowLayout) width(c column) int {
 }
 
 func (m Model) rowLayout() rowLayout {
-	l := rowLayout{compact: m.width < compactWidth}
-	badges := 22 // room for typical badges like "[draft] [2 new pushes]"
+	l := rowLayout{compact: m.width < compactWidth, narrowCI: m.width < narrowCIWidth}
+	badges := 15 // room for typical badges like "[2 new pushes]"
 	if l.compact {
-		badges = 9 // "[d] [+8p]"
+		badges = 5 // "[+8p]"
 	}
-	// What's left once the title has its third, after cursor, indent, gaps.
-	room := m.width - 6 - badges - max(24, m.width/3)
+	// What's left once the title has its third, after frame, cursor, indent, status icon, gaps.
+	room := m.width - 8 - badges - max(24, m.width/3)
 	for _, c := range columnPriority {
 		if need := l.width(c) + 1; need <= room || c == columnID {
 			l.shown[c] = true
@@ -105,14 +120,22 @@ func (m Model) View() string {
 	if m.width == 0 {
 		return ""
 	}
-	if m.help != nil {
-		return m.help.place(m.width, m.height)
-	}
+	base := m.baseView()
 	if m.modal != nil {
-		return placeModal(m.modal, m.width, m.height)
+		base = overlayCenter(base, m.modal.view(m.width), m.width, m.height)
 	}
+	if m.help != nil {
+		return overlayCenter(base, m.help.view(), m.width, m.height)
+	}
+	return base
+}
+
+func (m Model) baseView() string {
 	if m.detail != nil {
 		return m.detail.view()
+	}
+	if m.dashRun != nil {
+		return m.dashRun.view(m.width, m.height, m.helpGroups())
 	}
 	if m.project != nil {
 		return m.project.view()
@@ -134,13 +157,17 @@ func (m Model) View() string {
 		focused = rows[m.cursor].section
 	}
 	lines := dashLines(rows)
-	end := min(len(lines), m.offset+m.listHeight())
+	lh := m.prListHeight()
+	end := min(len(lines), m.offset+lh)
 	for i := m.offset; i < end; i++ {
 		l := lines[i]
 		b.WriteString(truncate(m.dashboardLine(rows, l, l.row == m.cursor && !l.bottom, l.section == focused), m.width) + "\n")
 	}
-	for i := end - m.offset; i < m.listHeight(); i++ {
+	for i := end - m.offset; i < lh; i++ {
 		b.WriteString("\n")
+	}
+	if m.height >= 5 {
+		b.WriteString(truncate(m.ciSummaryLine(), m.width) + "\n")
 	}
 	b.WriteString(m.statusLine() + "\n")
 	b.WriteString(styleDim.Render(truncate(footer(m.helpGroups()), m.width)))
@@ -225,7 +252,8 @@ func dashLines(rows []row) []dashLine {
 
 // dashboardLine draws a line of the Pull requests page. Each Section is a
 // framed pane, its header the top edge; the focused Section, the one the
-// cursor is in, is framed in the accent color like any focused pane.
+// cursor is in, is framed in the accent color like any focused pane. The
+// cursor's line is tinted edge to edge, header or pull request.
 func (m Model) dashboardLine(rows []row, l dashLine, cursor, focused bool) string {
 	r := rows[l.row]
 	edge, title := styleFrame, styleDim
@@ -256,25 +284,30 @@ func (m Model) dashboardLine(rows []row, l dashLine, cursor, focused bool) strin
 		}
 		name := title.Render(truncate(fmt.Sprintf(" %s %s (%s) ", arrow, s.Kind.Title(), count), max(1, inner-2)))
 		fill := max(0, inner-1-ansi.StringWidth(name))
+		if cursor {
+			// A solid bar, not this pane's dashed top edge.
+			return edge.Render("┌") + tint(lead+name+strings.Repeat(" ", fill), cursorRow) + edge.Render("┐")
+		}
 		return edge.Render("┌") + lead + name + edge.Render(strings.Repeat("─", fill)+"┐")
 	}
 	mark := " "
 	if cursor {
 		mark = styleCursor.Render("▌")
 	}
-	return edge.Render("│") + padRight(truncate(mark+m.renderPR(r.pr), inner), inner) + edge.Render("│")
+	line := padRight(truncate(mark+m.renderPR(r.pr, cursor), inner), inner)
+	if cursor {
+		line = tint(line, cursorRow)
+	}
+	return edge.Render("│") + line + edge.Render("│")
 }
 
-func (m Model) renderPR(pr *ado.PullRequest) string {
+func (m Model) renderPR(pr *ado.PullRequest, selected bool) string {
 	stats, hasStats := m.stats[pr.ID]
 	buildRes, hasBuild := m.builds[pr.ID]
 
 	layout := m.rowLayout()
 
 	var badges []string
-	if pr.IsDraft {
-		badges = append(badges, draftBadge(layout.compact))
-	}
 	if hasStats {
 		badges = append(badges, sinceLastVisit(stats, layout.compact)...)
 	}
@@ -289,7 +322,7 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 		columnID:       fit(fmt.Sprintf("!%d", pr.ID), colID),
 		columnRepo:     styleDim.Render(fit(pr.Repository.Name+" → "+pr.TargetBranch(), colRepo)),
 		columnComments: fitStyled(m.comments(stats, hasStats), colComments),
-		columnBuild:    fitStyled(build(buildRes, hasBuild), colBuild),
+		columnBuild:    fitStyled(ciCell(buildRes, hasBuild, layout.narrowCI), layout.width(columnBuild)),
 		columnUpdated:  styleDim.Render(fit(updated(stats, pr), colUpdated)),
 	}
 	var shown []string
@@ -300,8 +333,10 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	}
 	right := strings.Join(shown, " ")
 
-	// 2 frame + 1 cursor + 1 indent + 1 gap before right.
-	titleWidth := m.width - 5 - ansi.StringWidth(right) - ansi.StringWidth(badgeText)
+	icon := prStatusIcon(pr.IsDraft)
+	iconW := ansi.StringWidth(icon) + 1
+	// 2 frame + 1 cursor + 1 indent + status icon + 1 gap before right.
+	titleWidth := m.width - 5 - iconW - ansi.StringWidth(right) - ansi.StringWidth(badgeText)
 	if badgeText != "" {
 		titleWidth--
 	}
@@ -310,7 +345,11 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 	title := truncate(pr.Title, max(titleWidth, 10))
 	style := lipgloss.NewStyle()
 	if pr.IsDraft {
-		style = style.Foreground(lipgloss.Color("240")) // grayer than the dim columns: not up for review yet
+		c := lipgloss.Color("240") // grayer than the dim columns: not up for review yet
+		if selected {
+			c = lipgloss.Color("250") // but readable on the cursor's tint
+		}
+		style = style.Foreground(c)
 	}
 	if hasStats && hasNews(stats, pr.IsDraft) {
 		style = style.Bold(true)
@@ -321,7 +360,7 @@ func (m Model) renderPR(pr *ado.PullRequest) string {
 		title += " " + badgeText
 		cellWidth += 1 + ansi.StringWidth(badgeText)
 	}
-	return " " + padRight(title, cellWidth) + " " + right
+	return " " + icon + " " + padRight(title, cellWidth) + " " + right
 }
 
 // hasNews is whether a PR has something to look at: pushes or comments since
@@ -386,23 +425,19 @@ func (m Model) comments(s ado.Stats, ok bool) string {
 	return fmt.Sprint(s.Comments)
 }
 
-func build(b buildResult, ok bool) string {
-	switch {
-	case !ok:
-		return styleDim.Render("…")
-	case b.err != nil:
-		return styleRed.Render("?")
+// prStatusIcon renders the compact PR state marker placed before a PR title:
+// ● (blue) for Active and ○ (amber) for Draft, falling back to A / D under --ascii.
+func prStatusIcon(draft bool) string {
+	if useASCII {
+		if draft {
+			return styleDraftStatus.Render("D")
+		}
+		return styleActive.Render("A")
 	}
-	switch b.state {
-	case ado.BuildPassed:
-		return styleGreen.Render("✓")
-	case ado.BuildFailed:
-		return styleRed.Render("×")
-	case ado.BuildRunning:
-		return styleYellow.Render("●")
-	case ado.BuildNone:
+	if draft {
+		return styleDraftStatus.Render("○")
 	}
-	return styleDim.Render("·")
+	return styleActive.Render("●")
 }
 
 func updated(s ado.Stats, pr *ado.PullRequest) string {
@@ -478,6 +513,24 @@ func padRight(s string, w int) string {
 		return s + strings.Repeat(" ", w-n)
 	}
 	return s
+}
+
+// tint paints bg behind a rendered line, end to end. Each cell's own style
+// (or ansi.Truncate's reset) ends with a reset that would clear the background
+// after it, so the background is turned back on after every reset or bg-off
+// sequence. A terminal without color gets the line back unchanged.
+func tint(s string, bg lipgloss.TerminalColor) string {
+	// The opening escape is what the style renders just before the text.
+	on, _, _ := strings.Cut(lipgloss.NewStyle().Background(bg).Render("x"), "x")
+	if on == "" {
+		return s
+	}
+	r := strings.NewReplacer(
+		"\x1b[0m", "\x1b[0m"+on,
+		"\x1b[m", "\x1b[m"+on,
+		"\x1b[49m", "\x1b[49m"+on,
+	)
+	return on + r.Replace(s) + "\x1b[0m"
 }
 
 // sectionRows counts the pull requests a Section shows.

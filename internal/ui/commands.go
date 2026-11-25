@@ -19,6 +19,8 @@ func (m Model) commandGroups() []commandGroup {
 		if !m.detail.standalone {
 			gs = append(gs, m.ancestorCommands(m.detail.pr.Repository)...)
 		}
+	case m.dashRun != nil:
+		gs = append([]commandGroup{m.dashRunCommands()}, m.ancestorCommands(m.dashRun.pr.Repository)...)
 	case m.project != nil:
 		gs = m.projectViewCommands()
 	case m.page == pageProjects:
@@ -49,7 +51,166 @@ func (m Model) dashboardCommands() []commandGroup {
 	}
 	pr := *r.pr
 	gs := m.prCommandsFor(pr)
+	gs[0] = prCIHeaderOverrides(gs[0], m.builds, pr.ID)
+	if b, ok := m.builds[pr.ID]; ok && b.err == nil && len(b.summary.Checks) > 0 {
+		gs = append(gs, ciCommandsGroup(m.client, pr, b.summary.Checks, m.dashCICallbacks(pr), ""))
+	}
 	return append(append(gs, m.ancestorCommands(pr.Repository)...), page)
+}
+
+func prCIHeaderOverrides(g commandGroup, builds map[int]buildResult, prID int) commandGroup {
+	b, hasBuild := builds[prID]
+	hasRunnable, hasCancel := false, false
+	if hasBuild && b.err == nil {
+		for _, c := range b.summary.Checks {
+			if c.Kind != ado.CICheckExternal {
+				hasRunnable = true
+			}
+			if c.IsCancellable() {
+				hasCancel = true
+			}
+		}
+	}
+	for i := range g.commands {
+		c := &g.commands[i]
+		switch c.id {
+		case "Pipeline runs":
+			c.local = true
+			c.run = replayKey("b")
+			c.disabled = ""
+		case "Trigger pipeline":
+			c.local = true
+			c.run = replayKey("t")
+			c.disabled = ""
+		case "Re-run":
+			c.local = true
+			c.run = replayKey("Q")
+			c.disabled = ""
+			if hasBuild && b.err == nil && !hasRunnable {
+				c.disabled = "no pipeline to re-run"
+			}
+		case "Cancel run":
+			c.local = true
+			c.run = replayKey("X")
+			c.disabled = ""
+			if hasBuild && b.err == nil && !hasCancel {
+				c.disabled = "no running pipeline"
+			}
+		}
+	}
+	return g
+}
+
+func ciCommandsGroup(client *ado.Client, pr ado.PullRequest, checks []ado.CICheck, cb ciCallbacks, origin string) commandGroup {
+	cmds := make([]command, 0, len(checks)*3)
+	for i, c := range checks {
+		c := c
+		prefix := fmt.Sprintf("check-%d-", i)
+		switch {
+		case c.HasRun():
+			cmds = append(cmds, command{
+				id: prefix + "open", label: "Open the run of " + c.Name, local: true,
+				run: func(m *Model) tea.Cmd {
+					scr, cmd := newPRRunScreen(m.client, pr, c)
+					if scr == nil {
+						return cmd
+					}
+					scr.origin = origin
+					m.dashRun = scr
+					return cmd
+				},
+			})
+		case c.ExternalURL != "":
+			cmds = append(cmds, command{
+				id: prefix + "open", label: "Open " + c.Name + " in browser", local: true,
+				run: func(*Model) tea.Cmd { return openURL(c.ExternalURL, "opened "+c.Name) },
+			})
+		default:
+			cmds = append(cmds, command{
+				id: prefix + "open", label: "Open the run of " + c.Name, local: true,
+				disabled: c.Name + " hasn't run yet",
+			})
+		}
+		if c.Kind != ado.CICheckExternal {
+			rerun := command{
+				id: prefix + "rerun", label: pick2(c.Kind == ado.CICheckPolicyBuild, "Re-queue ", "Re-run ") + c.Name + "…",
+				key: "Q", local: true,
+				run: func(m *Model) tea.Cmd {
+					var cmd tea.Cmd
+					m.modal, cmd = ciRerunModal(c, cb, nil)
+					return cmd
+				},
+			}
+			if c.IsActive() {
+				rerun.disabled = c.Name + " is already running"
+			}
+			cmds = append(cmds, rerun)
+		}
+		if c.IsCancellable() {
+			cmds = append(cmds, command{
+				id: prefix + "cancel", label: "Cancel " + c.Name + "…", key: "X", local: true,
+				run: func(m *Model) tea.Cmd {
+					var cmd tea.Cmd
+					m.modal, cmd = ciCancelModal(c, cb, nil)
+					return cmd
+				},
+			})
+		}
+		if c.HasRun() {
+			cmds = append(cmds, command{
+				id: prefix + "browser", label: "Open " + c.Name + " in browser", local: true,
+				run: func(*Model) tea.Cmd {
+					return openURL(client.RunURL(pr.Repository.Project.Name, c.Run.ID), "opened run "+runNumLabel(*c.Run))
+				},
+			})
+		}
+	}
+	return commandGroup{title: "CI/CD", commands: cmds}
+}
+
+func (m Model) dashRunCommands() commandGroup {
+	s := m.dashRun
+	r := s.run.run
+	chk := s.currentCheck()
+	cb := m.dashCICallbacks(s.pr)
+	rerun := command{
+		id: "Re-run", label: pick2(chk.Kind == ado.CICheckPolicyBuild, "Re-queue ", "Re-run ") + chk.Name + "…", key: "Q",
+		run: func(m *Model) tea.Cmd {
+			var cmd tea.Cmd
+			m.modal, cmd = ciRerunModal(chk, cb, nil)
+			return cmd
+		},
+	}
+	if chk.IsActive() {
+		rerun.disabled = chk.Name + " is already running"
+	}
+	cancel := command{
+		id: "Cancel", label: "Cancel " + chk.Name + "…", key: "X",
+		run: func(m *Model) tea.Cmd {
+			var cmd tea.Cmd
+			m.modal, cmd = ciCancelModal(chk, cb, nil)
+			return cmd
+		},
+	}
+	if !chk.IsCancellable() {
+		cancel.disabled = chk.Name + " is not running"
+	}
+	cmds := []command{
+		rerun,
+		cancel,
+		{id: "Open in browser", label: "Open the run in the browser", key: "o", run: replayKey("o")},
+		{id: "Follow", label: "Follow the log", key: "G", run: func(m *Model) tea.Cmd {
+			m.dashRun.run.logPane = true
+			return replayKey("G")(m)
+		}},
+		{id: "Refresh", label: "Refresh the run", key: "r", run: replayKey("r")},
+	}
+	cmds = append(cmds, copyCommands(copyRun(m.client, s.pr.Repository.Project.Name, r), "y")...)
+	cmds = append(cmds, command{id: "Back", label: pick2(m.project != nil, "Back to the project", "Back to Pull requests"), run: func(m *Model) tea.Cmd {
+		m.dashRun = nil
+		return nil
+	}})
+	return commandGroup{title: fmt.Sprintf("Run %s %s", chk.Name, runNumLabel(r)), commands: cmds}
 }
 
 // prCommandsFor are a pull request's commands from outside it: the same as

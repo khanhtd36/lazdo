@@ -174,10 +174,6 @@ func (d *detailModel) overviewKey(msg tea.KeyMsg) tea.Cmd {
 		d.scrollToEntry()
 	case "f":
 		d.modal = d.filterMenu()
-	case "b":
-		return d.loadRuns()
-	case "Q":
-		return d.requeueKey()
 	case "w":
 		return d.openReviewers()
 	case "enter":
@@ -308,6 +304,7 @@ func (d *detailModel) renderOverview() string {
 		return styleDim.Render("loading…")
 	}
 	mainWidth := d.overviewWidth() - 3 // inside its frame, a column spare
+	d.runLines = map[int]ado.CICheck{}
 	main := make([]string, 0, 64)
 	main = append(main, d.renderChecks(mainWidth)...)
 	main = append(main, "", styleSection.Render("Description"))
@@ -876,8 +873,28 @@ func voteText(v int) string {
 
 // --- Sidebar ---
 
-// sidebarPanes are the Overview's side panes: Reviewers, Tags and Work
-// items, each titled by its heading.
+func ciSidebarSource(c ado.CICheck) string {
+	switch c.Kind {
+	case ado.CICheckPolicyBuild:
+		if !c.IsBlocking {
+			return "policy · optional"
+		}
+		return "policy"
+	case ado.CICheckPRRun:
+		return "PR trigger"
+	case ado.CICheckBranchRun:
+		return "source branch"
+	case ado.CICheckExternal:
+		if !c.IsBlocking {
+			return "external · optional"
+		}
+		return "external"
+	}
+	return ""
+}
+
+// sidebarPanes are the Overview's side panes: Reviewers, CI/CD (when checks
+// exist), Tags and Work items, each titled by its heading.
 func (d *detailModel) sidebarPanes(width int) []pane {
 	var required, optional []ado.Reviewer
 	for _, r := range d.data.Reviewers {
@@ -904,6 +921,15 @@ func (d *detailModel) sidebarPanes(width int) []pane {
 	if len(reviewers) == 0 {
 		reviewers = append(reviewers, styleDim.Render("No reviewers"))
 	}
+	panes := []pane{{title: "Reviewers", lines: reviewers}}
+	if checks := d.ciChecks(); len(checks) > 0 {
+		ciLines := make([]string, 0, len(checks)*2)
+		for _, c := range checks {
+			ciLines = append(ciLines, ciGlyph(c.State, c.StatusText)+" "+truncate(c.Name, width-2))
+			ciLines = append(ciLines, "  "+styleDim.Render(truncate(c.StatusText+" · "+ciSidebarSource(c), width-2)))
+		}
+		panes = append(panes, pane{title: fmt.Sprintf("CI/CD (%d)", len(checks)), lines: ciLines})
+	}
 	var tags []string
 	for _, l := range d.data.Labels {
 		if l.Active {
@@ -921,19 +947,48 @@ func (d *detailModel) sidebarPanes(width int) []pane {
 	if len(items) == 0 {
 		items = append(items, styleDim.Render("No work items"))
 	}
-	return []pane{{title: "Reviewers", lines: reviewers}, {title: "Tags", lines: tags}, {title: "Work items", lines: items}}
+	return append(panes, pane{title: "Tags", lines: tags}, pane{title: "Work items", lines: items})
+}
+
+func (d *detailModel) sidebarClick(by int) tea.Cmd {
+	if !d.sideBySide() || d.data == nil {
+		return nil
+	}
+	panes := d.sidebarPanes(sidebarWidth)
+	revH := len(panes[0].lines) + 2
+	if by < revH {
+		return d.openReviewers()
+	}
+	if checks := d.ciChecks(); len(checks) > 0 {
+		ciTop := revH
+		ciH := len(panes[1].lines) + 2
+		if by >= ciTop && by < ciTop+ciH {
+			if by == ciTop || by == ciTop+ciH-1 {
+				return d.loadRuns()
+			}
+			idx := (by - ciTop - 1) / 2
+			if idx >= 0 && idx < len(checks) {
+				return d.openCICheck(checks[idx])
+			}
+		}
+	}
+	return nil
 }
 
 // renderSidebar is the side panes as plain sections, for a screen too
 // narrow to set them beside the Overview.
 func (d *detailModel) renderSidebar(width int) []string {
 	var out []string
+	checks := d.ciChecks()
 	for i, p := range d.sidebarPanes(width - 2) {
 		if i > 0 {
 			out = append(out, "")
 		}
 		out = append(out, styleSection.Render(p.title))
-		for _, l := range p.lines {
+		for j, l := range p.lines {
+			if len(checks) > 0 && i == 1 {
+				d.runLines[len(out)] = checks[j/2]
+			}
 			out = append(out, "  "+l)
 		}
 	}

@@ -73,7 +73,23 @@ func TestShots(t *testing.T) {
 		1210: {Visited: true, Comments: 1},
 		1190: {Visited: true, NewPushes: 1, Comments: 4, ActiveComments: 2},
 	}
-	m.builds = map[int]buildResult{1204: {state: ado.BuildRunning}, 1199: {state: ado.BuildPassed}, 1187: {state: ado.BuildNone}, 1210: {state: ado.BuildPassed}, 1190: {state: ado.BuildFailed}}
+	m.builds = map[int]buildResult{
+		1204: {summary: ado.CISummary{State: ado.BuildRunning, Running: 1, Passed: 1, Checks: []ado.CICheck{
+			{Name: "build-api", State: ado.BuildPassed, StatusText: "succeeded"},
+			{Name: "deploy-dev", State: ado.BuildRunning, StatusText: "in progress"},
+		}}},
+		1199: {summary: ado.CISummary{State: ado.BuildPassed, Passed: 2, Checks: []ado.CICheck{
+			{Name: "build", State: ado.BuildPassed, StatusText: "succeeded"},
+			{Name: "test", State: ado.BuildPassed, StatusText: "succeeded"},
+		}}},
+		1187: {summary: ado.CISummary{State: ado.BuildNone}},
+		1210: {summary: ado.CISummary{State: ado.BuildPassed, Passed: 1, Checks: []ado.CICheck{
+			{Name: "docs", State: ado.BuildPassed, StatusText: "succeeded"},
+		}}},
+		1190: {summary: ado.CISummary{State: ado.BuildFailed, Failed: 1, Checks: []ado.CICheck{
+			{Name: "unit-tests", State: ado.BuildFailed, StatusText: "failed"},
+		}}},
+	}
 	next, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	m = next.(Model)
 	m.cursor = 2

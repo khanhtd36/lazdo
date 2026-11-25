@@ -61,12 +61,13 @@ func findLiteral(query string, texts []string) []fuzzy.Match {
 // selected; a groupStart row starts a group itself (a job above its
 // steps); searchOnly rows appear only while a filter is typed.
 type pickItem struct {
-	header     bool
-	groupStart bool
-	searchOnly bool
-	search     string // what / matches against
-	render     func(width int) string
-	value      any
+	header       bool
+	groupStart   bool
+	searchOnly   bool
+	search       string   // what / matches against
+	searchFields []string // optional per-field texts for tight multi-field matching
+	render       func(width int) string
+	value        any
 }
 
 // pickList is a scrollable, selectable list with / fuzzy filtering, shared
@@ -170,13 +171,29 @@ func (l *pickList) visible() []int {
 	var texts []string
 	var idx []int
 	for i, it := range l.items {
-		if !it.header && it.search != "" {
+		if it.header {
+			continue
+		}
+		if len(it.searchFields) > 0 {
+			for _, f := range it.searchFields {
+				if f != "" {
+					texts = append(texts, f)
+					idx = append(idx, i)
+				}
+			}
+		}
+		if it.search != "" {
 			texts = append(texts, it.search)
 			idx = append(idx, i)
 		}
 	}
+	seen := map[int]bool{}
 	for _, m := range rankFuzzy(l.filter, texts) {
-		out = append(out, idx[m.Index])
+		i := idx[m.Index]
+		if !seen[i] {
+			seen[i] = true
+			out = append(out, i)
+		}
 	}
 	return out
 }
@@ -353,13 +370,18 @@ func (l *pickList) view(width, height int) []string {
 	for i := l.offset; i < min(len(vis), l.offset+height); i++ {
 		it := l.items[vis[i]]
 		prefix := "  "
-		if i == l.cursor && !it.header {
+		selected := i == l.cursor && !it.header
+		if selected {
 			prefix = styleCursor.Render("▌ ")
 			if l.unfocused {
 				prefix = styleDim.Render("▏ ")
 			}
 		}
-		out = append(out, truncate(prefix+it.render(width-2), width))
+		line := truncate(prefix+it.render(width-2), width)
+		if selected && !l.unfocused {
+			line = tint(padRight(line, width), cursorRow)
+		}
+		out = append(out, line)
 	}
 	if len(vis) == 0 {
 		msg := "nothing here"
@@ -480,10 +502,18 @@ func (l *pickList) stackedView(width, height int) []string {
 			out = append(out, edge.Render("┌─")+name+edge.Render(strings.Repeat("─", fill)+"┐"))
 		default:
 			prefix := "  "
-			if sl.vis == l.cursor {
+			selected := sl.vis == l.cursor
+			if selected {
 				prefix = styleCursor.Render("▌ ")
+				if l.unfocused {
+					prefix = styleDim.Render("▏ ")
+				}
 			}
-			out = append(out, edge.Render("│")+padRight(truncate(prefix+it.render(inner-2), inner), inner)+edge.Render("│"))
+			line := padRight(truncate(prefix+it.render(inner-2), inner), inner)
+			if selected && !l.unfocused {
+				line = tint(line, cursorRow)
+			}
+			out = append(out, edge.Render("│")+line+edge.Render("│"))
 		}
 	}
 	for len(out) < height {

@@ -141,11 +141,32 @@ func (d *detailModel) prCommands() commandGroup {
 	if d.tab == tabOverview {
 		comment = "a"
 	}
+	checks := d.ciChecks()
+	hasRunnable, hasCancel := false, false
+	for _, c := range checks {
+		if c.Kind != ado.CICheckExternal {
+			hasRunnable = true
+		}
+		if c.IsCancellable() {
+			hasCancel = true
+		}
+	}
+	rerunCmd := command{id: "Re-run", label: "Re-queue / Re-run pipeline…", key: "Q", run: onDetail(d.requeueKey)}
+	if !hasRunnable {
+		rerunCmd.disabled = "no pipeline to re-run"
+	}
+	cancelCmd := command{id: "Cancel run", label: "Cancel running pipeline…", key: "X", run: onDetail(d.cancelKey)}
+	if !hasCancel {
+		cancelCmd.disabled = "no running pipeline"
+	}
 	cmds = append(cmds,
 		command{id: "Edit title and description", label: "Edit title and description…", key: "E", run: d.showModal(func() modal { return d.newPREditor() })},
 		command{id: "Add a comment", label: "Add a comment…", key: comment, run: d.showModal(d.newCommentEditor)},
 		command{id: "Reviewers", label: "Reviewers…", key: "w", run: onDetail(d.openReviewers)},
 		command{id: "Pipeline runs", label: "Pipeline runs…", key: "b", run: onDetail(d.loadRuns)},
+		rerunCmd,
+		cancelCmd,
+		command{id: "Trigger pipeline", label: "Trigger pipeline…", key: "t", run: onDetail(d.triggerKey)},
 		command{id: "Open in browser", label: "Open in browser", key: "o", local: true, run: func(*Model) tea.Cmd {
 			return openURL(pr.WebURL(d.client.Org), fmt.Sprintf("opened !%d", pr.ID))
 		}},
@@ -194,23 +215,63 @@ func (d *detailModel) reviewerCommands() commandGroup {
 }
 
 func (d *detailModel) policyCommands() commandGroup {
-	ps := d.buildPolicies()
-	cmds := make([]command, 0, 2*len(ps))
-	for _, p := range ps {
-		name := buildPolicyName(p)
-		open := command{id: "Open run " + p.EvaluationID, label: "Open the run of " + name, run: onDetail(func() tea.Cmd { return d.openPolicyRun(p) })}
-		if p.BuildID() == 0 {
-			open.disabled = name + " hasn't run"
+	checks := d.ciChecks()
+	cb := d.ciCallbacks()
+	cmds := make([]command, 0, len(checks)*3)
+	for i, c := range checks {
+		if c.Kind == ado.CICheckExternal {
+			continue
 		}
-		requeue := command{id: "Re-queue " + p.EvaluationID, label: "Re-queue " + name + "…", key: "Q", run: onDetail(func() tea.Cmd {
-			var cmd tea.Cmd
-			d.modal, cmd = d.confirmRequeue(p, nil)
-			return cmd
-		})}
-		if p.Status == "running" {
-			requeue.disabled = name + " is already running"
+		c := c
+		idKey := fmt.Sprintf("%d", i)
+		if c.Policy != nil && c.Policy.EvaluationID != "" {
+			idKey = c.Policy.EvaluationID
+		} else if c.HasRun() {
+			idKey = fmt.Sprintf("run-%d", c.Run.ID)
 		}
-		cmds = append(cmds, open, requeue)
+		open := command{
+			id:    "Open run " + idKey,
+			label: "Open the run of " + c.Name,
+			run:   onDetail(func() tea.Cmd { return d.openCICheck(c) }),
+		}
+		if !c.HasRun() {
+			open.disabled = c.Name + " hasn't run"
+		}
+		rerun := command{
+			id:    "Re-queue " + idKey,
+			label: pick2(c.Kind == ado.CICheckPolicyBuild, "Re-queue ", "Re-run ") + c.Name + "…",
+			key:   "Q",
+			run: onDetail(func() tea.Cmd {
+				var cmd tea.Cmd
+				d.modal, cmd = ciRerunModal(c, cb, nil)
+				return cmd
+			}),
+		}
+		if c.IsActive() {
+			rerun.disabled = c.Name + " is already running"
+		}
+		cmds = append(cmds, open, rerun)
+		if c.IsCancellable() {
+			cmds = append(cmds, command{
+				id:    "Cancel " + idKey,
+				label: "Cancel " + c.Name + "…",
+				key:   "X",
+				run: onDetail(func() tea.Cmd {
+					var cmd tea.Cmd
+					d.modal, cmd = ciCancelModal(c, cb, nil)
+					return cmd
+				}),
+			})
+		}
+		if c.HasRun() {
+			cmds = append(cmds, command{
+				id:    "Open browser " + idKey,
+				label: "Open " + c.Name + " in browser",
+				run: func(*Model) tea.Cmd {
+					return openURL(d.client.RunURL(d.prProject().Name, c.Run.ID), "opened run "+runNumLabel(*c.Run))
+				},
+			})
+		}
 	}
 	return commandGroup{title: "Build policies", commands: cmds}
 }
@@ -363,16 +424,32 @@ func commitSubject(commits []ado.Commit, id string) string {
 
 func (d *detailModel) runCommands() commandGroup {
 	r := d.run.run
-	cmds := []command{}
-	if d.runPolicy != nil {
-		p := *d.runPolicy
-		cmds = append(cmds, command{id: "Re-queue", label: "Re-queue " + buildPolicyName(p) + "…", key: "Q", run: replayKey("Q")})
+	chk := d.currentRunCheck()
+	rerun := command{
+		id:    "Re-queue",
+		label: pick2(chk.Kind == ado.CICheckPolicyBuild, "Re-queue ", "Re-run ") + chk.Name + "…",
+		key:   "Q",
+		run:   replayKey("Q"),
 	}
-	cmds = append(cmds,
-		command{id: "Open in browser", label: "Open the run in the browser", key: "o", run: replayKey("o")},
-		command{id: "Follow", label: "Follow the log", key: "G", run: replayKey("G")},
-		command{id: "Refresh", label: "Refresh the run", key: "r", run: replayKey("r")},
-	)
+	if chk.IsActive() {
+		rerun.disabled = chk.Name + " is already running"
+	}
+	cancel := command{
+		id:    "Cancel",
+		label: "Cancel " + chk.Name + "…",
+		key:   "X",
+		run:   replayKey("X"),
+	}
+	if !chk.IsCancellable() {
+		cancel.disabled = chk.Name + " is not running"
+	}
+	cmds := []command{
+		rerun,
+		cancel,
+		{id: "Open in browser", label: "Open the run in the browser", key: "o", run: replayKey("o")},
+		{id: "Follow", label: "Follow the log", key: "G", run: replayKey("G")},
+		{id: "Refresh", label: "Refresh the run", key: "r", run: replayKey("r")},
+	}
 	cmds = append(cmds, copyCommands(d.withPRID(copyRun(d.client, d.prProject().Name, r)), "y")...)
 	cmds = append(cmds, command{id: "Back", label: "Back to the pull request", run: onDetail(d.closeRun)})
 	return commandGroup{title: fmt.Sprintf("Run %s %s", d.runName, r.BuildNumber), commands: cmds}

@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/khanhtd36/lazdo/internal/actions"
 )
@@ -184,9 +183,4 @@ func (c *checkoutModal) view(int) string {
 	title := styleSection.Render("Check out "+c.req.what()) + styleDim.Render("  "+c.req.repo)
 	hint := "enter check out · tab complete folder · ctrl+n/ctrl+p suggestions · esc cancel"
 	return styleModal.Render(strings.Join([]string{title, "", c.input.View(), c.preview(), "", styleDim.Render(hint)}, "\n"))
-}
-
-// place centers the dialog over the screen.
-func placeModal(m modal, width, height int) string {
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, m.view(width))
 }

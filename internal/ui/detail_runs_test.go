@@ -105,10 +105,20 @@ func TestTheOnlyRunOpensStraightAway(t *testing.T) {
 	}
 	d.modal, d.run = nil, nil
 	d.data.Policies = nil
+	d.data.PRRuns = nil
+	d.data.BranchRuns = nil
 	press(d, "b")
 	d.update(prRunsMsg{prID: 7})
-	if d.run != nil || d.status != "no pipeline run for this pull request yet" {
-		t.Fatalf("status %q", d.status)
+	if d.run != nil {
+		t.Fatalf("expected no run open, got %+v", d.run)
+	}
+	if !strings.Contains(modalText(d), "Trigger a pipeline?") {
+		t.Fatalf("0 runs should offer to trigger a pipeline:\n%s", modalText(d))
+	}
+	var cmd tea.Cmd
+	d.modal, cmd = d.modal.update(keyMsg("y"))
+	if _, ok := d.modal.(*pipelinePicker); !ok || cmd == nil {
+		t.Fatalf("confirming should open pipelinePicker and load pipelines, got %T (cmd=%v)", d.modal, cmd != nil)
 	}
 }
 
@@ -244,15 +254,101 @@ func TestRequeueWaitGivesUp(t *testing.T) {
 	}
 }
 
-func TestOtherPipelinesCantBeRequeued(t *testing.T) {
+func TestDetailNonPolicyRerunOffersRetryOrRunNew(t *testing.T) {
+	savedRetry, savedQueue := retryRun, queueRun
+	defer func() { retryRun, queueRun = savedRetry, savedQueue }()
+	var retried []int
+	var queued []string
+	retryRun = func(_ context.Context, _ *ado.Client, _ string, runID int) error {
+		retried = append(retried, runID)
+		return nil
+	}
+	queueRun = func(_ context.Context, _ *ado.Client, _ string, defID int, branch string) (ado.Run, error) {
+		queued = append(queued, fmt.Sprintf("%d:%s", defID, branch))
+		return fakeRun(201, defID, "lint", "notStarted", ""), nil
+	}
+
 	d := fakeRuns(t)
 	press(d, "b")
 	d.update(prRunsAnswer())
-	_, cmd := d.modal.update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
+	_, _ = d.modal.update(keyMsg("G")) // lint (failed PR run 103, def 20)
+	var cmd tea.Cmd
+	d.modal, cmd = d.modal.update(keyMsg("Q"))
 	_ = cmd
-	d.modal, cmd = d.modal.update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Q")})
-	if s, ok := cmd().(statusMsg); !ok || !strings.Contains(string(s), "isn't a build policy") {
-		t.Fatalf("got %v", s)
+	text := modalText(d)
+	if !strings.Contains(text, "Retry failed jobs") || !strings.Contains(text, "Run new") {
+		t.Fatalf("failed non-policy run should offer Retry failed jobs or Run new:\n%s", text)
+	}
+	// Retry failed jobs -> confirm -> execute
+	press(d, "enter")
+	if !strings.Contains(modalText(d), "Retry failed jobs of lint?") {
+		t.Fatalf("expected retry confirmation:\n%s", modalText(d))
+	}
+	d.modal, cmd = d.modal.update(keyMsg("y"))
+	d.update(cmd())
+	if len(retried) != 1 || retried[0] != 103 {
+		t.Fatalf("retried = %v, want [103]", retried)
+	}
+
+	// Succeeded non-policy run -> confirms Queue a new run directly.
+	d2 := fakeDetail(t, 160)
+	d2.data.PRRuns = []ado.Run{fakeRun(150, 25, "unit", "completed", "succeeded")}
+	press(d2, "Q")
+	if !strings.Contains(modalText(d2), "Queue a new run of unit on fix/x?") {
+		t.Fatalf("succeeded non-policy run should confirm queueing new run:\n%s", modalText(d2))
+	}
+	d2.modal, cmd = d2.modal.update(keyMsg("y"))
+	d2.update(cmd())
+	if strings.Join(queued, ",") != "25:refs/heads/fix/x" {
+		t.Fatalf("queued = %v, want 25:refs/heads/fix/x", queued)
+	}
+}
+
+func TestDetailCancelAndTriggerCommands(t *testing.T) {
+	savedCancel, savedQueue, savedList := cancelRun, queueRun, listPipelines
+	defer func() { cancelRun, queueRun, listPipelines = savedCancel, savedQueue, savedList }()
+
+	var cancelled []int
+	var queued []string
+	cancelRun = func(_ context.Context, _ *ado.Client, _ string, runID int) error {
+		cancelled = append(cancelled, runID)
+		return nil
+	}
+	queueRun = func(_ context.Context, _ *ado.Client, _ string, defID int, branch string) (ado.Run, error) {
+		queued = append(queued, fmt.Sprintf("%d:%s", defID, branch))
+		return fakeRun(301, defID, "deploy", "notStarted", ""), nil
+	}
+	listPipelines = func(_ context.Context, _ *ado.Client, _ string) ([]ado.Pipeline, error) {
+		return []ado.Pipeline{{ID: 77, Name: "deploy"}, {ID: 88, Name: "lint"}}, nil
+	}
+
+	d := fakeRuns(t)
+	d.data.PRRuns = prRunsAnswer().runs
+	press(d, "X")
+	cf, ok := d.modal.(*confirmModal)
+	if !ok || !strings.Contains(cf.prompt, "Cancel web-e2e") || cf.yes {
+		t.Fatalf("X should open confirm with No focused by default, got %+v", d.modal)
+	}
+	var cmd tea.Cmd
+	d.modal, cmd = d.modal.update(keyMsg("y"))
+	d.update(cmd())
+	if len(cancelled) != 1 || cancelled[0] != 102 {
+		t.Fatalf("cancelled = %v, want [102]", cancelled)
+	}
+
+	press(d, "t")
+	if _, ok := d.modal.(*pipelinePicker); !ok {
+		t.Fatalf("t should open pipelinePicker, got %T", d.modal)
+	}
+	d.update(prPipelinesMsg{prID: 7, pipelines: []ado.Pipeline{{ID: 77, Name: "deploy"}, {ID: 88, Name: "lint"}}})
+	press(d, "d", "e", "p", "enter")
+	if !strings.Contains(modalText(d), "Run deploy on fix/x?") {
+		t.Fatalf("picking pipeline should confirm:\n%s", modalText(d))
+	}
+	d.modal, cmd = d.modal.update(keyMsg("y"))
+	d.update(cmd())
+	if strings.Join(queued, ",") != "77:refs/heads/fix/x" {
+		t.Fatalf("queued = %v, want 77:refs/heads/fix/x", queued)
 	}
 }
 

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
+	"sync"
 )
 
 // BuildID is the run a build policy last queued; 0 before it queued one.
@@ -53,4 +55,80 @@ func (c *Client) PRRuns(ctx context.Context, pr PullRequest) ([]Run, error) {
 	}
 	err := c.get(ctx, "/"+url.PathEscape(pr.Repository.Project.ID)+"/_apis/build/builds", q, &resp)
 	return resp.Value, err
+}
+
+// BranchRuns lists recent runs on the pull request's source branch.
+func (c *Client) BranchRuns(ctx context.Context, pr PullRequest) ([]Run, error) {
+	if pr.SourceRefName == "" || pr.Repository.Project.ID == "" {
+		return nil, nil
+	}
+	var resp struct {
+		Value []Run `json:"value"`
+	}
+	q := url.Values{
+		"branchName":  {pr.SourceRefName},
+		"$top":        {"30"},
+		"queryOrder":  {"queueTimeDescending"},
+		"api-version": {apiVersion},
+	}
+	if pr.Repository.ID != "" {
+		q.Set("repositoryId", pr.Repository.ID)
+		q.Set("repositoryType", "TfsGit")
+	}
+	err := c.get(ctx, "/"+url.PathEscape(pr.Repository.Project.ID)+"/_apis/build/builds", q, &resp)
+	return resp.Value, err
+}
+
+// PRAllRuns fetches PR merge-ref runs and source-branch runs concurrently.
+func (c *Client) PRAllRuns(ctx context.Context, pr PullRequest) (prRuns, branchRuns []Run, err error) {
+	var (
+		wg        sync.WaitGroup
+		prErr     error
+		branchErr error
+	)
+	wg.Go(func() {
+		prRuns, prErr = c.PRRuns(ctx, pr)
+	})
+	wg.Go(func() {
+		branchRuns, branchErr = c.BranchRuns(ctx, pr)
+	})
+	wg.Wait()
+	switch {
+	case prErr != nil && branchErr != nil:
+		return nil, nil, prErr
+	case prErr != nil:
+		return nil, branchRuns, prErr
+	case branchErr != nil:
+		return prRuns, nil, branchErr
+	}
+	return prRuns, branchRuns, nil
+}
+
+func buildPath(projectID string, runID int) string {
+	return "/" + url.PathEscape(projectID) + "/_apis/build/builds/" + strconv.Itoa(runID)
+}
+
+// CancelRun requests cancellation of an active or queued build run.
+func (c *Client) CancelRun(ctx context.Context, projectID string, runID int) error {
+	return c.do(ctx, http.MethodPatch, buildPath(projectID, runID), v71(), map[string]any{"status": "cancelling"}, nil)
+}
+
+// RetryRun retries failed jobs of an existing build run.
+func (c *Client) RetryRun(ctx context.Context, projectID string, runID int) error {
+	q := v71()
+	q.Set("retry", "true")
+	return c.do(ctx, http.MethodPatch, buildPath(projectID, runID), q, map[string]any{}, nil)
+}
+
+// QueueRun queues a new run of definitionID on sourceBranch with default parameters.
+func (c *Client) QueueRun(ctx context.Context, projectID string, definitionID int, sourceBranch string) (Run, error) {
+	body := map[string]any{
+		"definition": map[string]int{"id": definitionID},
+	}
+	if sourceBranch != "" {
+		body["sourceBranch"] = sourceBranch
+	}
+	var run Run
+	err := c.post(ctx, "/"+url.PathEscape(projectID)+"/_apis/build/builds", v71(), body, &run)
+	return run, err
 }

@@ -31,14 +31,16 @@ type PRDetail struct {
 	Labels            []Label   `json:"labels"`
 	MergeFailure      string    `json:"mergeFailureMessage"`
 
-	Policies  []Policy
-	Statuses  []Status
-	Threads   []Thread
-	Commits   []Commit
-	Pushes    []Push
-	Changes   []Change
-	Conflicts []Conflict
-	WorkItems []WorkItem
+	Policies   []Policy
+	PRRuns     []Run
+	BranchRuns []Run
+	Statuses   []Status
+	Threads    []Thread
+	Commits    []Commit
+	Pushes     []Push
+	Changes    []Change
+	Conflicts  []Conflict
+	WorkItems  []WorkItem
 }
 
 // Status is one report an external service (a CI outside Azure DevOps)
@@ -75,15 +77,19 @@ func (p Policy) StatusKey() string {
 // LatestStatus finds the status a Status policy last evaluated: the one its
 // context names, else the newest with its genre/name.
 func (d *PRDetail) LatestStatus(p Policy) (Status, bool) {
+	return latestStatusForPolicy(p, d.Statuses)
+}
+
+func latestStatusForPolicy(p Policy, statuses []Status) (Status, bool) {
 	if id, ok := p.Context["latestStatusId"].(float64); ok {
-		for _, s := range d.Statuses {
+		for _, s := range statuses {
 			if s.ID == int(id) {
 				return s, true
 			}
 		}
 	}
 	key, found := p.StatusKey(), Status{}
-	for _, s := range d.Statuses {
+	for _, s := range statuses {
 		if s.Key() == key && (found.ID == 0 || s.CreationDate.After(found.CreationDate)) {
 			found = s
 		}
@@ -94,15 +100,19 @@ func (d *PRDetail) LatestStatus(p Policy) (Status, bool) {
 // UnrequiredStatuses is the newest status of each genre/name no Status
 // policy asks for, oldest name first.
 func (d *PRDetail) UnrequiredStatuses() []Status {
+	return unrequiredStatuses(d.Policies, d.Statuses)
+}
+
+func unrequiredStatuses(policies []Policy, statuses []Status) []Status {
 	required := map[string]bool{}
-	for _, p := range d.Policies {
+	for _, p := range policies {
 		if p.Configuration.Type.ID == PolicyTypeStatus {
 			required[p.StatusKey()] = true
 		}
 	}
 	latest := map[string]Status{}
 	var order []string
-	for _, s := range d.Statuses {
+	for _, s := range statuses {
 		k := s.Key()
 		if required[k] {
 			continue
@@ -306,6 +316,16 @@ func (c *Client) Detail(ctx context.Context, pr PullRequest) (*PRDetail, error) 
 		d.Policies, err = c.policies(ctx, pr)
 		return err
 	})
+	run("pr runs", func() error {
+		var err error
+		d.PRRuns, err = c.PRRuns(ctx, pr)
+		return err
+	})
+	run("branch runs", func() error {
+		var err error
+		d.BranchRuns, err = c.BranchRuns(ctx, pr)
+		return err
+	})
 	run("statuses", func() error {
 		var err error
 		d.Statuses, err = c.statuses(ctx, pr)
@@ -345,7 +365,7 @@ func (c *Client) Detail(ctx context.Context, pr PullRequest) (*PRDetail, error) 
 	return d, nil
 }
 
-func (c *Client) policies(ctx context.Context, pr PullRequest) ([]Policy, error) {
+func (c *Client) rawPolicies(ctx context.Context, pr PullRequest) ([]Policy, error) {
 	q := url.Values{
 		"artifactId":  {fmt.Sprintf("vstfs:///CodeReview/CodeReviewId/%s/%d", pr.Repository.Project.ID, pr.ID)},
 		"api-version": {"7.1-preview.1"},
@@ -354,9 +374,14 @@ func (c *Client) policies(ctx context.Context, pr PullRequest) ([]Policy, error)
 		Value []Policy `json:"value"`
 	}
 	err := c.get(ctx, "/"+url.PathEscape(pr.Repository.Project.ID)+"/_apis/policy/evaluations", q, &resp)
+	return resp.Value, err
+}
+
+func (c *Client) policies(ctx context.Context, pr PullRequest) ([]Policy, error) {
+	raw, err := c.rawPolicies(ctx, pr)
 	var out []Policy
 	names := map[int]string{}
-	for _, p := range resp.Value {
+	for _, p := range raw {
 		if !p.Configuration.IsEnabled || p.Status == "notApplicable" {
 			continue
 		}

@@ -4,8 +4,14 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
+
+	"github.com/khanhtd36/lazdo/internal/ado"
 )
 
 func TestStackedListPanes(t *testing.T) {
@@ -58,5 +64,79 @@ func TestListShowsHeadersAboveTheTopRow(t *testing.T) {
 	view := ansi.Strip(strings.Join(l.view(40, 10), "\n"))
 	if !strings.HasPrefix(strings.TrimSpace(view), "repo") || !strings.Contains(view, "src") {
 		t.Fatalf("after G then g the folders above the first file should show:\n%s", view)
+	}
+}
+
+func TestPickListTintsFocusedCursorRow(t *testing.T) {
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(termenv.Ascii)
+	bg := "\x1b[48;5;237m" // cursorRow
+
+	head := func(s string) pickItem { return pickItem{header: true, render: func(int) string { return s }} }
+	row := func(s string) pickItem { return pickItem{search: s, render: func(int) string { return s }} }
+
+	l := &pickList{}
+	l.setItems([]pickItem{head("Group"), row("first item"), row("second item")})
+
+	// Focused view tints only the selected row to the full pane width.
+	lines := l.view(40, 5)
+	if !strings.Contains(lines[1], bg) || ansi.StringWidth(lines[1]) != 40 {
+		t.Fatalf("selected row should be tinted across full width 40: width=%d line=%q", ansi.StringWidth(lines[1]), lines[1])
+	}
+	if strings.Contains(lines[0], bg) || strings.Contains(lines[2], bg) {
+		t.Fatalf("headers and unselected rows must not be tinted: header=%q row2=%q", lines[0], lines[2])
+	}
+
+	// Unfocused lists keep only the faint marker without tinting.
+	l.unfocused = true
+	unfocusedLines := l.view(40, 5)
+	if strings.Contains(unfocusedLines[1], bg) {
+		t.Fatalf("unfocused pickList must not tint its cursor row: %q", unfocusedLines[1])
+	}
+	l.unfocused = false
+
+	// Stacked view tints selected row inside the frame borders while keeping exact width.
+	stacked := l.stackedView(40, 10)
+	var selLine string
+	for _, sl := range stacked {
+		if strings.Contains(ansi.Strip(sl), "first item") {
+			selLine = sl
+			break
+		}
+	}
+	if !strings.Contains(selLine, bg) || strings.HasPrefix(selLine, bg) || ansi.StringWidth(selLine) != 40 {
+		t.Fatalf("stackedView selected row should be tinted inside │...│ at width 40: %q", selLine)
+	}
+
+	// Project -> 2 Pull requests tints selected PR row inside borders, leaving unselected row untinted.
+	prs := []ado.PullRequest{
+		makeDashPR(11, "active pr", false),
+		makeDashPR(12, "draft pr", true),
+	}
+	m := New(ado.NewClient("org"), time.Minute)
+	m.me, m.loading = ado.Identity{ID: "me"}, false
+	p := newProject(m.client, ado.ProjectInfo{ID: "p1", Name: "Demo"}, prs, nil)
+	p.tab = projTabPRs
+	p.buildsLoaded = true
+	p.lists[projTabPRs].refreshItems(p.prItems(), samePR)
+	m.project = p
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 18})
+	m = next.(Model)
+
+	view := m.View()
+	var pr11Line, pr12Line string
+	for _, ln := range strings.Split(view, "\n") {
+		plain := ansi.Strip(ln)
+		if strings.Contains(plain, "active pr") {
+			pr11Line = ln
+		} else if strings.Contains(plain, "draft pr") {
+			pr12Line = ln
+		}
+	}
+	if !strings.Contains(pr11Line, bg) || strings.HasPrefix(pr11Line, bg) {
+		t.Fatalf("Project -> PRs selected row should be tinted inside frame: %q", pr11Line)
+	}
+	if strings.Contains(pr12Line, bg) {
+		t.Fatalf("Project -> PRs unselected row should not be tinted: %q", pr12Line)
 	}
 }

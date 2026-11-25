@@ -47,6 +47,13 @@ func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if m.detail != nil {
 		return m, m.detail.onMouse(msg)
 	}
+	if m.dashRun != nil {
+		by := msg.Y - 2
+		if by < 0 || by >= m.dashRun.bodyHeight(m.height) {
+			return m, nil
+		}
+		return m, m.dashRun.run.onMouse(msg, by, m.width, m.dashRun.bodyHeight(m.height))
+	}
 	if m.project != nil {
 		return m, m.project.onMouse(msg)
 	}
@@ -67,7 +74,13 @@ func (m Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.clampCursor()
 		return m, nil
 	}
-	if !isClick(msg) || msg.Y < 1 || msg.Y > m.listHeight() {
+	if m.height >= 5 && isClick(msg) && msg.Y == 1+m.prListHeight() {
+		if r, ok := m.selected(m.rows()); ok && r.pr != nil {
+			return m.dashOpenRuns(*r.pr)
+		}
+		return m, nil
+	}
+	if !isClick(msg) || msg.Y < 1 || msg.Y > m.prListHeight() {
 		return m, nil
 	}
 	rows := m.rows()
@@ -216,6 +229,12 @@ func (m Model) modalMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	h, w := strings.Count(box, "\n")+1, ansi.StringWidth(firstLine(box))
 	top, left := max(0, (m.height-h)/2), max(0, (m.width-w)/2)
 	inside := msg.Y >= top && msg.Y < top+h && msg.X >= left && msg.X < left+w
+	if menu, ok := m.modal.(*menuModal); ok {
+		if delta := wheelDelta(msg); delta != 0 {
+			menu.cursor = max(0, min(menu.cursor+sign(delta), max(0, len(menu.items)-1)))
+			return m, nil
+		}
+	}
 	if !isClick(msg) {
 		return m, nil
 	}
@@ -234,7 +253,12 @@ func (m Model) modalMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 	case *menuModal:
 		if !inside {
-			m.modal = nil
+			m.modal = dm.back
+			return m, nil
+		}
+		m.modal, cmd = dm.clickRow(msg.Y - top - 1)
+	case clickableModal:
+		if !inside {
 			return m, nil
 		}
 		m.modal, cmd = dm.clickRow(msg.Y - top - 1)
@@ -265,11 +289,7 @@ func (d *detailModel) overviewMouse(msg tea.MouseMsg, by int) tea.Cmd {
 		return nil
 	}
 	if msg.X >= d.overviewWidth() {
-		// The Reviewers pane, atop the side panes, opens the reviewers.
-		if d.sideBySide() && by < len(d.sidebarPanes(sidebarWidth)[0].lines)+2 {
-			return d.openReviewers()
-		}
-		return nil
+		return d.sidebarClick(by)
 	}
 	if by < 1 {
 		return nil // the frame
@@ -277,6 +297,9 @@ func (d *detailModel) overviewMouse(msg tea.MouseMsg, by int) tea.Cmd {
 	line := d.vp.YOffset + by - 1 // below the pane's top edge
 	if p, ok := d.buildLines[line]; ok {
 		return d.openPolicyRun(p)
+	}
+	if c, ok := d.runLines[line]; ok {
+		return d.openCICheck(c)
 	}
 	entry := -1
 	for i, start := range d.entryLines {

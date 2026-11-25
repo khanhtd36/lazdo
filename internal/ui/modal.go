@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // modal is a popup that takes all keys until it closes by returning nil.
@@ -18,7 +19,11 @@ type modal interface {
 	view(width int) string
 }
 
-var styleModal = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(accent).Padding(0, 1)
+var (
+	styleModal = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(accent).Padding(0, 1)
+	// styleBackdrop dims the underlying screen behind an open modal/popup.
+	styleBackdrop = lipgloss.NewStyle().Foreground(lipgloss.Color("239"))
+)
 
 // --- Menu ---
 
@@ -32,16 +37,17 @@ type menuModal struct {
 	title  string
 	items  []menuItem
 	cursor int
+	back   modal
 	// keys are extra keys acting on the item under the cursor, named in hint.
 	keys map[string]func(i int) (modal, tea.Cmd)
 	hint string
 }
 
 func (m *menuModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
-	last := len(m.items) - 1
+	last := max(0, len(m.items)-1)
 	switch msg.String() {
 	case "esc":
-		return nil, nil
+		return m.back, nil
 	case "j", "down":
 		m.cursor = min(m.cursor+1, last)
 	case "k", "up":
@@ -55,6 +61,9 @@ func (m *menuModal) update(msg tea.KeyMsg) (modal, tea.Cmd) {
 	case "G", "end":
 		m.cursor = last
 	case "enter":
+		if len(m.items) == 0 {
+			return m, nil
+		}
 		it := m.items[m.cursor]
 		if it.disabled != "" {
 			return m, statusCmd(it.disabled)
@@ -269,4 +278,56 @@ func (e *editorModal) view(int) string {
 	}
 	return styleModal.Render(styleSection.Render(e.title) + "\n\n" + e.ta.View() + e.mentionView(e.ta.Width()) + "\n\n" +
 		styleDim.Render(hint))
+}
+
+// overlayCenter composites box centered onto a dimmed copy of base, stripping
+// foreground/background styling from the backdrop so the popup stands out
+// without hiding the underlying screen.
+func overlayCenter(base, box string, width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	boxLines := strings.Split(box, "\n")
+	if len(boxLines) > height {
+		boxLines = boxLines[:height]
+	}
+	boxW := 0
+	for _, line := range boxLines {
+		boxW = max(boxW, ansi.StringWidth(line))
+	}
+	boxW = min(boxW, width)
+
+	top := max(0, (height-len(boxLines))/2)
+	left := max(0, (width-boxW)/2)
+	wantRight := width - left - boxW
+
+	baseLines := strings.Split(base, "\n")
+	out := make([]string, height)
+	for y := range height {
+		raw := ""
+		if y < len(baseLines) {
+			raw = baseLines[y]
+		}
+		plain := padRight(ansi.Truncate(screenSafe(ansi.Strip(raw)), width, ""), width)
+		if y < top || y >= top+len(boxLines) {
+			out[y] = styleBackdrop.Render(plain)
+			continue
+		}
+		bi := y - top
+		var b strings.Builder
+		if left > 0 {
+			leftPart := padRight(ansi.Cut(plain, 0, left), left)
+			b.WriteString(styleBackdrop.Render(leftPart))
+		}
+		b.WriteString(padRight(truncate(boxLines[bi], boxW), boxW))
+		if wantRight > 0 {
+			rightPart := ansi.Cut(plain, left+boxW, width)
+			if rw := ansi.StringWidth(rightPart); rw < wantRight {
+				rightPart = strings.Repeat(" ", wantRight-rw) + rightPart
+			}
+			b.WriteString(styleBackdrop.Render(rightPart))
+		}
+		out[y] = b.String()
+	}
+	return strings.Join(out, "\n")
 }

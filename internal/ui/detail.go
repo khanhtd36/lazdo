@@ -80,10 +80,13 @@ type detailModel struct {
 	run       *runView
 	runName   string      // its pipeline or build policy
 	runPolicy *ado.Policy // the build policy behind it; nil for another pipeline
+	runCheck  ado.CICheck // the CI check behind the open run
 	runStart  string      // its state when first loaded, to spot a change
 	wait      *runWait    // a re-queue waiting for its new run
-	// buildLines maps Overview lines to the build policy checks on them.
+	// buildLines maps Overview lines to the build policy checks on them;
+	// runLines maps narrow-mode Overview sidebar lines to CI/CD checks.
 	buildLines map[int]ado.Policy
+	runLines   map[int]ado.CICheck
 	// pending is a command picked from outside the pull request, run once
 	// it has loaded.
 	pending string
@@ -270,6 +273,14 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		return d.onRuns(msg)
 	case requeuedMsg:
 		return d.onRequeued(msg)
+	case ciActionMsg:
+		return d.onCIAction(msg)
+	case prPipelinesMsg:
+		if p, ok := d.modal.(*pipelinePicker); ok {
+			var cmd tea.Cmd
+			d.modal, cmd = p.onPipelines(msg)
+			return cmd
+		}
 	case runWaitTickMsg:
 		return d.onWaitTick(msg)
 	case runWaitMsg:
@@ -366,6 +377,22 @@ func (d *detailModel) onKey(msg tea.KeyMsg) tea.Cmd {
 	case "E":
 		if d.data != nil {
 			d.modal = d.newPREditor()
+		}
+	case "b":
+		if d.data != nil {
+			return d.loadRuns()
+		}
+	case "Q":
+		if d.data != nil {
+			return d.requeueKey()
+		}
+	case "X":
+		if d.data != nil {
+			return d.cancelKey()
+		}
+	case "t":
+		if d.data != nil {
+			return d.triggerKey()
 		}
 	default:
 		return d.tabKey(msg)

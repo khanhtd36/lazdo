@@ -23,9 +23,10 @@ const (
 
 type (
 	prRunsMsg struct {
-		prID int
-		runs []ado.Run
-		err  error
+		prID       int
+		runs       []ado.Run
+		branchRuns []ado.Run
+		err        error
 	}
 	requeuedMsg struct {
 		prID         int
@@ -49,14 +50,6 @@ func (m prRunsMsg) pullRequest() int      { return m.prID }
 func (m requeuedMsg) pullRequest() int    { return m.prID }
 func (m runWaitTickMsg) pullRequest() int { return m.prID }
 func (m runWaitMsg) pullRequest() int     { return m.prID }
-
-// prRun is a row of the runs menu: a build policy's latest run, or the
-// latest run of a pipeline no policy asks for.
-type prRun struct {
-	name   string
-	policy *ado.Policy
-	run    ado.Run // ID 0: the policy hasn't queued a run
-}
 
 // runWait watches a re-queued policy for its new run, to switch to it.
 type runWait struct {
@@ -106,33 +99,29 @@ func buildPolicyName(p ado.Policy) string {
 	return cmp.Or(name, p.BuildName, "Build")
 }
 
-// prRuns lines the build policies up first, then the latest run of each
-// other pipeline on the pull request's merge ref (runs come newest first).
-func (d *detailModel) prRuns(runs []ado.Run) []prRun {
-	byID := map[int]ado.Run{}
-	for _, r := range runs {
-		byID[r.ID] = r
+func (d *detailModel) ciChecks() []ado.CICheck {
+	if d.data == nil {
+		return nil
 	}
-	var out []prRun
-	covered := map[int]bool{}
-	for _, p := range d.buildPolicies() {
-		covered[p.BuildDefinitionID()] = true
-		r, ok := byID[p.BuildID()]
-		if !ok {
-			r = ado.Run{ID: p.BuildID()}
-		}
-		out = append(out, prRun{name: buildPolicyName(p), policy: &p, run: r})
-	}
-	for _, r := range runs {
-		if !covered[r.Definition.ID] {
-			covered[r.Definition.ID] = true
-			out = append(out, prRun{name: r.Definition.Name, run: r})
-		}
-	}
-	return out
+	return ado.SummarizeCI(d.data.Policies, d.data.PRRuns, d.data.BranchRuns, d.data.Statuses).Checks
 }
 
-// loadRuns asks for the runs on the pull request's merge ref, for the b menu.
+func (d *detailModel) ciCallbacks() ciCallbacks {
+	return newCICallbacks(
+		d.client,
+		d.pr,
+		func(c ado.CICheck) tea.Cmd { return d.openCICheck(c) },
+		func(back modal) (modal, tea.Cmd) { return d.openTriggerPicker(back) },
+	)
+}
+
+func (d *detailModel) openTriggerPicker(back modal) (modal, tea.Cmd) {
+	return newPipelinePicker(d.client, d.pr, back, func(pl ado.Pipeline) tea.Cmd {
+		return d.ciCallbacks().execQueue(pl.Name, pl.ID, d.pr.SourceRefName)
+	})
+}
+
+// loadRuns asks for PR and source-branch runs for the b menu.
 func (d *detailModel) loadRuns() tea.Cmd {
 	if d.data == nil {
 		return nil
@@ -142,68 +131,52 @@ func (d *detailModel) loadRuns() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		runs, err := client.PRRuns(ctx, pr)
-		return prRunsMsg{prID: pr.ID, runs: runs, err: err}
+		runs, branchRuns, err := client.PRAllRuns(ctx, pr)
+		return prRunsMsg{prID: pr.ID, runs: runs, branchRuns: branchRuns, err: err}
 	}
 }
 
-// onRuns opens the only run straight away, else the menu of them.
+// onRuns opens the only run straight away, asks to trigger if none, else shows the menu.
 func (d *detailModel) onRuns(msg prRunsMsg) tea.Cmd {
 	if d.status == "loading runs…" {
 		d.status = ""
 	}
-	if d.modal != nil || d.run != nil || d.tab != tabOverview {
+	if d.modal != nil || d.run != nil {
 		return nil // moved on while they loaded
 	}
 	if msg.err != nil {
 		d.status = "error: list runs: " + msg.err.Error()
 	}
-	runs := d.prRuns(msg.runs)
-	switch {
-	case len(runs) == 0 && msg.err == nil:
-		d.status = "no pipeline run for this pull request yet"
-	case len(runs) == 1 && runs[0].run.ID != 0:
-		return d.openRun(runs[0])
-	case len(runs) > 0:
-		d.modal = d.runsMenu(runs)
+	if d.data != nil {
+		if msg.err == nil {
+			d.data.PRRuns = msg.runs
+			d.data.BranchRuns = msg.branchRuns
+		} else {
+			if msg.runs != nil {
+				d.data.PRRuns = msg.runs
+			}
+			if msg.branchRuns != nil {
+				d.data.BranchRuns = msg.branchRuns
+			}
+		}
 	}
-	return nil
+	var cmd tea.Cmd
+	d.modal, cmd = ciOpenOrMenu(d.ciChecks(), d.ciCallbacks())
+	return cmd
 }
 
-func (d *detailModel) runsMenu(runs []prRun) modal {
-	m := &menuModal{title: "Pipeline runs", hint: "Q re-queue"}
-	for _, r := range runs {
-		it := menuItem{label: d.prRunLabel(r), run: func() (modal, tea.Cmd) { return nil, d.openRun(r) }}
-		if r.run.ID == 0 {
-			it.disabled = r.name + " hasn't run yet"
+func (d *detailModel) openCICheck(c ado.CICheck) tea.Cmd {
+	if !c.HasRun() {
+		if c.Kind == ado.CICheckExternal {
+			if c.ExternalURL != "" {
+				return openURL(c.ExternalURL, "opened "+c.Name)
+			}
+			return statusCmd(c.Name + " has no link")
 		}
-		m.items = append(m.items, it)
+		return statusCmd(c.Name + " hasn't run yet")
 	}
-	m.keys = map[string]func(int) (modal, tea.Cmd){"Q": func(i int) (modal, tea.Cmd) {
-		r := runs[i]
-		if r.policy == nil {
-			return m, statusCmd(r.name + " isn't a build policy: open it in the browser (o) to run it again")
-		}
-		return d.confirmRequeue(*r.policy, m)
-	}}
-	return m
-}
-
-func (d *detailModel) prRunLabel(r prRun) string {
-	if r.policy != nil {
-		label := d.policyLine(*r.policy)
-		if !r.policy.Configuration.IsBlocking {
-			label += styleDim.Render("  optional")
-		}
-		return label
-	}
-	return runGlyph(r.run.Status, r.run.Result) + " " + r.name + styleDim.Render("  "+cmp.Or(r.run.Result, r.run.Status)+" · not a policy")
-}
-
-// openRun shows a run in place of the tabs.
-func (d *detailModel) openRun(r prRun) tea.Cmd {
-	d.run = newRunView(d.client, d.prProject(), r.run)
-	d.runName, d.runPolicy, d.runStart, d.wait = r.name, r.policy, "", nil
+	d.run = newRunView(d.client, d.prProject(), *c.Run)
+	d.runName, d.runPolicy, d.runCheck, d.runStart, d.wait = c.Name, c.Policy, c, "", nil
 	d.modal = nil
 	return d.run.refresh()
 }
@@ -213,7 +186,24 @@ func (d *detailModel) openPolicyRun(p ado.Policy) tea.Cmd {
 	if p.BuildID() == 0 {
 		return statusCmd(buildPolicyName(p) + " hasn't run yet")
 	}
-	return d.openRun(prRun{name: buildPolicyName(p), policy: &p, run: ado.Run{ID: p.BuildID()}})
+	run := ado.Run{ID: p.BuildID()}
+	if d.data != nil {
+		for _, r := range append(append([]ado.Run(nil), d.data.PRRuns...), d.data.BranchRuns...) {
+			if r.ID == p.BuildID() {
+				run = r
+				break
+			}
+		}
+	}
+	pc := p
+	return d.openCICheck(ciCheckFromRun(buildPolicyName(p), &pc, run, p.BuildDefinitionID(), ado.CICheckPolicyBuild, p.Configuration.IsBlocking))
+}
+
+func (d *detailModel) currentRunCheck() ado.CICheck {
+	if d.run == nil {
+		return ado.CICheck{}
+	}
+	return ciCheckFromRun(d.runName, d.runPolicy, d.run.run, d.runCheck.DefinitionID, d.runCheck.Kind, d.runCheck.IsBlocking)
 }
 
 func runState(r ado.Run) string { return r.Status + "/" + r.Result }
@@ -222,7 +212,7 @@ func runState(r ado.Run) string { return r.Status + "/" + r.Result }
 // refreshes the checks now rather than on the next tick.
 func (d *detailModel) closeRun() tea.Cmd {
 	changed := d.runStart != "" && runState(d.run.run) != d.runStart
-	d.run, d.runPolicy, d.wait = nil, nil, nil
+	d.run, d.runPolicy, d.runCheck, d.wait = nil, nil, ado.CICheck{}, nil
 	if changed {
 		return d.reload()
 	}
@@ -256,14 +246,15 @@ func (d *detailModel) runKey(msg tea.KeyMsg) tea.Cmd {
 	case "r":
 		return d.run.refresh()
 	case "Q":
-		if d.runPolicy == nil {
-			return statusCmd(d.runName + " isn't a build policy: open it in the browser (o) to run it again")
-		}
 		var cmd tea.Cmd
-		d.modal, cmd = d.confirmRequeue(*d.runPolicy, nil)
+		d.modal, cmd = ciRerunModal(d.currentRunCheck(), d.ciCallbacks(), nil)
+		return cmd
+	case "X":
+		var cmd tea.Cmd
+		d.modal, cmd = ciCancelModal(d.currentRunCheck(), d.ciCallbacks(), nil)
 		return cmd
 	case "1", "2", "3", "4", "[", "]":
-		d.run, d.runPolicy, d.wait = nil, nil, nil
+		d.run, d.runPolicy, d.runCheck, d.wait = nil, nil, ado.CICheck{}, nil
 		return d.onKey(msg)
 	case "v":
 		d.modal = d.voteMenu()
@@ -281,7 +272,7 @@ func (d *detailModel) runKey(msg tea.KeyMsg) tea.Cmd {
 func (d *detailModel) runCrumbs() string {
 	r := d.run.run
 	s := strings.Join([]string{
-		"Overview", "Pipeline runs",
+		d.tab.title(), "Pipeline runs",
 		styleTitle.Render("run " + d.runLabel()),
 		runGlyph(r.Status, r.Result) + " " + d.runName,
 	}, styleDim.Render(" › "))
@@ -295,55 +286,22 @@ func (d *detailModel) runLabel() string {
 	return cmp.Or(d.run.run.BuildNumber, "#"+strconv.Itoa(d.run.run.ID))
 }
 
-// requeueKey is Q on the Overview: the only build policy, else a menu.
 func (d *detailModel) requeueKey() tea.Cmd {
-	ps := d.buildPolicies()
-	switch len(ps) {
-	case 0:
-		return statusCmd("no build policy to re-queue")
-	case 1:
-		var cmd tea.Cmd
-		d.modal, cmd = d.confirmRequeue(ps[0], nil)
-		return cmd
-	}
-	m := &menuModal{title: "Re-queue"}
-	for _, p := range ps {
-		m.items = append(m.items, menuItem{label: d.policyLine(p), run: func() (modal, tea.Cmd) {
-			return d.confirmRequeue(p, m)
-		}})
-	}
-	d.modal = m
-	return nil
+	var cmd tea.Cmd
+	d.modal, cmd = ciRerunKey(d.ciChecks(), d.ciCallbacks())
+	return cmd
 }
 
-// confirmRequeue asks before re-queueing a build policy; n goes back to
-// the menu it came from. A running policy is left alone.
-func (d *detailModel) confirmRequeue(p ado.Policy, back modal) (modal, tea.Cmd) {
-	if fresh, ok := d.policyByEvaluation(p.EvaluationID); ok {
-		p = fresh
-	}
-	name := buildPolicyName(p)
-	if p.Status == "running" {
-		return back, statusCmd(name + " is already running")
-	}
-	c := newConfirm("Re-queue "+name+"?", d.requeue(p)).focusYes()
-	c.back = back
-	return c, nil
+func (d *detailModel) cancelKey() tea.Cmd {
+	var cmd tea.Cmd
+	d.modal, cmd = ciCancelKey(d.ciChecks(), d.ciCallbacks())
+	return cmd
 }
 
-// requeuePolicy is the write behind Q; tests swap it.
-var requeuePolicy = func(ctx context.Context, c *ado.Client, pr ado.PullRequest, evaluationID string) error {
-	return c.RequeuePolicy(ctx, pr, evaluationID)
-}
-
-func (d *detailModel) requeue(p ado.Policy) tea.Cmd {
-	client, pr, name := d.client, d.pr, buildPolicyName(p)
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		err := requeuePolicy(ctx, client, pr, p.EvaluationID)
-		return requeuedMsg{prID: pr.ID, evaluationID: p.EvaluationID, name: name, err: err}
-	}
+func (d *detailModel) triggerKey() tea.Cmd {
+	var cmd tea.Cmd
+	d.modal, cmd = d.openTriggerPicker(nil)
+	return cmd
 }
 
 // onRequeued switches a shown run to the new one once it starts.
@@ -361,22 +319,51 @@ func (d *detailModel) onRequeued(msg requeuedMsg) tea.Cmd {
 	return d.reload()
 }
 
+func (d *detailModel) onCIAction(msg ciActionMsg) tea.Cmd {
+	if msg.err != nil {
+		d.status = fmt.Sprintf("error: %s %s: %s", ciActionVerb(msg.kind), msg.name, msg.err.Error())
+		return nil
+	}
+	switch msg.kind {
+	case ciActRequeue:
+		return d.onRequeued(requeuedMsg{prID: msg.prID, evaluationID: msg.evaluationID, name: msg.name, err: msg.err})
+	case ciActRetry:
+		d.status = "retrying failed jobs of " + msg.name
+		if d.run != nil && d.run.run.ID == msg.run.ID {
+			return tea.Batch(d.run.refresh(), d.reload())
+		}
+		return d.reload()
+	case ciActQueue:
+		label := "queued " + msg.name
+		if msg.run.ID > 0 {
+			label = fmt.Sprintf("queued %s (%s)", msg.name, runNumLabel(msg.run))
+			if d.run != nil {
+				cmd := d.openCICheck(ciCheckFromRun(msg.name, nil, msg.run, msg.run.Definition.ID, ado.CICheckBranchRun, false))
+				d.status = label
+				return tea.Batch(cmd, d.reload())
+			}
+		}
+		d.status = label
+		return d.reload()
+	case ciActCancel:
+		d.status = fmt.Sprintf("cancelling %s (%s)", msg.name, runNumLabel(msg.run))
+		if d.run != nil && d.run.run.ID == msg.run.ID {
+			return tea.Batch(d.run.refresh(), d.reload())
+		}
+		return d.reload()
+	}
+	return nil
+}
+
 func (d *detailModel) waitTick() tea.Cmd {
-	prID, id := d.pr.ID, d.wait.evaluationID
-	return tea.Tick(runWaitPoll, func(time.Time) tea.Msg { return runWaitTickMsg{prID: prID, evaluationID: id} })
+	return waitPolicyTick(d.pr.ID, d.wait.evaluationID)
 }
 
 func (d *detailModel) onWaitTick(msg runWaitTickMsg) tea.Cmd {
 	if d.wait == nil || d.wait.evaluationID != msg.evaluationID {
 		return nil
 	}
-	client, pr, id := d.client, d.pr, msg.evaluationID
-	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		p, err := client.PolicyEvaluation(ctx, pr, id)
-		return runWaitMsg{prID: pr.ID, evaluationID: id, policy: p, err: err}
-	}
+	return waitPolicyPoll(d.client, d.pr, msg.evaluationID)
 }
 
 func (d *detailModel) onWait(msg runWaitMsg) tea.Cmd {
@@ -389,7 +376,7 @@ func (d *detailModel) onWait(msg runWaitMsg) tea.Cmd {
 		if old, ok := d.policyByEvaluation(p.EvaluationID); ok {
 			p.BuildName = old.BuildName
 		}
-		cmd := d.openRun(prRun{name: w.name, policy: &p, run: ado.Run{ID: id}})
+		cmd := d.openCICheck(ciCheckFromRun(w.name, &p, ado.Run{ID: id}, p.BuildDefinitionID(), ado.CICheckPolicyBuild, p.Configuration.IsBlocking))
 		d.status = fmt.Sprintf("%s: new run #%d", w.name, id)
 		return tea.Batch(cmd, d.reload())
 	}

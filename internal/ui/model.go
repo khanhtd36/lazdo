@@ -4,6 +4,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,12 +14,16 @@ import (
 	"github.com/khanhtd36/lazdo/internal/update"
 )
 
-// maxParallelBuilds caps concurrent per-PR build policy requests.
-const maxParallelBuilds = 8
+// maxParallelBuilds caps concurrent per-PR CI/CD requests.
+const (
+	maxParallelBuilds = 8
+	ciPollInterval    = 10 * time.Second
+	ciWatchDuration   = 2 * time.Minute
+)
 
 type buildResult struct {
-	state ado.BuildState
-	err   error
+	summary ado.CISummary
+	err     error
 }
 
 // row is one visible line: a section header or a PR inside a section.
@@ -36,6 +41,9 @@ type Model struct {
 	stats     map[int]ado.Stats // nil until the stats batch returns
 	statsErr  error
 	builds    map[int]buildResult
+	watchCI   map[int]time.Time // PRs recently acted on via Q/X/t, polled faster until deadline
+	ciPollGen int
+	ciPolling bool
 	collapsed map[ado.SectionKind]bool
 	loading   bool
 	tickGen   int // which poll chain is current; older tickMsgs are dropped
@@ -51,9 +59,10 @@ type Model struct {
 	projects projectsPage
 	project  *projectModel // non-nil while a project is open
 
-	detail *detailModel // non-nil while a pull request's detail is open
-	help   *helpModal   // non-nil while the shortcut help is open
-	modal  modal        // a dialog over any screen, such as checkout
+	detail  *detailModel // non-nil while a pull request's detail is open
+	dashRun *prRunScreen // non-nil while a run opened directly from the PR list is shown
+	help    *helpModal   // non-nil while the shortcut help is open
+	modal   modal        // a dialog over any screen, such as checkout
 
 	lastCheckout    map[string]string // repo key → path, this session only
 	updates         []update.Release  // releases newer than this build, newest first
@@ -82,6 +91,7 @@ func New(client *ado.Client, interval time.Duration) Model {
 		client:    client,
 		interval:  interval,
 		builds:    map[int]buildResult{},
+		watchCI:   map[int]time.Time{},
 		collapsed: map[ado.SectionKind]bool{},
 		loading:   true,
 		sem:       make(chan struct{}, maxParallelBuilds),
@@ -110,6 +120,10 @@ type (
 		result buildResult
 	}
 	tickMsg struct {
+		from *ado.Client
+		gen  int
+	}
+	ciPollTickMsg struct {
 		from *ado.Client
 		gen  int
 	}
@@ -160,8 +174,8 @@ func (m Model) fetchBuild(pr ado.PullRequest) tea.Cmd {
 		defer func() { <-sem }()
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		state, err := client.Build(ctx, pr)
-		return buildMsg{from: client, id: pr.ID, result: buildResult{state: state, err: err}}
+		summary, err := client.PRCI(ctx, pr)
+		return buildMsg{from: client, id: pr.ID, result: buildResult{summary: summary, err: err}}
 	}
 }
 
@@ -195,6 +209,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := msg.run(&m)
 		return m, cmd
 	case runLoadedMsg, logMsg, runTickMsg:
+		if m.dashRun != nil {
+			return m, m.dashRun.updateRun(msg)
+		}
 		// A run opened from a pull request covers the project page.
 		if m.detail != nil && m.detail.run != nil {
 			return m, m.detail.update(msg)
@@ -202,12 +219,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.project != nil {
 			return m, m.project.update(msg)
 		}
-	case prRunsMsg, requeuedMsg, runWaitTickMsg, runWaitMsg, peopleTickMsg, peopleFoundMsg:
+	case prRunsMsg, requeuedMsg, peopleTickMsg, peopleFoundMsg:
 		if m.detail != nil {
 			return m, m.detail.update(msg)
 		}
+	case runWaitTickMsg:
+		if m.dashRun != nil && m.dashRun.pr.ID == msg.prID {
+			return m, m.dashRun.onWaitTick(m.client, msg)
+		}
+		if m.detail != nil {
+			return m, m.detail.update(msg)
+		}
+	case runWaitMsg:
+		if m.dashRun != nil && m.dashRun.pr.ID == msg.prID {
+			var cmds []tea.Cmd
+			if cmd := m.dashRun.onWait(m.client, msg); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			if m.dashRun.wait == nil && msg.err == nil && msg.policy.BuildID() != 0 {
+				if pr, ok := m.prByID(msg.prID); ok {
+					cmds = append(cmds, m.fetchBuild(pr))
+				}
+			}
+			return m, tea.Batch(cmds...)
+		}
+		if m.detail != nil {
+			return m, m.detail.update(msg)
+		}
+	case prPipelinesMsg:
+		if p, ok := m.modal.(*pipelinePicker); ok && p.pr.ID == msg.prID {
+			var cmd tea.Cmd
+			m.modal, cmd = p.onPipelines(msg)
+			return m, cmd
+		}
+		if m.detail != nil {
+			return m, m.detail.update(msg)
+		}
+	case openDashRunMsg:
+		scr, cmd := newPRRunScreen(m.client, msg.pr, msg.check)
+		if scr == nil {
+			return m, cmd
+		}
+		scr.origin = msg.origin
+		m.dashRun = scr
+		return m, cmd
+	case ciActionMsg:
+		if m.detail != nil && msg.prID == m.detail.pr.ID {
+			return m, m.detail.onCIAction(msg)
+		}
+		return m.onDashCIAction(msg)
 	case repoPushesMsg, pipelinesMsg, branchesMsg, runsMsg,
-		folderMsg, indexMsg, contentMsg, projectPRsMsg,
+		folderMsg, indexMsg, contentMsg, projectPRsMsg, projectBuildMsg, projectCIPollTickMsg,
 		commitsMsg, releaseMsg, tagsMsg, tagInfoMsg, refsChangedMsg,
 		settingsLoadedMsg, settingsMembersMsg, settingsSavedMsg, settingsReloadMsg, permDiscardMsg:
 		if m.project != nil {
@@ -304,6 +366,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case buildMsg:
 		m.builds[msg.id] = msg.result
+		return m, m.ensureCIPoll()
+	case ciPollTickMsg:
+		return m.onCIPollTick(msg)
 	case tickMsg:
 		if msg.gen != m.tickGen {
 			return m, nil // an older chain: a refresh since started the newest
@@ -351,6 +416,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.detail != nil {
 			return m.onDetailKey(msg)
 		}
+		if m.dashRun != nil {
+			return m.onDashRunKey(msg)
+		}
 		if m.project != nil {
 			return m.onProjectKey(msg)
 		}
@@ -388,11 +456,13 @@ func (m Model) inTextInput() bool {
 	case m.help != nil:
 		return m.help.typing
 	case m.modal != nil:
-		switch m.modal.(type) {
+		switch mm := m.modal.(type) {
 		case *checkoutModal, *tagDialog, *formModal, *nameConfirm, *paletteModal:
 			return true
 		case *orgPicker:
-			return m.modal.(*orgPicker).list.typing
+			return mm.list.typing
+		case *pipelinePicker:
+			return mm.list.typing
 		}
 		return false
 	case m.detail != nil && m.detail.modal != nil:
@@ -400,6 +470,8 @@ func (m Model) inTextInput() bool {
 		case *editorModal, *completeDialog, *prEditor:
 			return true
 		case *targetPicker:
+			return dm.list.typing
+		case *pipelinePicker:
 			return dm.list.typing
 		}
 		return false
@@ -413,6 +485,8 @@ func (m Model) typing() bool {
 	switch {
 	case m.detail != nil:
 		return m.detail.modal != nil || m.detail.typing()
+	case m.dashRun != nil:
+		return m.dashRun.run.tree.typing || m.dashRun.run.find.typing
 	case m.project != nil:
 		return m.project.typing()
 	case m.page == pageProjects:
@@ -525,6 +599,8 @@ func (m Model) openDetail(pr *ado.PullRequest) (tea.Model, tea.Cmd) {
 func (m Model) onList(msg listMsg) (tea.Model, tea.Cmd) {
 	m.loading = false
 	m.tickGen++ // every list load restarts the one poll chain, so refreshes never stack extra ones
+	m.ciPolling = false
+	m.ciPollGen++
 	cmds := []tea.Cmd{m.tick()}
 	if msg.err != nil {
 		m.err = msg.err
@@ -546,6 +622,9 @@ func (m Model) onList(msg listMsg) (tea.Model, tea.Cmd) {
 	for _, pr := range all {
 		cmds = append(cmds, m.fetchBuild(pr))
 	}
+	if pollCmd := m.ensureCIPoll(); pollCmd != nil {
+		cmds = append(cmds, pollCmd)
+	}
 	m.clampCursor()
 	return m, tea.Batch(cmds...)
 }
@@ -556,7 +635,7 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onFilterKey(msg)
 	}
 	rows := m.rows()
-	half := max(1, m.listHeight()/2)
+	half := max(1, m.prListHeight()/2)
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -591,6 +670,24 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.collapsed[kind] = !m.collapsed[kind]
 		} else if ok {
 			return m.openDetail(r.pr)
+		}
+	case "b":
+		if r, ok := m.selected(rows); ok && r.pr != nil {
+			return m.dashOpenRuns(*r.pr)
+		}
+	case "Q":
+		if r, ok := m.selected(rows); ok && r.pr != nil {
+			return m.dashRerun(*r.pr)
+		}
+	case "X":
+		if r, ok := m.selected(rows); ok && r.pr != nil {
+			return m.dashCancel(*r.pr)
+		}
+	case "t":
+		if r, ok := m.selected(rows); ok && r.pr != nil {
+			var cmd tea.Cmd
+			m.modal, cmd = m.dashTrigger(*r.pr, nil)
+			return m, cmd
 		}
 	case "o":
 		if r, ok := m.selected(rows); ok && r.pr != nil {
@@ -683,7 +780,21 @@ func (m Model) filterMatches() map[int]bool {
 	var ids []int
 	for _, s := range m.sections {
 		for _, pr := range s.PRs {
-			texts = append(texts, fmt.Sprintf("%s %s !%d %s", pr.Title, pr.CreatedBy.DisplayName, pr.ID, pr.SourceBranch()))
+			statusWord := "active"
+			if pr.IsDraft {
+				statusWord = "draft"
+			}
+			fields := []string{pr.Title, pr.CreatedBy.DisplayName, fmt.Sprintf("!%d", pr.ID), pr.SourceBranch(), statusWord}
+			if b, ok := m.builds[pr.ID]; ok && b.err == nil {
+				fields = append(fields, ciFilterTokens(b.summary)...)
+			}
+			for _, f := range fields {
+				if f != "" {
+					texts = append(texts, f)
+					ids = append(ids, pr.ID)
+				}
+			}
+			texts = append(texts, strings.Join(fields, " "))
 			ids = append(ids, pr.ID)
 		}
 	}
@@ -726,7 +837,7 @@ func (m *Model) clampCursor() {
 	if at+1 < len(lines) && lines[at+1].bottom {
 		last = at + 1
 	}
-	visible := m.listHeight()
+	visible := m.prListHeight()
 	if at < m.offset {
 		m.offset = at
 	}
@@ -739,6 +850,14 @@ func (m *Model) clampCursor() {
 // listHeight is the number of rows left after the title and footer lines.
 func (m Model) listHeight() int { return m.height - 3 }
 
+// prListHeight leaves an extra row for the CI/CD summary bar on the Pull requests page.
+func (m Model) prListHeight() int {
+	if m.height >= 5 {
+		return m.height - 4
+	}
+	return max(1, m.height-3)
+}
+
 // fromClient is a message answering a request to one org: after a switch,
 // those from the old org are dropped.
 type fromClient interface{ source() *ado.Client }
@@ -747,6 +866,7 @@ func (m listMsg) source() *ado.Client           { return m.from }
 func (m statsMsg) source() *ado.Client          { return m.from }
 func (m buildMsg) source() *ado.Client          { return m.from }
 func (m tickMsg) source() *ado.Client           { return m.from }
+func (m ciPollTickMsg) source() *ado.Client     { return m.from }
 func (m projectsLoadedMsg) source() *ado.Client { return m.from }
 
 // rowID names a dashboard row across refreshes: its Section, and its pull
@@ -796,4 +916,274 @@ func (m *Model) keepCursorOn(was rowID) {
 	if at >= 0 {
 		m.cursor = at
 	}
+}
+
+func (m Model) prByID(id int) (ado.PullRequest, bool) {
+	for _, s := range m.sections {
+		for _, pr := range s.PRs {
+			if pr.ID == id {
+				return pr, true
+			}
+		}
+	}
+	return ado.PullRequest{}, false
+}
+
+func (m Model) dashCICallbacks(pr ado.PullRequest) ciCallbacks {
+	return newCICallbacks(
+		m.client,
+		pr,
+		func(c ado.CICheck) tea.Cmd {
+			client := m.client
+			return func() tea.Msg { return openDashRunMsg{from: client, pr: pr, check: c} }
+		},
+		func(back modal) (modal, tea.Cmd) {
+			return m.dashTrigger(pr, back)
+		},
+	)
+}
+
+func (m Model) dashTrigger(pr ado.PullRequest, back modal) (modal, tea.Cmd) {
+	return newPipelinePicker(m.client, pr, back, func(pl ado.Pipeline) tea.Cmd {
+		return m.dashCICallbacks(pr).execQueue(pl.Name, pl.ID, pr.SourceRefName)
+	})
+}
+
+func (m Model) dashOpenRuns(pr ado.PullRequest) (tea.Model, tea.Cmd) {
+	b, has := m.builds[pr.ID]
+	if !has {
+		m.status = fmt.Sprintf("loading CI/CD for !%d…", pr.ID)
+		return m, nil
+	}
+	if b.err != nil {
+		m.status = "error: CI/CD: " + b.err.Error()
+		return m, nil
+	}
+	if len(b.summary.Checks) == 1 && b.summary.Checks[0].HasRun() {
+		scr, cmd := newPRRunScreen(m.client, pr, b.summary.Checks[0])
+		if scr == nil {
+			return m, cmd
+		}
+		m.dashRun = scr
+		return m, cmd
+	}
+	var cmd tea.Cmd
+	m.modal, cmd = ciOpenOrMenu(b.summary.Checks, m.dashCICallbacks(pr))
+	return m, cmd
+}
+
+func (m Model) dashRerun(pr ado.PullRequest) (tea.Model, tea.Cmd) {
+	b, has := m.builds[pr.ID]
+	if !has {
+		m.status = fmt.Sprintf("loading CI/CD for !%d…", pr.ID)
+		return m, nil
+	}
+	if b.err != nil {
+		m.status = "error: CI/CD: " + b.err.Error()
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.modal, cmd = ciRerunKey(b.summary.Checks, m.dashCICallbacks(pr))
+	return m, cmd
+}
+
+func (m Model) dashCancel(pr ado.PullRequest) (tea.Model, tea.Cmd) {
+	b, has := m.builds[pr.ID]
+	if !has {
+		m.status = fmt.Sprintf("loading CI/CD for !%d…", pr.ID)
+		return m, nil
+	}
+	if b.err != nil {
+		m.status = "error: CI/CD: " + b.err.Error()
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.modal, cmd = ciCancelKey(b.summary.Checks, m.dashCICallbacks(pr))
+	return m, cmd
+}
+
+func (m Model) onDashRunKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+	closed, changed, nextModal, cmd := m.dashRun.key(msg, m.width, m.height, m.dashCICallbacks(m.dashRun.pr))
+	if nextModal != nil {
+		m.modal = nextModal
+	}
+	if closed {
+		pr := m.dashRun.pr
+		m.dashRun = nil
+		if changed {
+			var cmds []tea.Cmd
+			if _, ok := m.prByID(pr.ID); ok {
+				cmds = append(cmds, m.fetchBuild(pr))
+			}
+			if m.project != nil {
+				if _, ok := m.project.prByID(pr.ID); ok {
+					cmds = append(cmds, m.project.fetchPRBuild(pr))
+				}
+			}
+			return m, tea.Batch(cmds...)
+		}
+		return m, nil
+	}
+	return m, cmd
+}
+
+func (m Model) onDashCIAction(msg ciActionMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		errText := fmt.Sprintf("error: %s %s: %s", ciActionVerb(msg.kind), msg.name, msg.err.Error())
+		if m.dashRun != nil && m.dashRun.pr.ID == msg.prID {
+			m.dashRun.status = errText
+			return m, nil
+		}
+		if m.detail != nil {
+			return m.Update(statusMsg(fmt.Sprintf("!%d: %s", msg.prID, errText)))
+		}
+		if m.project != nil {
+			return m, m.project.onCIAction(msg)
+		}
+		m.status = errText
+		return m, nil
+	}
+	var okText string
+	switch msg.kind {
+	case ciActRequeue:
+		okText = "re-queued " + msg.name
+	case ciActRetry:
+		okText = "retrying failed jobs of " + msg.name
+	case ciActQueue:
+		if msg.run.ID > 0 {
+			okText = fmt.Sprintf("queued %s (%s)", msg.name, runNumLabel(msg.run))
+		} else {
+			okText = "queued " + msg.name
+		}
+	case ciActCancel:
+		okText = fmt.Sprintf("cancelling %s (%s)", msg.name, runNumLabel(msg.run))
+	}
+
+	if m.watchCI == nil {
+		m.watchCI = map[int]time.Time{}
+	}
+	m.watchCI[msg.prID] = time.Now().Add(ciWatchDuration)
+
+	var cmds []tea.Cmd
+	if pr, ok := m.prByID(msg.prID); ok {
+		cmds = append(cmds, m.fetchBuild(pr))
+	}
+	if pollCmd := m.ensureCIPoll(); pollCmd != nil {
+		cmds = append(cmds, pollCmd)
+	}
+	projHandled := false
+	if m.project != nil {
+		if _, ok := m.project.prByID(msg.prID); ok {
+			projHandled = true
+			if pcmd := m.project.onCIAction(msg); pcmd != nil {
+				cmds = append(cmds, pcmd)
+			}
+		}
+	}
+
+	switch {
+	case m.dashRun != nil && m.dashRun.pr.ID == msg.prID:
+		switch msg.kind {
+		case ciActRequeue:
+			if m.dashRun.check.Policy != nil && m.dashRun.check.Policy.EvaluationID == msg.evaluationID {
+				m.dashRun.wait = &runWait{
+					evaluationID: msg.evaluationID,
+					name:         msg.name,
+					from:         m.dashRun.run.run.ID,
+					until:        time.Now().Add(runWaitMax),
+				}
+				m.dashRun.status = "re-queued " + msg.name + ", waiting for its run…"
+				cmds = append(cmds, waitPolicyTick(msg.prID, msg.evaluationID))
+			} else {
+				m.dashRun.status = okText
+			}
+		case ciActQueue:
+			if msg.run.ID > 0 {
+				scr, cmd := newPRRunScreen(m.client, m.dashRun.pr, ciCheckFromRun(msg.name, nil, msg.run, msg.run.Definition.ID, ado.CICheckBranchRun, false))
+				if scr != nil {
+					scr.origin = m.dashRun.origin
+					scr.status = okText
+					m.dashRun = scr
+					cmds = append(cmds, cmd)
+				}
+			} else {
+				m.dashRun.status = okText
+			}
+		case ciActRetry, ciActCancel:
+			m.dashRun.status = okText
+			if m.dashRun.run.run.ID == msg.run.ID {
+				cmds = append(cmds, m.dashRun.run.refresh())
+			}
+		}
+	case m.detail != nil:
+		cmds = append(cmds, statusCmd(fmt.Sprintf("!%d: %s", msg.prID, okText)))
+	case projHandled:
+	default:
+		m.status = okText
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) ciPollTargets(now time.Time) []ado.PullRequest {
+	for id, deadline := range m.watchCI {
+		if !deadline.After(now) {
+			delete(m.watchCI, id)
+		}
+	}
+	var out []ado.PullRequest
+	seen := map[int]bool{}
+	for _, s := range m.sections {
+		for _, pr := range s.PRs {
+			if seen[pr.ID] {
+				continue
+			}
+			seen[pr.ID] = true
+			active := false
+			if b, ok := m.builds[pr.ID]; ok && b.err == nil && b.summary.HasActiveRun() {
+				active = true
+			}
+			if deadline, watched := m.watchCI[pr.ID]; watched && deadline.After(now) {
+				active = true
+			}
+			if active {
+				out = append(out, pr)
+			}
+		}
+	}
+	return out
+}
+
+func (m *Model) ensureCIPoll() tea.Cmd {
+	if m.ciPolling || len(m.ciPollTargets(time.Now())) == 0 {
+		return nil
+	}
+	m.ciPolling = true
+	m.ciPollGen++
+	client, gen := m.client, m.ciPollGen
+	return tea.Tick(ciPollInterval, func(time.Time) tea.Msg { return ciPollTickMsg{from: client, gen: gen} })
+}
+
+func (m Model) onCIPollTick(msg ciPollTickMsg) (tea.Model, tea.Cmd) {
+	if msg.gen != m.ciPollGen {
+		return m, nil
+	}
+	m.ciPolling = false
+	targets := m.ciPollTargets(time.Now())
+	if len(targets) == 0 {
+		return m, nil
+	}
+	if m.loading {
+		return m, m.ensureCIPoll()
+	}
+	cmds := make([]tea.Cmd, 0, len(targets)+1)
+	for _, pr := range targets {
+		cmds = append(cmds, m.fetchBuild(pr))
+	}
+	if pollCmd := m.ensureCIPoll(); pollCmd != nil {
+		cmds = append(cmds, pollCmd)
+	}
+	return m, tea.Batch(cmds...)
 }
