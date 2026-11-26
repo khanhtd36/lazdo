@@ -842,22 +842,83 @@ func (d *detailModel) resolveMentions(s string) string {
 	if !strings.Contains(s, "@<") {
 		return s
 	}
-	names := map[string]string{strings.ToLower(d.pr.CreatedBy.ID): d.pr.CreatedBy.DisplayName}
-	for _, r := range d.data.Reviewers {
-		names[strings.ToLower(r.ID)] = r.DisplayName
-	}
-	for _, t := range d.data.Threads {
-		for _, c := range t.Comments {
-			names[strings.ToLower(c.Author.ID)] = c.Author.DisplayName
-		}
-	}
+	names := d.knownNames()
 	return mentionPattern.ReplaceAllStringFunc(s, func(m string) string {
 		id := strings.ToLower(mentionPattern.FindStringSubmatch(m)[1])
-		if name, ok := names[id]; ok {
+		if name, ok := names[id]; ok && name != "" {
 			return "**@" + name + "**"
 		}
 		return "@someone"
 	})
+}
+
+// knownNames maps lower-case identity IDs to names: the pull request's
+// people, then the organization's, then those looked up.
+func (d *detailModel) knownNames() map[string]string {
+	names := map[string]string{}
+	if d.people != nil {
+		for _, p := range d.people.users {
+			names[strings.ToLower(p.ID)] = p.Name
+		}
+	}
+	for id, n := range d.mentionNames {
+		names[id] = n
+	}
+	names[strings.ToLower(d.pr.CreatedBy.ID)] = d.pr.CreatedBy.DisplayName
+	if d.data != nil {
+		for _, r := range d.data.Reviewers {
+			names[strings.ToLower(r.ID)] = r.DisplayName
+		}
+		for _, t := range d.data.Threads {
+			for _, c := range t.Comments {
+				names[strings.ToLower(c.Author.ID)] = c.Author.DisplayName
+			}
+		}
+	}
+	return names
+}
+
+type mentionNamesMsg struct {
+	prID  int
+	names map[string]string
+}
+
+func (m mentionNamesMsg) pullRequest() int { return m.prID }
+
+// lookupMentions fetches names for mentioned IDs nobody on the pull request
+// or in the org list accounts for.
+func (d *detailModel) lookupMentions() tea.Cmd {
+	if d.data == nil || d.client == nil {
+		return nil
+	}
+	texts := []string{d.data.Description}
+	for _, t := range d.data.Threads {
+		for _, c := range t.Comments {
+			texts = append(texts, c.Content)
+		}
+	}
+	known := d.knownNames()
+	seen := map[string]bool{}
+	var ids []string
+	for _, s := range texts {
+		for _, m := range mentionPattern.FindAllStringSubmatch(s, -1) {
+			id := strings.ToLower(m[1])
+			if known[id] == "" && !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	client, prID := d.client, d.pr.ID
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		names, _ := client.IdentityNames(ctx, ids)
+		return mentionNamesMsg{prID: prID, names: names}
+	}
 }
 
 func voteText(v int) string {

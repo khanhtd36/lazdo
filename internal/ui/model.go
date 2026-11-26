@@ -288,7 +288,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, loadPeople(m.client)
 		}
 		return m, nil
-	case teamsMsg, mentionTickMsg, mentionFoundMsg:
+	case teamsMsg, mentionTickMsg, mentionFoundMsg, mentionNamesMsg:
 		if m.detail != nil {
 			return m, m.detail.update(msg)
 		}

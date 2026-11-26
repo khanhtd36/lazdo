@@ -90,6 +90,9 @@ type detailModel struct {
 	// people and teams are who @ in a comment can mention.
 	people *peopleCache
 	teams  []ado.Team
+	// mentionNames are names of mentioned people not on the pull request,
+	// looked up by identity ID (lower case).
+	mentionNames map[string]string
 
 	// standalone is a repo diff (a commit or a tag range) shown with the
 	// Files view alone: no pull request header, tabs, votes or comments.
@@ -207,11 +210,21 @@ func (d *detailModel) update(msg tea.Msg) tea.Cmd {
 		}
 		d.rebuildOverview()
 		d.rebuildLists()
+		look := d.lookupMentions()
 		if d.pending != "" && d.data != nil && msg.err == nil {
-			return d.runPending()
+			return tea.Batch(d.runPending(), look)
 		}
 		if d.tab == tabFiles {
-			return d.ensureFiles()
+			return tea.Batch(d.ensureFiles(), look)
+		}
+		return look
+	case mentionNamesMsg:
+		if msg.prID == d.pr.ID {
+			if d.mentionNames == nil {
+				d.mentionNames = map[string]string{}
+			}
+			maps.Copy(d.mentionNames, msg.names)
+			d.rebuildOverview()
 		}
 	case filesLoadedMsg:
 		return d.onFilesLoaded(msg)
